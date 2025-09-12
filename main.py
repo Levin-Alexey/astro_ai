@@ -21,6 +21,7 @@ from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.storage.memory import MemoryStorage
 from config import BOT_TOKEN, LOG_LEVEL, LOG_FORMAT
 from geocoding import geocode_city_ru, GeocodingError
+from timezone_utils import resolve_timezone, format_utc_offset
 
 # Настройка логирования
 logging.basicConfig(level=getattr(logging, LOG_LEVEL), format=LOG_FORMAT)
@@ -120,6 +121,8 @@ class ProfileForm(StatesGroup):
     waiting_for_first_name = State()
     waiting_for_birth_date = State()
     waiting_for_birth_city = State()
+    waiting_for_birth_time_accuracy = State()
+    waiting_for_birth_time_local = State()
 
 
 def zodiac_sign_ru_for_date(d: date) -> ZodiacSignRu:
@@ -314,6 +317,126 @@ async def receive_birth_city(message: Message, state: FSMContext):
             "Можешь попробовать указать иначе (например: 'Россия, Краснодар') или выбрать ближайший крупный город."
         )
 
+    # Следующий шаг — спросить про время рождения
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="👍🏼 Знаю точное время", callback_data="timeacc:exact")],
+            [InlineKeyboardButton(text="🤏🏼 Знаю примерное время", callback_data="timeacc:approx")],
+            [InlineKeyboardButton(text="👎🏼 Не знаю время вообще", callback_data="timeacc:unknown")],
+        ]
+    )
+    await message.answer(
+        "Для полной информации мне не хватает только времени рождения 🪄  \n\n\n"
+        "🕰 Подскажи, знаешь ли ты время своего рождения?",
+        reply_markup=kb,
+    )
+    await state.set_state(ProfileForm.waiting_for_birth_time_accuracy)
+
+
+@dp.callback_query(F.data.startswith("timeacc:"))
+async def set_birth_time_accuracy(callback: CallbackQuery, state: FSMContext):
+    _, value = callback.data.split(":", 1)
+    if value not in {"exact", "approx", "unknown"}:
+        await callback.answer("Некорректный выбор", show_alert=True)
+        return
+
+    # Для сценария "unknown" ничего не пишем в БД — только отправляем сообщение
+    if value != "unknown":
+        async with get_session() as session:
+            res = await session.execute(select(User).where(User.telegram_id == callback.from_user.id))
+            user = res.scalar_one_or_none()
+            if user is None:
+                await callback.answer("Похоже, анкета ещё не начата. Нажми /start 💫", show_alert=True)
+                await state.clear()
+                return
+            user.birth_time_accuracy = value
+
+    # Убираем клавиатуру под сообщением
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+    # Дальнейшие шаги в зависимости от выбора
+    if value == "exact":
+        # Просим ввести точное время рождения в формате ЧЧ:ММ
+        await callback.message.answer(
+            "Супер! 🤌🏼  \n\n"
+            "тогда напиши время своего рождения по бирке/справке в формате ЧЧ:ММ\n\n"
+            "пример: 10:38"
+        )
+        await state.set_state(ProfileForm.waiting_for_birth_time_local)
+    elif value == "approx":
+        await callback.message.answer(
+            "Принято! ✌🏼  \n\n"
+            "🕰 Напиши примерное время своего рождения в формате ЧЧ:ММ\n\n"
+            "пример: 11:00"
+        )
+        await state.set_state(ProfileForm.waiting_for_birth_time_local)
+    else:  # unknown
+        await callback.message.answer(
+            "Принято! 🔮  \n\n"
+            "Ничего страшного, если ты не знаешь время своего рождения 👌🏼 \n"
+            "Информация будет чуть менее детальной, но все равно абсолютно точной! 💯🚀"
+        )
+        await state.clear()
+
+    await callback.answer()
+
+
+@dp.message(ProfileForm.waiting_for_birth_time_local)
+async def receive_birth_time_local(message: Message, state: FSMContext):
+    text = (message.text or "").strip()
+    from datetime import datetime as dt_mod
+    try:
+        # Принимаем формат ЧЧ:ММ
+        t = dt_mod.strptime(text, "%H:%M").time()
+    except ValueError:
+        await message.answer(
+            "Не получилось распознать время. Пожалуйста, пришли в формате ЧЧ:ММ\n"
+            "например: 10:38"
+        )
+        return
+
+    async with get_session() as session:
+        res = await session.execute(select(User).where(User.telegram_id == message.from_user.id))
+        user = res.scalar_one_or_none()
+        if user is None:
+            await message.answer("Похоже, анкета ещё не начата. Нажми /start 💫")
+            await state.clear()
+            return
+        user.birth_time_local = t
+        # Не меняем birth_time_accuracy — оно уже сохранено выбором пользователя
+
+        # Пытаемся определить часовой пояс и UTC-смещение, если есть координаты и дата
+        try:
+            if user.birth_date and user.birth_lat is not None and user.birth_lon is not None:
+                tzres = resolve_timezone(user.birth_lat, user.birth_lon, user.birth_date, t)
+                if tzres:
+                    user.tzid = tzres.tzid
+                    user.tz_offset_minutes = tzres.offset_minutes
+                    user.birth_datetime_utc = tzres.birth_datetime_utc
+                    tz_label = f"{tzres.tzid} ({format_utc_offset(tzres.offset_minutes)})"
+                    await message.answer(
+                        "Отлично, сохранила твоё время рождения ⏱✅\n"
+                        f"Часовой пояс: {tz_label}"
+                    )
+                else:
+                    await message.answer(
+                        "Отлично, сохранила твоё время рождения ⏱✅\n"
+                        "Не удалось автоматически определить часовой пояс по координатам."
+                    )
+            else:
+                await message.answer(
+                    "Отлично, сохранила твоё время рождения ⏱✅\n"
+                    "Для определения часового пояса нужны дата и координаты места рождения."
+                )
+        except Exception as e:
+            logger.warning(f"Timezone resolve failed: {e}")
+            await message.answer(
+                "Отлично, сохранила твоё время рождения ⏱✅\n"
+                "Но не удалось определить часовой пояс автоматически."
+            )
     await state.clear()
 
 @dp.message(Command("help"))
