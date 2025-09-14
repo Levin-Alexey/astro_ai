@@ -241,7 +241,7 @@ async def show_main_menu(message_or_callback):
         ]
     )
 
-    if hasattr(message_or_callback, 'answer'):
+    if hasattr(message_or_callback, 'message'):
         # Это callback
         cb_msg = cast(Message, message_or_callback.message)
         await cb_msg.answer(text, reply_markup=kb)
