@@ -42,6 +42,7 @@ class Gender(str, Enum):
     other = "other"
     unknown = "unknown"
 
+
 class ZodiacSignRu(str, Enum):
     oven = "Овен"
     telec = "Телец"
@@ -57,28 +58,55 @@ class ZodiacSignRu(str, Enum):
     ryby = "Рыбы"
 
 
+class Planet(str, Enum):
+    moon = "moon"  # Луна - бесплатная
+    sun = "sun"    # Солнце - платная
+    mercury = "mercury"  # Меркурий - платная
+    venus = "venus"      # Венера - платная
+    mars = "mars"        # Марс - платная
+
+
+class PredictionType(str, Enum):
+    free = "free"    # Бесплатное предсказание (только для Луны)
+    paid = "paid"    # Платное предсказание
+
+
 class User(Base):
     __tablename__ = "users"
 
     # PK
-    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True, autoincrement=True
+    )
 
     # Telegram
-    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False)
+    telegram_id: Mapped[int] = mapped_column(
+        BigInteger, unique=True, nullable=False
+    )
     username: Mapped[Optional[str]] = mapped_column(Text)
     first_name: Mapped[Optional[str]] = mapped_column(Text)
     last_name: Mapped[Optional[str]] = mapped_column(Text)
-    lang: Mapped[str] = mapped_column(Text, server_default=text("'ru'"))
-    joined_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+    lang: Mapped[str] = mapped_column(
+        Text, server_default=text("'ru'")
     )
-    last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    consent_given_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    last_seen_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
+    consent_given_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
 
     # Профиль для астрологии
     full_name: Mapped[Optional[str]] = mapped_column(Text)
     gender: Mapped[Gender] = mapped_column(
-        PG_ENUM(Gender, name="gender", create_type=False, native_enum=True),
+        PG_ENUM(
+            Gender, name="gender", create_type=False, native_enum=True
+        ),
         server_default=text("'unknown'"),
         nullable=False,
     )
@@ -86,7 +114,9 @@ class User(Base):
     birth_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     birth_time_local: Mapped[Optional[time]] = mapped_column(Time)
     birth_time_accuracy: Mapped[str] = mapped_column(
-        Text, server_default=text("'exact'"), nullable=False
+        Text,
+        server_default=text("'exact'"),
+        nullable=False,
     )
     unknown_time_strategy: Mapped[Optional[str]] = mapped_column(Text)
 
@@ -100,14 +130,18 @@ class User(Base):
     tz_offset_minutes: Mapped[Optional[int]] = mapped_column(SmallInteger)
 
     # Предрасчитанный момент в UTC (заполняем при точном времени)
-    birth_datetime_utc: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    birth_datetime_utc: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
 
     # Метаданные гео-провайдера
     geo_provider: Mapped[Optional[str]] = mapped_column(Text)
     geo_provider_place_id: Mapped[Optional[str]] = mapped_column(Text)
 
     # Служебное
-    is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    is_deleted: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
     notes: Mapped[Optional[str]] = mapped_column(Text)
 
     # Знак зодиака (рус.)
@@ -117,8 +151,9 @@ class User(Base):
             name="zodiac_sign_ru",
             create_type=False,
             native_enum=True,
-            # Важно: используем русские значения Enum как значения PostgreSQL ENUM,
-            # иначе SQLAlchemy по умолчанию отправляет имена (oven, bliznecy, ...)
+            # Важно: используем русские значения Enum как значения
+            # PostgreSQL ENUM, иначе SQLAlchemy по умолчанию отправляет
+            # имена (oven, bliznecy, ...)
             values_callable=lambda enum: [e.value for e in enum],
             validate_strings=True,
         )
@@ -129,7 +164,8 @@ class User(Base):
         # Валидность пары координат
         CheckConstraint(
             "(birth_lat IS NULL AND birth_lon IS NULL) OR "
-            "(birth_lat BETWEEN -90 AND 90 AND birth_lon BETWEEN -180 AND 180)",
+            "(birth_lat BETWEEN -90 AND 90 AND "
+            "birth_lon BETWEEN -180 AND 180)",
             name="coord_pair_valid",
         ),
         # Допустимые значения birth_time_accuracy
@@ -140,7 +176,100 @@ class User(Base):
     )
 
     def __repr__(self) -> str:  # pragma: no cover - вспомогательное
-        return f"<User id={self.user_id} tg={self.telegram_id} username={self.username!r}>"
+        return (
+            f"<User id={self.user_id} tg={self.telegram_id} "
+            f"username={self.username!r}>"
+        )
+
+
+class Prediction(Base):
+    __tablename__ = "predictions"
+
+    # PK
+    prediction_id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True, autoincrement=True
+    )
+
+    # Связь с пользователем
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+    # Планета для которой делается предсказание
+    planet: Mapped[Planet] = mapped_column(
+        PG_ENUM(
+            Planet, name="planet", create_type=False, native_enum=True
+        ),
+        nullable=False,
+    )
+
+    # Тип предсказания (бесплатное/платное)
+    prediction_type: Mapped[PredictionType] = mapped_column(
+        PG_ENUM(
+            PredictionType,
+            name="prediction_type",
+            create_type=False,
+            native_enum=True,
+        ),
+        nullable=False,
+    )
+
+    # Содержимое предсказания от LLM
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Метаданные LLM
+    llm_model: Mapped[Optional[str]] = mapped_column(Text)
+    llm_tokens_used: Mapped[Optional[int]] = mapped_column(BigInteger)
+    llm_temperature: Mapped[Optional[float]] = mapped_column(
+        DOUBLE_PRECISION
+    )  # Температура генерации
+
+    # Временные метки
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )  # Для платных предсказаний
+
+    # Статус предсказания
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+    is_deleted: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+
+    # Дополнительные данные
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Ограничения таблицы (CHECK)
+    __table_args__ = (
+        # Луна может быть только бесплатной
+        CheckConstraint(
+            "(planet != 'moon') OR "
+            "(planet = 'moon' AND prediction_type = 'free')",
+            name="moon_only_free",
+        ),
+        # Платные предсказания должны иметь срок действия
+        CheckConstraint(
+            "(prediction_type = 'free') OR "
+            "(prediction_type = 'paid' AND expires_at IS NOT NULL)",
+            name="paid_predictions_must_expire",
+        ),
+        # Температура должна быть в разумных пределах
+        CheckConstraint(
+            "llm_temperature IS NULL OR "
+            "(llm_temperature >= 0.0 AND llm_temperature <= 2.0)",
+            name="temperature_range_valid",
+        ),
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover - вспомогательное
+        return (
+            f"<Prediction id={self.prediction_id} user={self.user_id} "
+            f"planet={self.planet.value} type={self.prediction_type.value}>"
+        )
 
 
 # Индексы (соответствуют заданным)
@@ -149,12 +278,22 @@ Index("users_birth_utc_idx", User.birth_datetime_utc)
 Index("users_tg_username_idx", func.lower(User.username))
 Index("users_zodiac_idx", User.zodiac_sign)
 
+# Индексы для таблицы predictions
+Index("predictions_user_id_idx", Prediction.user_id)
+Index("predictions_planet_idx", Prediction.planet)
+Index("predictions_type_idx", Prediction.prediction_type)
+Index("predictions_created_at_idx", Prediction.created_at.desc())
+Index("predictions_expires_at_idx", Prediction.expires_at)
+Index("predictions_active_idx", Prediction.is_active)
+
 
 async def create_all(engine: AsyncEngine) -> None:
-    """Создать все таблицы по моделям (для первичной инициализации без Alembic).
+    """Создать все таблицы по моделям (для первичной инициализации
+    без Alembic).
 
-    Примечание: ENUM gender должен существовать в БД. Если его нет — создайте вручную
-    миграцией Alembic или через: CREATE TYPE gender AS ENUM ('male','female','other','unknown');
+    Примечание: ENUM gender должен существовать в БД. Если его нет — создайте
+    вручную миграцией Alembic или через:
+    CREATE TYPE gender AS ENUM ('male','female','other','unknown');
     """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

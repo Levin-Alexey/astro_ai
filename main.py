@@ -16,6 +16,8 @@ from db import (
     ensure_gender_enum,
     ensure_birth_date_nullable,
     ensure_zodiac_enum_ru,
+    ensure_planet_enum,
+    ensure_prediction_type_enum,
 )
 from models import create_all
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -29,6 +31,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from config import BOT_TOKEN, LOG_LEVEL, LOG_FORMAT
 from geocoding import geocode_city_ru, GeocodingError
 from timezone_utils import resolve_timezone, format_utc_offset
+from astrology_handlers import start_moon_analysis
 
 # Настройка логирования
 logging.basicConfig(level=getattr(logging, LOG_LEVEL), format=LOG_FORMAT)
@@ -116,7 +119,8 @@ async def cmd_start(message: Message):
             "Теперь мне нужно узнать тебя получше, чтобы наши разговоры "
             "приносили тебе максимум пользы 🤗\n\n"
             "✍🏼 Заполнишь небольшую анкету?\n\n"
-            "нажимая на кнопку, ты соглашаешься с Политикой конфиденциальности "
+            "нажимая на кнопку, ты соглашаешься с "
+            "Политикой конфиденциальности "
             "— все твои данные будут надежно защищены 🔐🫱🏻‍🫲🏼"
         ),
         reply_markup=kb,
@@ -1104,9 +1108,9 @@ async def on_birth_time_unknown_specify(
 
 
 @dp.callback_query(F.data == "start_moon_analysis")
-async def on_start_moon_analysis(callback: CallbackQuery):
-    """Обработчик кнопки 'Начнем' - пока пустой"""
-    await callback.answer("Функция в разработке")
+async def on_start_moon_analysis(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Начнем' - запуск анализа Луны"""
+    await start_moon_analysis(callback, state)
 
 
 @dp.message(Command("help"))
@@ -1155,6 +1159,8 @@ async def main():
         await ensure_gender_enum(db_engine)
         await ensure_birth_date_nullable(db_engine)
         await ensure_zodiac_enum_ru(db_engine)
+        await ensure_planet_enum(db_engine)
+        await ensure_prediction_type_enum(db_engine)
     # create_all безопасен: создаст отсутствующие таблицы,
     # существующие не тронет
         await create_all(db_engine)

@@ -21,7 +21,9 @@ SessionLocal: async_sessionmaker[AsyncSession] | None = None
 def init_engine() -> None:
     global engine, SessionLocal
     if engine is None:
-        engine = create_async_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
+        engine = create_async_engine(
+            DATABASE_URL, echo=False, pool_pre_ping=True
+        )
         SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 
@@ -61,15 +63,18 @@ async def ensure_gender_enum(engine: AsyncEngine) -> None:
         if not exists:
             await conn.execute(
                 text(
-                    "CREATE TYPE gender AS ENUM ('male','female','other','unknown')"
+                    "CREATE TYPE gender AS ENUM "
+                    "('male','female','other','unknown')"
                 )
             )
 
 
 async def ensure_birth_date_nullable(engine: AsyncEngine) -> None:
-    """Снимает NOT NULL с столбца users.birth_date, если ограничение установлено.
+    """Снимает NOT NULL с столбца users.birth_date,
+    если ограничение установлено.
 
-    Нужно, чтобы создавать профиль пользователя на /start до заполнения анкеты.
+    Нужно, чтобы создавать профиль пользователя на /start до заполнения
+    анкеты.
     """
     check_sql = text(
         """
@@ -77,24 +82,71 @@ async def ensure_birth_date_nullable(engine: AsyncEngine) -> None:
         FROM pg_attribute a
         JOIN pg_class c ON a.attrelid = c.oid
         JOIN pg_namespace n ON c.relnamespace = n.oid
-        WHERE c.relname = 'users' AND a.attname = 'birth_date' AND n.nspname = 'public'
+        WHERE c.relname = 'users' AND a.attname = 'birth_date' "
+        "AND n.nspname = 'public'"
         """
     )
     async with engine.begin() as conn:
         attnotnull = await conn.scalar(check_sql)
         if attnotnull:
-            await conn.execute(text("ALTER TABLE public.users ALTER COLUMN birth_date DROP NOT NULL"))
+            await conn.execute(
+                text(
+                    "ALTER TABLE public.users "
+                    "ALTER COLUMN birth_date DROP NOT NULL"
+                )
+            )
 
 
 async def ensure_zodiac_enum_ru(engine: AsyncEngine) -> None:
-    """Создаёт ENUM тип zodiac_sign_ru с русскими названиями знаков зодиака, если отсутствует."""
+    """Создаёт ENUM тип zodiac_sign_ru с русскими названиями знаков зодиака,
+    если отсутствует."""
     async with engine.begin() as conn:
-        exists = await conn.scalar(text("SELECT 1 FROM pg_type WHERE typname = 'zodiac_sign_ru' LIMIT 1"))
+        exists = await conn.scalar(
+            text(
+                "SELECT 1 FROM pg_type WHERE typname = 'zodiac_sign_ru' "
+                "LIMIT 1"
+            )
+        )
         if not exists:
             await conn.execute(
                 text(
                     "CREATE TYPE zodiac_sign_ru AS ENUM ("
-                    "'Овен','Телец','Близнецы','Рак','Лев','Дева','Весы','Скорпион','Стрелец','Козерог','Водолей','Рыбы'"
+                    "'Овен','Телец','Близнецы','Рак','Лев','Дева',"
+                    "'Весы','Скорпион','Стрелец','Козерог','Водолей','Рыбы'"
                     ")"
+                )
+            )
+
+
+async def ensure_planet_enum(engine: AsyncEngine) -> None:
+    """Создаёт ENUM тип planet для планет, если отсутствует."""
+    async with engine.begin() as conn:
+        exists = await conn.scalar(
+            text("SELECT 1 FROM pg_type WHERE typname = 'planet' LIMIT 1")
+        )
+        if not exists:
+            await conn.execute(
+                text(
+                    "CREATE TYPE planet AS ENUM "
+                    "('moon','sun','mercury','venus','mars')"
+                )
+            )
+
+
+async def ensure_prediction_type_enum(engine: AsyncEngine) -> None:
+    """Создаёт ENUM тип prediction_type для типов предсказаний,
+    если отсутствует."""
+    async with engine.begin() as conn:
+        exists = await conn.scalar(
+            text(
+                "SELECT 1 FROM pg_type WHERE typname = 'prediction_type' "
+                "LIMIT 1"
+            )
+        )
+        if not exists:
+            await conn.execute(
+                text(
+                    "CREATE TYPE prediction_type AS ENUM "
+                    "('free','paid')"
                 )
             )

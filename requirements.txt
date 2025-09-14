@@ -43,3 +43,6 @@ tzdata==2024.1
 
 redis==5.0.1
 aioredis==2.0.1
+
+# RabbitMQ
+aio-pika==9.3.1
