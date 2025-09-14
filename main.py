@@ -31,7 +31,10 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from config import BOT_TOKEN, LOG_LEVEL, LOG_FORMAT
 from geocoding import geocode_city_ru, GeocodingError
 from timezone_utils import resolve_timezone, format_utc_offset
-from astrology_handlers import start_moon_analysis
+from astrology_handlers import (
+    start_moon_analysis,
+    check_existing_moon_prediction
+)
 
 # Настройка логирования
 logging.basicConfig(level=getattr(logging, LOG_LEVEL), format=LOG_FORMAT)
@@ -79,53 +82,68 @@ async def cmd_start(message: Message):
             user.last_name = tg_user.last_name
             user.lang = lang or user.lang
             user.last_seen_at = now
-    # Первое сообщение
-    await message.answer(
-        (
-            "Привет! Меня зовут Лилит 🐈‍⬛\n"
-            "Я умный бот-астролог на основе искусственного интеллекта 🤖🔮\n\n"
-            "🫂 Стану твоим личным астро-помощником, которому можно задать "
-            "любой вопрос в любое время\n\n"
-            "🪐 С моей помощью тебе не нужно проверять точность построения "
-            "твоей натальной карты – я уже позаботилась о достоверности\n\n"
-            "🧠 Я не копирую информацию из открытых источников – мои разборы "
-            "основаны на опыте профессионального астролога и его работе с "
-            "людьми\n\n"
-            "😎 Дам личные рекомендации по всем важным сферам: финансы, "
-            "отношения, уверенность в себе и не только"
+
+    # Проверяем, есть ли у пользователя уже бесплатный разбор Луны
+    has_moon_analysis = await check_existing_moon_prediction(tg_user.id)
+
+    if has_moon_analysis:
+        # Если разбор есть, показываем главное меню
+        await show_main_menu(message)
+        logger.info(
+            f"Пользователь {tg_user.id} с существующим разбором "
+            "показано главное меню"
         )
-    )
+    else:
+        # Если разбора нет, запускаем стандартный опросник
+        # Первое сообщение
+        await message.answer(
+            (
+                "Привет! Меня зовут Лилит 🐈‍⬛\n"
+                "Я умный бот-астролог на основе искусственного интеллекта "
+                "🤖🔮\n\n"
+                "🫂 Стану твоим личным астро-помощником, которому можно задать "
+                "любой вопрос в любое время\n\n"
+                "🪐 С моей помощью тебе не нужно проверять точность "
+                "построения твоей натальной карты – я уже позаботилась о "
+                "достоверности\n\n"
+                "🧠 Я не копирую информацию из открытых источников – мои "
+                "разборы основаны на опыте профессионального астролога и его "
+                "работе с людьми\n\n"
+                "😎 Дам личные рекомендации по всем важным сферам: финансы, "
+                "отношения, уверенность в себе и не только"
+            )
+        )
 
-    # Второе сообщение с кнопками
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="Политика конфиденциальности",
-                    url="https://disk.yandex.ru/i/DwatWs4N5h5HFA"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="Окей 👌🏼",
-                    callback_data="ok",
-                )
+        # Второе сообщение с кнопками
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="Политика конфиденциальности",
+                        url="https://disk.yandex.ru/i/DwatWs4N5h5HFA"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="Окей 👌🏼",
+                        callback_data="ok",
+                    )
+                ]
             ]
-        ]
-    )
+        )
 
-    await message.answer(
-        (
-            "Теперь мне нужно узнать тебя получше, чтобы наши разговоры "
-            "приносили тебе максимум пользы 🤗\n\n"
-            "✍🏼 Заполнишь небольшую анкету?\n\n"
-            "нажимая на кнопку, ты соглашаешься с "
-            "Политикой конфиденциальности "
-            "— все твои данные будут надежно защищены 🔐🫱🏻‍🫲🏼"
-        ),
-        reply_markup=kb,
-    )
-    logger.info(f"Пользователь {tg_user.id} запустил бота")
+        await message.answer(
+            (
+                "Теперь мне нужно узнать тебя получше, чтобы наши разговоры "
+                "приносили тебе максимум пользы 🤗\n\n"
+                "✍🏼 Заполнишь небольшую анкету?\n\n"
+                "нажимая на кнопку, ты соглашаешься с "
+                "Политикой конфиденциальности "
+                "— все твои данные будут надежно защищены 🔐🫱🏻‍🫲🏼"
+            ),
+            reply_markup=kb,
+        )
+        logger.info(f"Пользователь {tg_user.id} без разбора запустил анкету")
 
 
 @dp.callback_query(F.data == "ok")
@@ -181,6 +199,55 @@ def build_gender_kb(selected: str | None) -> InlineKeyboardMarkup:
             ]
         )
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def show_main_menu(message_or_callback):
+    """Показывает главное меню с кнопками для пользователей с существующим
+    разбором"""
+    text = (
+        "🔮 Добро пожаловать в главное меню!\n\n"
+        "Выбери, что тебя интересует:"
+    )
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="👤 Личный кабинет",
+                    callback_data="personal_cabinet"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="💳 Купить разбор", callback_data="buy_analysis"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🆕 Начать разбор по новой дате",
+                    callback_data="new_analysis"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="❓ FAQ", callback_data="faq"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🆘 Служба заботы", callback_data="support"
+                )
+            ]
+        ]
+    )
+
+    if hasattr(message_or_callback, 'answer'):
+        # Это callback
+        cb_msg = cast(Message, message_or_callback.message)
+        await cb_msg.answer(text, reply_markup=kb)
+    else:
+        # Это message
+        await message_or_callback.answer(text, reply_markup=kb)
 
 
 async def show_profile_completion_message(message_or_callback):
@@ -1111,6 +1178,304 @@ async def on_birth_time_unknown_specify(
 async def on_start_moon_analysis(callback: CallbackQuery, state: FSMContext):
     """Обработчик кнопки 'Начнем' - запуск анализа Луны"""
     await start_moon_analysis(callback, state)
+
+
+@dp.callback_query(F.data == "personal_cabinet")
+async def on_personal_cabinet(callback: CallbackQuery):
+    """Обработчик кнопки 'Личный кабинет'"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "👤 Личный кабинет\n\n"
+        "Здесь будет информация о твоем профиле и разборах.\n\n"
+        "Функция в разработке... 🚧"
+    )
+
+
+@dp.callback_query(F.data == "buy_analysis")
+async def on_buy_analysis(callback: CallbackQuery):
+    """Обработчик кнопки 'Купить разбор'"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "💳 Купить разбор\n\n"
+        "Доступные платные разборы:\n"
+        "☀️ Солнце - 500₽\n"
+        "☿️ Меркурий - 500₽\n"
+        "♀️ Венера - 500₽\n"
+        "♂️ Марс - 500₽\n\n"
+        "Функция в разработке... 🚧"
+    )
+
+
+@dp.callback_query(F.data == "new_analysis")
+async def on_new_analysis(callback: CallbackQuery):
+    """Обработчик кнопки 'Начать разбор по новой дате'"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "🆕 Начать разбор по новой дате\n\n"
+        "Для создания нового разбора нужно будет заполнить анкету заново.\n\n"
+        "Начать заполнение анкеты?",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="Да, начать", callback_data="ok"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="Отмена", callback_data="back_to_menu"
+                    )
+                ]
+            ]
+        )
+    )
+
+
+@dp.callback_query(F.data == "faq")
+async def on_faq(callback: CallbackQuery):
+    """Обработчик кнопки 'FAQ'"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "❓ Часто задаваемые вопросы\n\n"
+        "Q: Что такое астрологический разбор?\n"
+        "A: Это персональный анализ твоей натальной карты с "
+        "рекомендациями.\n\n"
+        "Q: Сколько стоит разбор?\n"
+        "A: Разбор Луны бесплатный, остальные планеты - 500₽ каждая.\n\n"
+        "Q: Как долго готовится разбор?\n"
+        "A: Обычно 5-10 минут после заполнения анкеты.\n\n"
+        "Есть другие вопросы? Обратись в службу заботы! 🆘"
+    )
+
+
+@dp.callback_query(F.data == "support")
+async def on_support(callback: CallbackQuery):
+    """Обработчик кнопки 'Служба заботы'"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "🆘 Служба заботы\n\n"
+        "Если у тебя есть вопросы или проблемы, напиши нам:\n\n"
+        "📧 Email: support@astro-bot.ru\n"
+        "💬 Telegram: @astro_support\n\n"
+        "Мы ответим в течение 24 часов! ⏰"
+    )
+
+
+@dp.callback_query(F.data == "back_to_menu")
+async def on_back_to_menu(callback: CallbackQuery):
+    """Обработчик кнопки 'Назад в меню'"""
+    await callback.answer()
+    await show_main_menu(callback)
+
+
+# Обработчики для кнопок после разбора Луны
+@dp.callback_query(F.data == "get_recommendations")
+async def on_get_recommendations(callback: CallbackQuery):
+    """Обработчик кнопки 'Получить рекомендации'"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "💡 Персональные рекомендации\n\n"
+        "На основе твоего разбора Луны я могу дать рекомендации по:\n\n"
+        "• Эмоциональному благополучию\n"
+        "• Отношениям и семье\n"
+        "• Работе и карьере\n"
+        "• Здоровью и самочувствию\n\n"
+        "Выбери тему для получения персональных рекомендаций:",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="💕 Эмоции и отношения",
+                        callback_data="recommend_emotions"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="💼 Работа и карьера",
+                        callback_data="recommend_career"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="💪 Здоровье и самочувствие",
+                        callback_data="recommend_health"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🏠 Семья и быт",
+                        callback_data="recommend_family"
+                    )
+                ]
+            ]
+        )
+    )
+
+
+@dp.callback_query(F.data == "ask_question")
+async def on_ask_question(callback: CallbackQuery):
+    """Обработчик кнопки 'Задать вопрос'"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "❓ Задать вопрос астрологу\n\n"
+        "Ты можешь задать любой вопрос, связанный с твоим разбором Луны:\n\n"
+        "• Уточнения по интерпретации\n"
+        "• Советы по конкретным ситуациям\n"
+        "• Рекомендации по развитию\n"
+        "• Вопросы о других планетах\n\n"
+        "Просто напиши свой вопрос текстом, и я отвечу! 💬\n\n"
+        "Или выбери одну из готовых тем:",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="💕 Отношения",
+                        callback_data="question_relationships"
+                    ),
+                    InlineKeyboardButton(
+                        text="💼 Карьера",
+                        callback_data="question_career"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🏠 Семья",
+                        callback_data="question_family"
+                    ),
+                    InlineKeyboardButton(
+                        text="💪 Здоровье",
+                        callback_data="question_health"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🔍 Исследовать другие сферы",
+                        callback_data="explore_other_areas"
+                    )
+                ]
+            ]
+        )
+    )
+
+
+@dp.callback_query(F.data == "explore_other_areas")
+async def on_explore_other_areas(callback: CallbackQuery):
+    """Обработчик кнопки 'Исследовать другие сферы'"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "🔍 Исследовать другие сферы\n\n"
+        "Помимо Луны, в твоей натальной карте есть много других важных "
+        "планет:\n\n"
+        "☀️ Солнце - твоя сущность и жизненная сила\n"
+        "☿️ Меркурий - мышление и общение\n"
+        "♀️ Венера - любовь и красота\n"
+        "♂️ Марс - энергия и действия\n\n"
+        "Каждая планета расскажет что-то особенное о тебе!\n\n"
+        "Хочешь узнать больше?",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="💳 Купить разбор",
+                        callback_data="buy_analysis"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="❓ Задать вопрос",
+                        callback_data="ask_question"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🏠 Главное меню",
+                        callback_data="back_to_menu"
+                    )
+                ]
+            ]
+        )
+    )
+
+
+# Обработчики для рекомендаций
+@dp.callback_query(F.data.startswith("recommend_"))
+async def on_recommendation_topic(callback: CallbackQuery):
+    """Обработчик тематических рекомендаций"""
+    topic = (callback.data or "").replace("recommend_", "")
+
+    topic_names = {
+        "emotions": "💕 Эмоции и отношения",
+        "career": "💼 Работа и карьера",
+        "health": "💪 Здоровье и самочувствие",
+        "family": "🏠 Семья и быт"
+    }
+
+    topic_name = topic_names.get(topic, topic)
+
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        f"{topic_name}\n\n"
+        "Готовлю персональные рекомендации на основе твоего разбора "
+        "Луны...\n\n"
+        "⏳ Это займет несколько секунд",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🔍 Исследовать другие сферы",
+                        callback_data="explore_other_areas"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🏠 Главное меню",
+                        callback_data="back_to_menu"
+                    )
+                ]
+            ]
+        )
+    )
+
+    # TODO: Здесь будет отправка запроса в LLM для генерации рекомендаций
+    # await send_recommendation_to_llm(user_id, topic, moon_analysis_data)
+
+
+# Обработчики для тематических вопросов
+@dp.callback_query(F.data.startswith("question_"))
+async def on_question_topic(callback: CallbackQuery):
+    """Обработчик тематических вопросов"""
+    topic = (callback.data or "").replace("question_", "")
+
+    topic_names = {
+        "relationships": "💕 Отношения",
+        "career": "💼 Карьера",
+        "family": "🏠 Семья",
+        "health": "💪 Здоровье"
+    }
+
+    topic_name = topic_names.get(topic, topic)
+
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        f"{topic_name}\n\n"
+        "Отлично! Теперь напиши свой конкретный вопрос по этой теме.\n\n"
+        "Например:\n"
+        "• Как улучшить отношения с партнером?\n"
+        "• В какой сфере лучше развиваться?\n"
+        "• Как наладить отношения в семье?\n"
+        "• Что делать для поддержания здоровья?\n\n"
+        "Я дам персональный ответ на основе твоей натальной карты! ✨"
+    )
 
 
 @dp.message(Command("help"))

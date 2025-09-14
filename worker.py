@@ -223,13 +223,19 @@ class PredictionWorker:
             logger.info(f"Prediction {prediction_id} updated with LLM content")
             return True
     
-    async def send_telegram_message(self, chat_id: int, text: str) -> bool:
+    async def send_telegram_message(
+        self, 
+        chat_id: int, 
+        text: str, 
+        reply_markup: Optional[Dict[str, Any]] = None
+    ) -> bool:
         """
         Отправляет сообщение через Telegram Bot API
         
         Args:
             chat_id: ID чата
             text: Текст сообщения
+            reply_markup: Клавиатура для сообщения (опционально)
             
         Returns:
             True если отправлено успешно, False иначе
@@ -242,6 +248,9 @@ class PredictionWorker:
             "parse_mode": "HTML",
             "disable_web_page_preview": True
         }
+        
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
         
         async with aiohttp.ClientSession() as session:
             try:
@@ -325,6 +334,36 @@ class PredictionWorker:
         
         return message
     
+    def create_moon_analysis_buttons(self) -> Dict[str, Any]:
+        """
+        Создает кнопки для сообщения с разбором Луны
+        
+        Returns:
+            Словарь с клавиатурой для Telegram API
+        """
+        return {
+            "inline_keyboard": [
+                [
+                    {
+                        "text": "💡 Получить рекомендации",
+                        "callback_data": "get_recommendations"
+                    }
+                ],
+                [
+                    {
+                        "text": "❓ Задать вопрос",
+                        "callback_data": "ask_question"
+                    }
+                ],
+                [
+                    {
+                        "text": "🔍 Исследовать другие сферы",
+                        "callback_data": "explore_other_areas"
+                    }
+                ]
+            ]
+        }
+    
     async def process_prediction(self, message_data: Dict[str, Any]):
         """Обрабатывает одно предсказание"""
         prediction_id = message_data.get("prediction_id")
@@ -402,9 +441,15 @@ class PredictionWorker:
                             # Формируем и отправляем сообщение
                             message = self.format_prediction_message(updated_prediction, user)
                             
+                            # Добавляем кнопки только для разбора Луны
+                            reply_markup = None
+                            if updated_prediction.planet == Planet.moon:
+                                reply_markup = self.create_moon_analysis_buttons()
+                            
                             success = await self.send_telegram_message(
                                 chat_id=user.telegram_id,
-                                text=message
+                                text=message,
+                                reply_markup=reply_markup
                             )
                             
                             if success:
