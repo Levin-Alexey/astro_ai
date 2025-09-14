@@ -1,8 +1,15 @@
 import asyncio
 import logging
-from aiogram import Bot, Dispatcher, types, F
+from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.types import (
+    Message,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    CallbackQuery,
+    User as TgUser,
+)
+from typing import cast
 from db import (
     init_engine,
     dispose_engine,
@@ -13,7 +20,7 @@ from db import (
 from models import create_all
 from sqlalchemy.ext.asyncio import AsyncEngine
 from db import get_session
-from models import User, Gender, ZodiacSignRu
+from models import User as DbUser, Gender, ZodiacSignRu
 from sqlalchemy import select
 from datetime import datetime, timezone, date
 from aiogram.fsm.context import FSMContext
@@ -38,18 +45,21 @@ if BOT_TOKEN in ["YOUR_BOT_TOKEN_HERE", "ваш_токен_здесь"]:
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
+
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
     """Обработчик команды /start"""
     # Созраняем/обновляем пользователя в БД при первом запуске
-    tg_user = message.from_user
-    lang = (tg_user.language_code or "ru") if hasattr(tg_user, "language_code") else "ru"
+    tg_user = cast(TgUser, message.from_user)
+    lang = tg_user.language_code or "ru"
     now = datetime.now(timezone.utc)
     async with get_session() as session:
-        res = await session.execute(select(User).where(User.telegram_id == tg_user.id))
+        res = await session.execute(
+            select(DbUser).where(DbUser.telegram_id == tg_user.id)
+        )
         user = res.scalar_one_or_none()
         if user is None:
-            user = User(
+            user = DbUser(
                 telegram_id=tg_user.id,
                 username=tg_user.username,
                 first_name=tg_user.first_name,
@@ -66,63 +76,145 @@ async def cmd_start(message: Message):
             user.last_name = tg_user.last_name
             user.lang = lang or user.lang
             user.last_seen_at = now
-    # Кнопка "Далее"
-    next_kb = InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="Далее", callback_data="next")]]
+    # Первое сообщение
+    await message.answer(
+        (
+            "Привет! Меня зовут Лилит 🐈‍⬛\n"
+            "Я умный бот-астролог на основе искусственного интеллекта 🤖🔮\n\n"
+            "🫂 Стану твоим личным астро-помощником, которому можно задать "
+            "любой вопрос в любое время\n\n"
+            "🪐 С моей помощью тебе не нужно проверять точность построения "
+            "твоей натальной карты – я уже позаботилась о достоверности\n\n"
+            "🧠 Я не копирую информацию из открытых источников – мои разборы "
+            "основаны на опыте профессионального астролога и его работе с "
+            "людьми\n\n"
+            "😎 Дам личные рекомендации по всем важным сферам: финансы, "
+            "отношения, уверенность в себе и не только"
+        )
+    )
+
+    # Второе сообщение с кнопками
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Политика конфиденциальности",
+                    url="https://disk.yandex.ru/i/DwatWs4N5h5HFA"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Окей 👌🏼",
+                    callback_data="ok",
+                )
+            ]
+        ]
     )
 
     await message.answer(
-        """Привет! Меня зовут Лилит 🐈‍⬛
-Я умный бот-астролог на основе искусственного интеллекта 🤖🔮 
-
-
-🫂 Стану твоим личным астро-помощником, которому можно задать любой вопрос в любое время 
-
-🪐 С моей помощью тебе не нужно проверять точность построения твоей натальной карты – я уже позаботилась о достоверности
-
-🧠 Я не копирую информацию из открытых источников – мои разборы основаны на опыте профессионального астролога и его работе с людьми
-
-😎 Дам личные рекомендации по всем важным сферам: финансы, отношения, уверенность в себе и не только"""
-        , reply_markup=next_kb
+        (
+            "Теперь мне нужно узнать тебя получше, чтобы наши разговоры "
+            "приносили тебе максимум пользы 🤗\n\n"
+            "✍🏼 Заполнишь небольшую анкету?\n\n"
+            "нажимая на кнопку, ты соглашаешься с Политикой конфиденциальности "
+            "— все твои данные будут надежно защищены 🔐🫱🏻‍🫲🏼"
+        ),
+        reply_markup=kb,
     )
-    logger.info(f"Пользователь {message.from_user.id} запустил бота")
-
-
-@dp.callback_query(F.data == "next")
-async def on_next(callback: CallbackQuery):
-    """Обработчик кнопки "Далее" — отправляет следующий текст и кнопку "Окей 👌🏼"""
-    text = (
-        "Теперь мне нужно узнать тебя получше, чтобы наши разговоры приносили тебе максимум пользы 🤗  \n\n"
-        "\n✍🏼 Заполнишь небольшую анкету?\n\n"
-        "*нажимая на кнопку, ты соглашаешься с Политикой конфиденциальности (https://disk.yandex.ru/i/DwatWs4N5h5HFA) — все твои данные будут надежно защищены 🔐🫱🏻‍🫲🏼\n"
-    )
-
-    ok_kb = InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="Окей 👌🏼", callback_data="ok")]]
-    )
-
-    await callback.message.answer(text, reply_markup=ok_kb, disable_web_page_preview=True)
-    await callback.answer()
+    logger.info(f"Пользователь {tg_user.id} запустил бота")
 
 
 @dp.callback_query(F.data == "ok")
 async def on_ok(callback: CallbackQuery):
     """После нажатия на "Окей" — старт анкеты, спрашиваем пол"""
     await callback.answer()
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="👩🏻 Женский", callback_data="gender:female")],
-            [InlineKeyboardButton(text="👨🏼 Мужской", callback_data="gender:male")],
-        ]
+    kb = build_gender_kb(selected=None)
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "Для начала укажи свой пол 👇🏼",
+        reply_markup=kb,
     )
-    await callback.message.answer("Для начала укажи свой пол 👇🏼", reply_markup=kb)
+
 
 class ProfileForm(StatesGroup):
     waiting_for_first_name = State()
     waiting_for_birth_date = State()
     waiting_for_birth_city = State()
+    waiting_for_birth_city_confirm = State()
     waiting_for_birth_time_accuracy = State()
     waiting_for_birth_time_local = State()
+    waiting_for_birth_time_confirm = State()
+    waiting_for_birth_time_approx_confirm = State()
+    waiting_for_birth_time_unknown_confirm = State()
+
+
+def build_gender_kb(selected: str | None) -> InlineKeyboardMarkup:
+    """
+    Строит клавиатуру выбора пола. Если selected задан — добавляет чек и
+    кнопку 'Подтвердить'.
+    """
+    female_text = ("✅ " if selected == "female" else "") + "👩🏻 Женский"
+    male_text = ("✅ " if selected == "male" else "") + "👨🏼 Мужской"
+
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=female_text, callback_data="gender:female"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=male_text, callback_data="gender:male"
+            )
+        ],
+    ]
+    if selected in {"male", "female"}:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="Подтвердить", callback_data="gender_confirm"
+                )
+            ]
+        )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def show_profile_completion_message(message_or_callback):
+    """Показывает финальное сообщение после завершения анкеты"""
+    text = (
+        "Смотри, я предлагаю начать нашу работу с тебя, а именно с разбора "
+        "твоей Луны 🌙\n\n"
+        "Объясню почему👇🏼\n\n"
+        "🌒 Луна включается еще в утробе матери и работает всю жизнь, от неё "
+        "зависят твои эмоции, характер, то, как ты воспринимаешь мир и даже "
+        "отношения в семье\n\n"
+        "🌓 Эта планета является фундаментом твоего внутреннего мира: если он "
+        "не прочен, остальные планеты работать просто не будут и нет смысла "
+        "разбирать всеми любимых Венеру и Асцендент ;)\n\n"
+        "🌔 Пока все бегут, спешат и забывают про себя, ты сможешь не бояться "
+        "выгорания на работе, что очень важно с нашей тенденцией к "
+        "достигаторству, согласись?\n\n"
+        "🌕 Никаких больше эмоциональных качелей — только спокойное и "
+        "уверенное движение по жизни"
+    )
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Начнем", callback_data="start_moon_analysis"
+                )
+            ]
+        ]
+    )
+
+    if hasattr(message_or_callback, 'answer'):
+        # Это callback
+        cb_msg = cast(Message, message_or_callback.message)
+        await cb_msg.answer(text, reply_markup=kb)
+    else:
+        # Это message
+        await message_or_callback.answer(text, reply_markup=kb)
 
 
 def zodiac_sign_ru_for_date(d: date) -> ZodiacSignRu:
@@ -136,7 +228,7 @@ def zodiac_sign_ru_for_date(d: date) -> ZodiacSignRu:
     """
     m, day = d.month, d.day
 
-    if   (m == 12 and day >= 22) or (m == 1 and day <= 19):
+    if (m == 12 and day >= 22) or (m == 1 and day <= 19):
         return ZodiacSignRu.kozerog
     elif (m == 1 and day >= 20) or (m == 2 and day <= 18):
         return ZodiacSignRu.vodolei
@@ -167,8 +259,16 @@ def zodiac_sign_ru_for_date(d: date) -> ZodiacSignRu:
 async def ask_gender(message: Message):
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Мужской", callback_data="gender:male")],
-            [InlineKeyboardButton(text="Женский", callback_data="gender:female")],
+            [
+                InlineKeyboardButton(
+                    text="Мужской", callback_data="gender:male"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Женский", callback_data="gender:female"
+                )
+            ],
         ]
     )
     await message.answer("Выберите ваш пол:", reply_markup=kb)
@@ -176,31 +276,66 @@ async def ask_gender(message: Message):
 
 @dp.callback_query(F.data.startswith("gender:"))
 async def set_gender(callback: CallbackQuery, state: FSMContext):
-    _, value = callback.data.split(":", 1)
+    cb_data = cast(str, callback.data)
+    _, value = cb_data.split(":", 1)
     if value not in {"male", "female"}:
         await callback.answer("Некорректное значение", show_alert=True)
         return
 
-    tg_id = callback.from_user.id
+    # Запоминаем выбор пола во временном состоянии, не сохраняем в БД сразу
+    await state.update_data(pending_gender=value)
 
-    # Создаём/обновляем пользователя
+    # Оставляем кнопки пола и помечаем выбранный чек‑маркой + добавляем
+    # кнопку "Подтвердить"
+    kb = build_gender_kb(selected=value)
+    try:
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.edit_reply_markup(reply_markup=kb)
+    except Exception:
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.answer("Подтверди выбор пола", reply_markup=kb)
+    await callback.answer()
+
+
+@dp.callback_query(F.data == "gender_confirm")
+async def confirm_gender(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    value = data.get("pending_gender")
+    if value not in {"male", "female"}:
+        await callback.answer("Сначала выбери пол", show_alert=True)
+        return
+    cb_user = cast(TgUser, callback.from_user)
+    tg_id = cb_user.id
+
+    # Сохраняем выбор в БД
     async with get_session() as session:
-        from sqlalchemy import select
-        res = await session.execute(select(User).where(User.telegram_id == tg_id))
+        res = await session.execute(
+            select(DbUser).where(DbUser.telegram_id == tg_id)
+        )
         user = res.scalar_one_or_none()
-
         if user is None:
-            await callback.answer("Сначала заполните анкету (дата рождения и т.д.)", show_alert=True)
+            await callback.answer(
+                "Сначала запусти анкету: /start", show_alert=True
+            )
+            await state.clear()
             return
-
         user.gender = Gender(value)
 
-    await callback.answer("Сохранено", show_alert=False)
-    await callback.message.edit_reply_markup(reply_markup=None)
+    # Очищаем временные данные о поле
+    await state.update_data(pending_gender=None)
+
+    # Убираем клавиатуру подтверждения
+    try:
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
     # Следующий шаг анкеты — спросить имя
-    await callback.message.answer("Как тебя зовут? 💫")
-    # Переводим пользователя в состояние ожидания имени
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer("Как тебя зовут? 💫")
     await state.set_state(ProfileForm.waiting_for_first_name)
+    await callback.answer("Сохранено")
 
 
 @dp.message(ProfileForm.waiting_for_first_name)
@@ -212,10 +347,15 @@ async def receive_first_name(message: Message, state: FSMContext):
 
     # Сохраняем в БД
     async with get_session() as session:
-        res = await session.execute(select(User).where(User.telegram_id == message.from_user.id))
+        uid = cast(TgUser, message.from_user).id
+        res = await session.execute(
+            select(DbUser).where(DbUser.telegram_id == uid)
+        )
         user = res.scalar_one_or_none()
         if user is None:
-            await message.answer("Похоже, анкета ещё не начата. Нажми /start 💫")
+            await message.answer(
+                "Похоже, анкета ещё не начата. Нажми /start 💫"
+            )
             await state.clear()
             return
         user.first_name = name
@@ -236,33 +376,112 @@ async def receive_birth_date(message: Message, state: FSMContext):
         dt = datetime.strptime(text, "%d.%m.%Y").date()
     except ValueError:
         await message.answer(
-            "Не получилось распознать дату. Пожалуйста, пришли в формате ДД.ММ.ГГГГ\n"
-            "например: 23.04.1987"
+            "Не получилось распознать дату. Пожалуйста, пришли в формате "
+            "ДД.ММ.ГГГГ\nнапример: 23.04.1987"
+        )
+        return
+    # Сохраняем дату временно и предлагаем подтвердить
+    await state.update_data(pending_birth_date=dt.isoformat())
+
+    date_str = dt.strftime("%d.%m.%Y")
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Верно", callback_data="bdate:confirm"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🔄 Ввести заново", callback_data="bdate:redo"
+                )
+            ],
+        ]
+    )
+    await message.answer(
+        f"Дата рождения: {date_str} -\n" "Верно? Нажми кнопку 👇🏼",
+        reply_markup=kb,
+    )
+    # Остаёмся в состоянии ожидания даты до подтверждения/переввода
+    await state.set_state(ProfileForm.waiting_for_birth_date)
+
+
+@dp.callback_query(F.data == "bdate:confirm")
+async def on_birth_date_confirm(
+    callback: CallbackQuery, state: FSMContext
+):
+    # Подтверждение: записать дату, определить знак и перейти к городу
+    data = await state.get_data()
+    iso = data.get("pending_birth_date")
+    if not iso:
+        await callback.answer(
+            "Не нашла дату. Пожалуйста, введите снова.",
+            show_alert=True,
         )
         return
 
-    # Сохраняем дату рождения и знак зодиака
+    from datetime import date as _date
+    try:
+        dt = _date.fromisoformat(iso)
+    except Exception:
+        await callback.answer(
+            "Формат даты потерялся, введите дату ещё раз.",
+            show_alert=True,
+        )
+        return
+
+    cb_user = cast(TgUser, callback.from_user)
     async with get_session() as session:
-        res = await session.execute(select(User).where(User.telegram_id == message.from_user.id))
+        res = await session.execute(
+            select(DbUser).where(DbUser.telegram_id == cb_user.id)
+        )
         user = res.scalar_one_or_none()
         if user is None:
-            await message.answer("Похоже, анкета ещё не начата. Нажми /start 💫")
+            await callback.answer(
+                "Похоже, анкета ещё не начата. Нажми /start 💫",
+                show_alert=True,
+            )
             await state.clear()
             return
         user.birth_date = dt
         sign_enum = zodiac_sign_ru_for_date(dt)
-        # Сохраняем именно enum-значение; тип колонки настроен хранить русские метки
         user.zodiac_sign = sign_enum
 
-    # Спрашиваем место рождения, показывая знак
-    sign = sign_enum.value
+    await state.update_data(pending_birth_date=None)
     await state.set_state(ProfileForm.waiting_for_birth_city)
-    await message.answer(
-        f"Понятно, значит ты у нас {sign} 🤭 интересно, что еще зашифровано в твоей карте \n\n\n"
+
+    cb_msg = cast(Message, callback.message)
+    sign = sign_enum.value
+    await cb_msg.answer(
+        f"Понятно, значит ты у нас {sign} 🤭 интересно, что еще "
+        "зашифровано в твоей карте \n\n\n"
         "📍 Далее напиши место своего рождения\n\n"
-        "можно указать конкретный населенный пункт или же ближайший крупный город \n"
+        "можно указать конкретный населенный пункт или же ближайший "
+        "крупный город \n"
         "пример: г. Краснодар"
     )
+    try:
+        await cb_msg.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    await callback.answer()
+
+
+@dp.callback_query(F.data == "bdate:redo")
+async def on_birth_date_redo(callback: CallbackQuery, state: FSMContext):
+    # Просим ввести дату снова
+    await state.update_data(pending_birth_date=None)
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "Окей! Пришли дату рождения в формате ДД.ММ.ГГГГ\n"
+        "например: 23.04.1987"
+    )
+    try:
+        await cb_msg.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    await state.set_state(ProfileForm.waiting_for_birth_date)
+    await callback.answer()
 
 
 @dp.message(ProfileForm.waiting_for_birth_city)
@@ -272,25 +491,79 @@ async def receive_birth_city(message: Message, state: FSMContext):
         await message.answer("Пожалуйста, укажи населённый пункт текстом ✍️")
         return
 
-    # Пробуем геокодировать город (на русском) и сохранить координаты
+    # Пробуем геокодировать город (на русском)
     try:
         geo = await geocode_city_ru(city)
     except GeocodingError as e:
         logger.warning(f"Geocoding failed for '{city}': {e}")
         geo = None
 
+    # Сохраняем данные временно для подтверждения
+    city_data = {
+        "city_input": city,
+        "geo": geo
+    }
+    await state.update_data(pending_birth_city=city_data)
+
+    # Показываем что нашли и просим подтвердить
+    if geo:
+        place = geo["place_name"]
+        display_text = f"Место рождения: {place}\nВерно? Нажми кнопку 👇🏼"
+    else:
+        display_text = f"Место рождения: {city}\nВерно? Нажми кнопку 👇🏼"
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Верно", callback_data="bcity:confirm"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🔄 Ввести заново", callback_data="bcity:redo"
+                )
+            ],
+        ]
+    )
+    await message.answer(display_text, reply_markup=kb)
+    await state.set_state(ProfileForm.waiting_for_birth_city_confirm)
+
+
+@dp.callback_query(F.data == "bcity:confirm")
+async def on_birth_city_confirm(callback: CallbackQuery, state: FSMContext):
+    """Подтверждение места рождения: сохраняем данные и переходим к времени"""
+    data = await state.get_data()
+    city_data = data.get("pending_birth_city")
+    if not city_data:
+        await callback.answer(
+            "Не нашла данные о городе. Пожалуйста, введите снова.",
+            show_alert=True,
+        )
+        return
+
+    city_input = city_data["city_input"]
+    geo = city_data["geo"]
+
+    cb_user = cast(TgUser, callback.from_user)
     async with get_session() as session:
-        res = await session.execute(select(User).where(User.telegram_id == message.from_user.id))
+        res = await session.execute(
+            select(DbUser).where(DbUser.telegram_id == cb_user.id)
+        )
         user = res.scalar_one_or_none()
         if user is None:
-            await message.answer("Похоже, анкета ещё не начата. Нажми /start 💫")
+            await callback.answer(
+                "Похоже, анкета ещё не начата. Нажми /start 💫",
+                show_alert=True,
+            )
             await state.clear()
             return
 
-        # Всегда сохраняем сырое пользовательское значение
-        user.birth_city_input = city
+        # Сохраняем данные в БД
+        user.birth_city_input = city_input
 
-        # Если геокодирование удалось — записываем нормализованное имя, страну и координаты
+        # Если геокодирование удалось — записываем нормализованное имя,
+        # страну и координаты
         if geo:
             user.birth_place_name = geo.get("place_name")
             user.birth_country_code = geo.get("country_code")
@@ -303,39 +576,91 @@ async def receive_birth_city(message: Message, state: FSMContext):
             user.birth_lat = None
             user.birth_lon = None
 
+    # Очищаем временные данные
+    await state.update_data(pending_birth_city=None)
+
+    # Убираем клавиатуру
+    try:
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+    # Показываем результат и переходим к следующему шагу
     if geo:
         place = geo["place_name"]
         lat = geo["lat"]
         lon = geo["lon"]
-        await message.answer(
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.answer(
             f"Принято! Нашла: {place}\n"
             f"Координаты: {lat:.5f}, {lon:.5f} ✅"
         )
     else:
-        await message.answer(
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.answer(
             "Принято! Но не удалось найти город по базе. "
-            "Можешь попробовать указать иначе (например: 'Россия, Краснодар') или выбрать ближайший крупный город."
+            "Можешь попробовать указать иначе (например: 'Россия, Краснодар') "
+            "или выбрать ближайший крупный город."
         )
 
     # Следующий шаг — спросить про время рождения
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="👍🏼 Знаю точное время", callback_data="timeacc:exact")],
-            [InlineKeyboardButton(text="🤏🏼 Знаю примерное время", callback_data="timeacc:approx")],
-            [InlineKeyboardButton(text="👎🏼 Не знаю время вообще", callback_data="timeacc:unknown")],
+            [
+                InlineKeyboardButton(
+                    text="👍🏼 Знаю точное время",
+                    callback_data="timeacc:exact",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🤏🏼 Знаю примерное время",
+                    callback_data="timeacc:approx",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="👎🏼 Не знаю время вообще",
+                    callback_data="timeacc:unknown",
+                )
+            ],
         ]
     )
-    await message.answer(
-        "Для полной информации мне не хватает только времени рождения 🪄  \n\n\n"
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "Для полной информации мне не хватает только времени рождения "
+        "🪄  \n\n\n"
         "🕰 Подскажи, знаешь ли ты время своего рождения?",
         reply_markup=kb,
     )
     await state.set_state(ProfileForm.waiting_for_birth_time_accuracy)
+    await callback.answer()
+
+
+@dp.callback_query(F.data == "bcity:redo")
+async def on_birth_city_redo(callback: CallbackQuery, state: FSMContext):
+    """Просим ввести место рождения заново"""
+    await state.update_data(pending_birth_city=None)
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "Окей! Пришли место своего рождения\n"
+        "можно указать конкретный населенный пункт или же ближайший "
+        "крупный город\n"
+        "пример: г. Краснодар"
+    )
+    try:
+        await cb_msg.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    await state.set_state(ProfileForm.waiting_for_birth_city)
+    await callback.answer()
 
 
 @dp.callback_query(F.data.startswith("timeacc:"))
 async def set_birth_time_accuracy(callback: CallbackQuery, state: FSMContext):
-    _, value = callback.data.split(":", 1)
+    cb_data = cast(str, callback.data)
+    _, value = cb_data.split(":", 1)
     if value not in {"exact", "approx", "unknown"}:
         await callback.answer("Некорректный выбор", show_alert=True)
         return
@@ -343,43 +668,75 @@ async def set_birth_time_accuracy(callback: CallbackQuery, state: FSMContext):
     # Для сценария "unknown" ничего не пишем в БД — только отправляем сообщение
     if value != "unknown":
         async with get_session() as session:
-            res = await session.execute(select(User).where(User.telegram_id == callback.from_user.id))
+            cb_user = cast(TgUser, callback.from_user)
+            res = await session.execute(
+                select(DbUser).where(
+                    DbUser.telegram_id == cb_user.id
+                )
+            )
             user = res.scalar_one_or_none()
             if user is None:
-                await callback.answer("Похоже, анкета ещё не начата. Нажми /start 💫", show_alert=True)
+                await callback.answer(
+                    "Похоже, анкета ещё не начата. Нажми /start 💫",
+                    show_alert=True,
+                )
                 await state.clear()
                 return
             user.birth_time_accuracy = value
 
     # Убираем клавиатуру под сообщением
     try:
-        await callback.message.edit_reply_markup(reply_markup=None)
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.edit_reply_markup(reply_markup=None)
     except Exception:
         pass
 
     # Дальнейшие шаги в зависимости от выбора
     if value == "exact":
         # Просим ввести точное время рождения в формате ЧЧ:ММ
-        await callback.message.answer(
+        await state.update_data(time_accuracy_type="exact")
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.answer(
             "Супер! 🤌🏼  \n\n"
-            "тогда напиши время своего рождения по бирке/справке в формате ЧЧ:ММ\n\n"
-            "пример: 10:38"
+            + "тогда напиши время своего рождения по бирке/справке "
+            + "в формате ЧЧ:ММ\n\n"
+            + "пример: 10:38"
         )
         await state.set_state(ProfileForm.waiting_for_birth_time_local)
     elif value == "approx":
-        await callback.message.answer(
+        await state.update_data(time_accuracy_type="approx")
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.answer(
             "Принято! ✌🏼  \n\n"
             "🕰 Напиши примерное время своего рождения в формате ЧЧ:ММ\n\n"
             "пример: 11:00"
         )
         await state.set_state(ProfileForm.waiting_for_birth_time_local)
     else:  # unknown
-        await callback.message.answer(
-            "Принято! 🔮  \n\n"
-            "Ничего страшного, если ты не знаешь время своего рождения 👌🏼 \n"
-            "Информация будет чуть менее детальной, но все равно абсолютно точной! 💯🚀"
+        # Показываем подтверждение для работы без времени
+        display_text = "Работаем без времени рождения\nВерно? Нажми кнопку 👇🏼"
+
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="✅ Верно", callback_data="btime_unknown:confirm"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🔄 Указать время",
+                        callback_data="btime_unknown:specify"
+                    )
+                ],
+            ]
         )
-        await state.clear()
+
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.answer(display_text, reply_markup=kb)
+        await state.set_state(
+            ProfileForm.waiting_for_birth_time_unknown_confirm
+        )
 
     await callback.answer()
 
@@ -393,51 +750,364 @@ async def receive_birth_time_local(message: Message, state: FSMContext):
         t = dt_mod.strptime(text, "%H:%M").time()
     except ValueError:
         await message.answer(
-            "Не получилось распознать время. Пожалуйста, пришли в формате ЧЧ:ММ\n"
+            "Не получилось распознать время. Пожалуйста, пришли в формате "
+            "ЧЧ:ММ\n"
             "например: 10:38"
         )
         return
 
+    # Получаем тип точности времени
+    data = await state.get_data()
+    time_accuracy_type = data.get("time_accuracy_type", "exact")
+
+    # Сохраняем время временно для подтверждения
+    await state.update_data(pending_birth_time=t.isoformat())
+
+    # Показываем подтверждение в зависимости от типа
+    time_str = t.strftime("%H:%M")
+    if time_accuracy_type == "exact":
+        display_text = (
+            f"Точное время рождения: {time_str}\nВерно? Нажми кнопку 👇🏼"
+        )
+        next_state = ProfileForm.waiting_for_birth_time_confirm
+        callback_data = "btime:confirm"
+        redo_callback_data = "btime:redo"
+    else:  # approx
+        display_text = (
+            f"Примерное время рождения: {time_str}\nВерно? Нажми кнопку 👇🏼"
+        )
+        next_state = ProfileForm.waiting_for_birth_time_approx_confirm
+        callback_data = "btime_approx:confirm"
+        redo_callback_data = "btime_approx:redo"
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Верно", callback_data=callback_data
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🔄 Ввести заново", callback_data=redo_callback_data
+                )
+            ],
+        ]
+    )
+    await message.answer(display_text, reply_markup=kb)
+    await state.set_state(next_state)
+
+
+@dp.callback_query(F.data == "btime:confirm")
+async def on_birth_time_confirm(callback: CallbackQuery, state: FSMContext):
+    """Подтверждение времени рождения: сохраняем данные и завершаем анкету"""
+    data = await state.get_data()
+    time_iso = data.get("pending_birth_time")
+    if not time_iso:
+        await callback.answer(
+            "Не нашла время. Пожалуйста, введите снова.",
+            show_alert=True,
+        )
+        return
+
+    from datetime import time as _time
+    try:
+        t = _time.fromisoformat(time_iso)
+    except Exception:
+        await callback.answer(
+            "Формат времени потерялся, введите время ещё раз.",
+            show_alert=True,
+        )
+        return
+
+    cb_user = cast(TgUser, callback.from_user)
     async with get_session() as session:
-        res = await session.execute(select(User).where(User.telegram_id == message.from_user.id))
+        res = await session.execute(
+            select(DbUser).where(DbUser.telegram_id == cb_user.id)
+        )
         user = res.scalar_one_or_none()
         if user is None:
-            await message.answer("Похоже, анкета ещё не начата. Нажми /start 💫")
+            await callback.answer(
+                "Похоже, анкета ещё не начата. Нажми /start 💫",
+                show_alert=True,
+            )
             await state.clear()
             return
-        user.birth_time_local = t
-        # Не меняем birth_time_accuracy — оно уже сохранено выбором пользователя
 
-        # Пытаемся определить часовой пояс и UTC-смещение, если есть координаты и дата
+        # Сохраняем время в БД
+        user.birth_time_local = t
+
+        # Пытаемся определить часовой пояс и UTC-смещение, если есть
+        # координаты и дата
         try:
-            if user.birth_date and user.birth_lat is not None and user.birth_lon is not None:
-                tzres = resolve_timezone(user.birth_lat, user.birth_lon, user.birth_date, t)
+            if (
+                user.birth_date
+                and user.birth_lat is not None
+                and user.birth_lon is not None
+            ):
+                tzres = resolve_timezone(
+                    user.birth_lat, user.birth_lon, user.birth_date, t
+                )
                 if tzres:
                     user.tzid = tzres.tzid
                     user.tz_offset_minutes = tzres.offset_minutes
                     user.birth_datetime_utc = tzres.birth_datetime_utc
-                    tz_label = f"{tzres.tzid} ({format_utc_offset(tzres.offset_minutes)})"
-                    await message.answer(
+                    tz_label = (
+                        f"{tzres.tzid} "
+                        f"({format_utc_offset(tzres.offset_minutes)})"
+                    )
+                    cb_msg = cast(Message, callback.message)
+                    await cb_msg.answer(
                         "Отлично, сохранила твоё время рождения ⏱✅\n"
                         f"Часовой пояс: {tz_label}"
                     )
                 else:
-                    await message.answer(
+                    cb_msg = cast(Message, callback.message)
+                    await cb_msg.answer(
                         "Отлично, сохранила твоё время рождения ⏱✅\n"
-                        "Не удалось автоматически определить часовой пояс по координатам."
+                        "Не удалось автоматически определить часовой пояс "
+                        "по координатам."
                     )
             else:
-                await message.answer(
+                cb_msg = cast(Message, callback.message)
+                await cb_msg.answer(
                     "Отлично, сохранила твоё время рождения ⏱✅\n"
-                    "Для определения часового пояса нужны дата и координаты места рождения."
+                    "Для определения часового пояса нужны дата и координаты "
+                    "места рождения."
                 )
         except Exception as e:
             logger.warning(f"Timezone resolve failed: {e}")
-            await message.answer(
+            cb_msg = cast(Message, callback.message)
+            await cb_msg.answer(
                 "Отлично, сохранила твоё время рождения ⏱✅\n"
                 "Но не удалось определить часовой пояс автоматически."
             )
+
+    # Очищаем временные данные
+    await state.update_data(pending_birth_time=None)
+
+    # Убираем клавиатуру
+    try:
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
     await state.clear()
+    await show_profile_completion_message(callback)
+    await callback.answer()
+
+
+@dp.callback_query(F.data == "btime:redo")
+async def on_birth_time_redo(callback: CallbackQuery, state: FSMContext):
+    """Просим ввести время рождения заново"""
+    await state.update_data(pending_birth_time=None)
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "Окей! Пришли время своего рождения в формате ЧЧ:ММ\n"
+        "например: 10:38"
+    )
+    try:
+        await cb_msg.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    await state.set_state(ProfileForm.waiting_for_birth_time_local)
+    await callback.answer()
+
+
+@dp.callback_query(F.data == "btime_approx:confirm")
+async def on_birth_time_approx_confirm(
+    callback: CallbackQuery, state: FSMContext
+):
+    """Подтверждение примерного времени рождения:
+    сохраняем данные и завершаем анкету"""
+    data = await state.get_data()
+    time_iso = data.get("pending_birth_time")
+    if not time_iso:
+        await callback.answer(
+            "Не нашла время. Пожалуйста, введите снова.",
+            show_alert=True,
+        )
+        return
+
+    from datetime import time as _time
+    try:
+        t = _time.fromisoformat(time_iso)
+    except Exception:
+        await callback.answer(
+            "Формат времени потерялся, введите время ещё раз.",
+            show_alert=True,
+        )
+        return
+
+    cb_user = cast(TgUser, callback.from_user)
+    async with get_session() as session:
+        res = await session.execute(
+            select(DbUser).where(DbUser.telegram_id == cb_user.id)
+        )
+        user = res.scalar_one_or_none()
+        if user is None:
+            await callback.answer(
+                "Похоже, анкета ещё не начата. Нажми /start 💫",
+                show_alert=True,
+            )
+            await state.clear()
+            return
+
+        # Сохраняем время в БД
+        user.birth_time_local = t
+
+        # Пытаемся определить часовой пояс и UTC-смещение, если есть
+        # координаты и дата
+        try:
+            if (
+                user.birth_date
+                and user.birth_lat is not None
+                and user.birth_lon is not None
+            ):
+                tzres = resolve_timezone(
+                    user.birth_lat, user.birth_lon, user.birth_date, t
+                )
+                if tzres:
+                    user.tzid = tzres.tzid
+                    user.tz_offset_minutes = tzres.offset_minutes
+                    user.birth_datetime_utc = tzres.birth_datetime_utc
+                    tz_label = (
+                        f"{tzres.tzid} "
+                        f"({format_utc_offset(tzres.offset_minutes)})"
+                    )
+                    cb_msg = cast(Message, callback.message)
+                    await cb_msg.answer(
+                        "Отлично, сохранила твоё примерное время рождения ⏱✅\n"
+                        f"Часовой пояс: {tz_label}"
+                    )
+                else:
+                    cb_msg = cast(Message, callback.message)
+                    await cb_msg.answer(
+                        "Отлично, сохранила твоё примерное время рождения ⏱✅\n"
+                        "Не удалось автоматически определить часовой пояс "
+                        "по координатам."
+                    )
+            else:
+                cb_msg = cast(Message, callback.message)
+                await cb_msg.answer(
+                    "Отлично, сохранила твоё примерное время рождения ⏱✅\n"
+                    "Для определения часового пояса нужны дата и координаты "
+                    "места рождения."
+                )
+        except Exception as e:
+            logger.warning(f"Timezone resolve failed: {e}")
+            cb_msg = cast(Message, callback.message)
+            await cb_msg.answer(
+                "Отлично, сохранила твоё примерное время рождения ⏱✅\n"
+                "Но не удалось определить часовой пояс автоматически."
+            )
+
+    # Очищаем временные данные
+    await state.update_data(pending_birth_time=None)
+
+    # Убираем клавиатуру
+    try:
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+    await state.clear()
+    await show_profile_completion_message(callback)
+    await callback.answer()
+
+
+@dp.callback_query(F.data == "btime_approx:redo")
+async def on_birth_time_approx_redo(
+    callback: CallbackQuery, state: FSMContext
+):
+    """Просим ввести примерное время рождения заново"""
+    await state.update_data(pending_birth_time=None)
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "Окей! Пришли примерное время своего рождения в формате ЧЧ:ММ\n"
+        "например: 11:00"
+    )
+    try:
+        await cb_msg.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    await state.set_state(ProfileForm.waiting_for_birth_time_local)
+    await callback.answer()
+
+
+@dp.callback_query(F.data == "btime_unknown:confirm")
+async def on_birth_time_unknown_confirm(
+    callback: CallbackQuery, state: FSMContext
+):
+    """Подтверждение работы без времени рождения: завершаем анкету"""
+    # Убираем клавиатуру
+    try:
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+    # Показываем сообщение о завершении
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "Принято! 🔮  \n\n"
+        "Ничего страшного, если ты не знаешь время своего рождения 👌🏼 \n"
+        "Информация будет чуть менее детальной, но все равно "
+        "абсолютно точной! 💯🚀"
+    )
+
+    await state.clear()
+    await show_profile_completion_message(callback)
+    await callback.answer()
+
+
+@dp.callback_query(F.data == "btime_unknown:specify")
+async def on_birth_time_unknown_specify(
+    callback: CallbackQuery, state: FSMContext
+):
+    """Переход к указанию времени рождения"""
+    # Убираем клавиатуру
+    try:
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+    # Показываем клавиатуру выбора точности времени
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="👍🏼 Знаю точное время",
+                    callback_data="timeacc:exact",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🤏🏼 Знаю примерное время",
+                    callback_data="timeacc:approx",
+                )
+            ],
+        ]
+    )
+
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "Отлично! Тогда давай укажем время рождения 🕰\n\n"
+        "Подскажи, знаешь ли ты время своего рождения?",
+        reply_markup=kb,
+    )
+    await state.set_state(ProfileForm.waiting_for_birth_time_accuracy)
+    await callback.answer()
+
+
+@dp.callback_query(F.data == "start_moon_analysis")
+async def on_start_moon_analysis(callback: CallbackQuery):
+    """Обработчик кнопки 'Начнем' - пока пустой"""
+    await callback.answer("Функция в разработке")
+
 
 @dp.message(Command("help"))
 async def cmd_help(message: Message):
@@ -453,19 +1123,24 @@ async def cmd_help(message: Message):
     """
     await message.answer(help_text)
 
+
 @dp.message()
 async def echo_message(message: Message):
     """Обработчик всех остальных сообщений"""
     # Обновляем последнюю активность пользователя
-    from sqlalchemy import select
-    from datetime import datetime, timezone
     async with get_session() as session:
-        res = await session.execute(select(User).where(User.telegram_id == message.from_user.id))
+        uid = cast(TgUser, message.from_user).id
+        res = await session.execute(
+            select(DbUser).where(DbUser.telegram_id == uid)
+        )
         user = res.scalar_one_or_none()
         if user is not None:
             user.last_seen_at = datetime.now(timezone.utc)
 
-    await message.answer("Привет! Я бот астролог. Используйте /help для списка команд.")
+    await message.answer(
+        "Привет! Я бот астролог. Используйте /help для списка команд."
+    )
+
 
 async def main():
     """Основная функция запуска бота"""
@@ -480,7 +1155,8 @@ async def main():
         await ensure_gender_enum(db_engine)
         await ensure_birth_date_nullable(db_engine)
         await ensure_zodiac_enum_ru(db_engine)
-        # create_all безопасен: создаст отсутствующие таблицы, существующие не тронет
+    # create_all безопасен: создаст отсутствующие таблицы,
+    # существующие не тронет
         await create_all(db_engine)
     except Exception as e:
         logger.error(f"Не удалось инициализировать схему БД: {e}")

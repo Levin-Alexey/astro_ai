@@ -39,3 +39,7 @@ requests-html==0.10.0
 # Часовые пояса
 timezonefinder==6.2.0
 tzdata==2024.1
+
+
+redis==5.0.1
+aioredis==2.0.1
