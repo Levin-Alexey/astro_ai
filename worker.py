@@ -2,7 +2,7 @@
 Воркер для обработки астрологических предсказаний через RabbitMQ.
 
 Получает данные из очереди, отправляет в OpenRouter для анализа,
-и обновляет предсказание в базе данных.
+обновляет предсказание в базе данных и сразу отправляет пользователю.
 """
 
 import asyncio
@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db import get_session, init_engine, dispose_engine
 from models import Prediction, User, Planet, PredictionType
+from config import BOT_TOKEN
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -29,6 +30,7 @@ RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://astro_user:astro_password_123@3
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 QUEUE_NAME = "moon_predictions"
+BOT_API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 # Проверяем наличие API ключа
 if not OPENROUTER_API_KEY:
@@ -221,6 +223,108 @@ class PredictionWorker:
             logger.info(f"Prediction {prediction_id} updated with LLM content")
             return True
     
+    async def send_telegram_message(self, chat_id: int, text: str) -> bool:
+        """
+        Отправляет сообщение через Telegram Bot API
+        
+        Args:
+            chat_id: ID чата
+            text: Текст сообщения
+            
+        Returns:
+            True если отправлено успешно, False иначе
+        """
+        url = f"{BOT_API_URL}/sendMessage"
+        
+        payload = {
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(
+                    url,
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=30)
+                ) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        if result.get("ok"):
+                            return True
+                        else:
+                            logger.error(f"Telegram API error: {result}")
+                            return False
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"HTTP error {response.status}: {error_text}")
+                        return False
+                        
+            except asyncio.TimeoutError:
+                logger.error("Telegram API request timeout")
+                return False
+            except Exception as e:
+                logger.error(f"Telegram API request failed: {e}")
+                return False
+    
+    def format_prediction_message(self, prediction: Prediction, user: User) -> str:
+        """
+        Форматирует сообщение с предсказанием
+        
+        Args:
+            prediction: Объект предсказания
+            user: Объект пользователя
+            
+        Returns:
+            Отформатированное сообщение
+        """
+        # Заголовок
+        planet_emoji = {
+            Planet.moon: "🌙",
+            Planet.sun: "☀️",
+            Planet.mercury: "☿️",
+            Planet.venus: "♀️",
+            Planet.mars: "♂️"
+        }
+        
+        planet_name = {
+            Planet.moon: "Луны",
+            Planet.sun: "Солнца",
+            Planet.mercury: "Меркурия",
+            Planet.venus: "Венеры",
+            Planet.mars: "Марса"
+        }
+        
+        emoji = planet_emoji.get(prediction.planet, "🔮")
+        name = planet_name.get(prediction.planet, prediction.planet.value)
+        
+        # Основное сообщение
+        message = f"{emoji} Твой персональный разбор {name}\n\n"
+        
+        # Добавляем имя пользователя если есть
+        if user.first_name:
+            message = f"Привет, {user.first_name}! {message}"
+        
+        # Добавляем содержимое предсказания
+        content = prediction.content
+        
+        # Обрезаем если слишком длинное (Telegram лимит 4096 символов)
+        max_length = 4096 - len(message) - 100  # Оставляем место для подписи
+        if len(content) > max_length:
+            content = content[:max_length] + "..."
+        
+        message += content
+        
+        # Добавляем подпись
+        message += f"\n\n✨ Создано: {prediction.created_at.strftime('%d.%m.%Y %H:%M')}"
+        
+        if prediction.llm_model:
+            message += f"\n🤖 Модель: {prediction.llm_model}"
+        
+        return message
+    
     async def process_prediction(self, message_data: Dict[str, Any]):
         """Обрабатывает одно предсказание"""
         prediction_id = message_data.get("prediction_id")
@@ -277,6 +381,43 @@ class PredictionWorker:
                 tokens_used=llm_result.get("usage", {}).get("total_tokens", 0),
                 temperature=0.7
             )
+            
+            # Сразу отправляем готовое предсказание пользователю
+            try:
+                # Получаем обновленное предсказание
+                async with get_session() as session:
+                    result = await session.execute(
+                        select(Prediction).where(Prediction.prediction_id == prediction_id)
+                    )
+                    updated_prediction = result.scalar_one_or_none()
+                    
+                    if updated_prediction:
+                        # Получаем данные пользователя
+                        user_result = await session.execute(
+                            select(User).where(User.telegram_id == user_id)
+                        )
+                        user = user_result.scalar_one_or_none()
+                        
+                        if user:
+                            # Формируем и отправляем сообщение
+                            message = self.format_prediction_message(updated_prediction, user)
+                            
+                            success = await self.send_telegram_message(
+                                chat_id=user.telegram_id,
+                                text=message
+                            )
+                            
+                            if success:
+                                logger.info(f"Prediction {prediction_id} sent to user {user.telegram_id}")
+                            else:
+                                logger.error(f"Failed to send prediction {prediction_id} to user {user.telegram_id}")
+                        else:
+                            logger.error(f"User {user_id} not found for sending prediction")
+                    else:
+                        logger.error(f"Updated prediction {prediction_id} not found")
+                        
+            except Exception as e:
+                logger.error(f"Error sending prediction to user: {e}")
         else:
             logger.info(f"LLM processing skipped for prediction {prediction_id} - no API key")
         
