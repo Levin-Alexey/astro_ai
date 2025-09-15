@@ -35,6 +35,7 @@ from astrology_handlers import (
     start_moon_analysis,
     check_existing_moon_prediction
 )
+from handlers.recommendations_handler import handle_get_recommendations
 
 # Настройка логирования
 logging.basicConfig(level=getattr(logging, LOG_LEVEL), format=LOG_FORMAT)
@@ -1275,47 +1276,9 @@ async def on_back_to_menu(callback: CallbackQuery):
 
 # Обработчики для кнопок после разбора Луны
 @dp.callback_query(F.data == "get_recommendations")
-async def on_get_recommendations(callback: CallbackQuery):
+async def on_get_recommendations(callback: CallbackQuery, state: FSMContext):
     """Обработчик кнопки 'Получить рекомендации'"""
-    await callback.answer()
-    cb_msg = cast(Message, callback.message)
-    await cb_msg.answer(
-        "💡 Персональные рекомендации\n\n"
-        "На основе твоего разбора Луны я могу дать рекомендации по:\n\n"
-        "• Эмоциональному благополучию\n"
-        "• Отношениям и семье\n"
-        "• Работе и карьере\n"
-        "• Здоровью и самочувствию\n\n"
-        "Выбери тему для получения персональных рекомендаций:",
-        reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="💕 Эмоции и отношения",
-                        callback_data="recommend_emotions"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text="💼 Работа и карьера",
-                        callback_data="recommend_career"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text="💪 Здоровье и самочувствие",
-                        callback_data="recommend_health"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text="🏠 Семья и быт",
-                        callback_data="recommend_family"
-                    )
-                ]
-            ]
-        )
-    )
+    await handle_get_recommendations(callback, state)
 
 
 @dp.callback_query(F.data == "ask_question")
@@ -1405,48 +1368,8 @@ async def on_explore_other_areas(callback: CallbackQuery):
     )
 
 
-# Обработчики для рекомендаций
-@dp.callback_query(F.data.startswith("recommend_"))
-async def on_recommendation_topic(callback: CallbackQuery):
-    """Обработчик тематических рекомендаций"""
-    topic = (callback.data or "").replace("recommend_", "")
-
-    topic_names = {
-        "emotions": "💕 Эмоции и отношения",
-        "career": "💼 Работа и карьера",
-        "health": "💪 Здоровье и самочувствие",
-        "family": "🏠 Семья и быт"
-    }
-
-    topic_name = topic_names.get(topic, topic)
-
-    await callback.answer()
-    cb_msg = cast(Message, callback.message)
-    await cb_msg.answer(
-        f"{topic_name}\n\n"
-        "Готовлю персональные рекомендации на основе твоего разбора "
-        "Луны...\n\n"
-        "⏳ Это займет несколько секунд",
-        reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="🔍 Исследовать другие сферы",
-                        callback_data="explore_other_areas"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text="🏠 Главное меню",
-                        callback_data="back_to_menu"
-                    )
-                ]
-            ]
-        )
-    )
-
-    # TODO: Здесь будет отправка запроса в LLM для генерации рекомендаций
-    # await send_recommendation_to_llm(user_id, topic, moon_analysis_data)
+# Старые обработчики тематических рекомендаций удалены
+# Теперь используется единый обработчик handle_get_recommendations
 
 
 # Обработчики для тематических вопросов
