@@ -287,12 +287,13 @@ async def save_astrology_data(
         if not user:
             raise ValueError(f"User {user_id} not found")
 
-        # Создаем запись предсказания
+        # Создаем запись предсказания - сохраняем сырые данные в content
+        # Результат LLM будет сохранен в соответствующий столбец воркером
         prediction = Prediction(
             user_id=user.user_id,
             planet=planet,
             prediction_type=prediction_type,
-            content=content,
+            content=content,  # Сырые данные от API
             llm_model=llm_model,
             llm_tokens_used=llm_tokens_used,
             llm_temperature=llm_temperature,
@@ -306,6 +307,169 @@ async def save_astrology_data(
             f"Saved prediction for user {user_id}, planet {planet.value}"
         )
         return prediction.prediction_id
+
+
+async def save_recommendations(
+    user_id: int,
+    recommendations: str,
+    llm_model: Optional[str] = None,
+    llm_tokens_used: Optional[int] = None,
+    llm_temperature: Optional[float] = None
+) -> int:
+    """
+    Сохранить рекомендации в базу
+
+    Args:
+        user_id: ID пользователя в Telegram
+        recommendations: текст рекомендаций
+        llm_model: модель LLM
+        llm_tokens_used: количество токенов
+        llm_temperature: температура генерации
+
+    Returns:
+        ID созданной записи
+    """
+    async with get_session() as session:
+        # Получаем user_id из базы
+        result = await session.execute(
+            select(User).where(User.telegram_id == user_id)
+        )
+        user = result.scalar_one_or_none()
+
+        if not user:
+            raise ValueError(f"User {user_id} not found")
+
+        # Создаем запись предсказания для рекомендаций
+        prediction = Prediction(
+            user_id=user.user_id,
+            planet=Planet.moon,  # Рекомендации привязаны к Луне
+            prediction_type=PredictionType.free,
+            recommendations=recommendations,
+            llm_model=llm_model,
+            llm_tokens_used=llm_tokens_used,
+            llm_temperature=llm_temperature,
+            expires_at=None
+        )
+
+        session.add(prediction)
+        await session.commit()
+
+        logger.info(f"Saved recommendations for user {user_id}")
+        return prediction.prediction_id
+
+
+async def save_qa_response(
+    user_id: int,
+    question: str,
+    answer: str,
+    llm_model: Optional[str] = None,
+    llm_tokens_used: Optional[int] = None,
+    llm_temperature: Optional[float] = None
+) -> int:
+    """
+    Сохранить ответ на вопрос пользователя
+
+    Args:
+        user_id: ID пользователя в Telegram
+        question: вопрос пользователя
+        answer: ответ от LLM
+        llm_model: модель LLM
+        llm_tokens_used: количество токенов
+        llm_temperature: температура генерации
+
+    Returns:
+        ID созданной записи
+    """
+    async with get_session() as session:
+        # Получаем user_id из базы
+        result = await session.execute(
+            select(User).where(User.telegram_id == user_id)
+        )
+        user = result.scalar_one_or_none()
+
+        if not user:
+            raise ValueError(f"User {user_id} not found")
+
+        # Формируем полный текст Q&A
+        qa_content = f"Вопрос: {question}\n\nОтвет: {answer}"
+
+        # Создаем запись предсказания для Q&A
+        prediction = Prediction(
+            user_id=user.user_id,
+            planet=Planet.moon,  # Q&A привязаны к Луне
+            prediction_type=PredictionType.free,
+            qa_responses=qa_content,
+            llm_model=llm_model,
+            llm_tokens_used=llm_tokens_used,
+            llm_temperature=llm_temperature,
+            expires_at=None
+        )
+
+        session.add(prediction)
+        await session.commit()
+
+        logger.info(f"Saved Q&A response for user {user_id}")
+        return prediction.prediction_id
+
+
+async def get_user_predictions(user_id: int) -> Dict[str, Optional[str]]:
+    """
+    Получить все предсказания пользователя из разных столбцов
+
+    Args:
+        user_id: ID пользователя в Telegram
+
+    Returns:
+        Dict с данными из всех столбцов
+    """
+    async with get_session() as session:
+        # Получаем user_id из базы
+        result = await session.execute(
+            select(User).where(User.telegram_id == user_id)
+        )
+        user = result.scalar_one_or_none()
+
+        if not user:
+            return {}
+
+        # Получаем все активные предсказания пользователя
+        predictions_result = await session.execute(
+            select(Prediction).where(
+                Prediction.user_id == user.user_id,
+                Prediction.is_active.is_(True),
+                Prediction.is_deleted.is_(False)
+            )
+        )
+        predictions = predictions_result.scalars().all()
+
+        # Объединяем данные из всех предсказаний
+        result_data: Dict[str, Optional[str]] = {
+            "moon_analysis": None,
+            "sun_analysis": None,
+            "mercury_analysis": None,
+            "venus_analysis": None,
+            "mars_analysis": None,
+            "recommendations": None,
+            "qa_responses": None
+        }
+
+        for prediction in predictions:
+            if prediction.moon_analysis:
+                result_data["moon_analysis"] = prediction.moon_analysis
+            if prediction.sun_analysis:
+                result_data["sun_analysis"] = prediction.sun_analysis
+            if prediction.mercury_analysis:
+                result_data["mercury_analysis"] = prediction.mercury_analysis
+            if prediction.venus_analysis:
+                result_data["venus_analysis"] = prediction.venus_analysis
+            if prediction.mars_analysis:
+                result_data["mars_analysis"] = prediction.mars_analysis
+            if prediction.recommendations:
+                result_data["recommendations"] = prediction.recommendations
+            if prediction.qa_responses:
+                result_data["qa_responses"] = prediction.qa_responses
+
+        return result_data
 
 
 async def check_existing_moon_prediction(user_id: int) -> bool:
@@ -432,7 +596,9 @@ async def start_moon_analysis(callback: CallbackQuery, state: FSMContext):
 
         # Отправляем в очередь для обработки LLM
         try:
-            await send_prediction_to_queue(prediction_id, user_data["telegram_id"])
+            await send_prediction_to_queue(
+                prediction_id, user_data["telegram_id"]
+            )
             logger.info(
                 f"Prediction {prediction_id} sent to queue for LLM processing"
             )

@@ -212,8 +212,21 @@ class Prediction(Base):
         nullable=False,
     )
 
-    # Содержимое предсказания от LLM
-    content: Mapped[str] = mapped_column(Text, nullable=False)
+    # Содержимое предсказания от LLM (разделено по типам)
+    content: Mapped[Optional[str]] = mapped_column(Text)  # Совместимость
+
+    # Анализы планет (каждый в своем столбце)
+    moon_analysis: Mapped[Optional[str]] = mapped_column(Text)
+    sun_analysis: Mapped[Optional[str]] = mapped_column(Text)
+    mercury_analysis: Mapped[Optional[str]] = mapped_column(Text)
+    venus_analysis: Mapped[Optional[str]] = mapped_column(Text)
+    mars_analysis: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Рекомендации по темам
+    recommendations: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Ответы на вопросы пользователя
+    qa_responses: Mapped[Optional[str]] = mapped_column(Text)
 
     # Метаданные LLM
     llm_model: Mapped[Optional[str]] = mapped_column(Text)
@@ -262,6 +275,14 @@ class Prediction(Base):
             "llm_temperature IS NULL OR "
             "(llm_temperature >= 0.0 AND llm_temperature <= 2.0)",
             name="temperature_range_valid",
+        ),
+        # Должен быть хотя бы один тип контента
+        CheckConstraint(
+            "content IS NOT NULL OR moon_analysis IS NOT NULL OR "
+            "sun_analysis IS NOT NULL OR mercury_analysis IS NOT NULL OR "
+            "venus_analysis IS NOT NULL OR mars_analysis IS NOT NULL OR "
+            "recommendations IS NOT NULL OR qa_responses IS NOT NULL",
+            name="at_least_one_content_type",
         ),
     )
 

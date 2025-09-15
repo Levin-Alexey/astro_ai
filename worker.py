@@ -202,7 +202,7 @@ class PredictionWorker:
         tokens_used: int,
         temperature: float = 0.7
     ) -> bool:
-        """Обновляет предсказание с результатом LLM"""
+        """Обновляет предсказание с результатом LLM в соответствующий столбец"""
         async with get_session() as session:
             result = await session.execute(
                 select(Prediction).where(Prediction.prediction_id == prediction_id)
@@ -213,14 +213,28 @@ class PredictionWorker:
                 logger.error(f"Prediction {prediction_id} not found")
                 return False
             
-            # Обновляем содержимое и метаданные LLM
-            prediction.content = llm_content
+            # Сохраняем результат LLM в соответствующий столбец по планете
+            if prediction.planet == Planet.moon:
+                prediction.moon_analysis = llm_content
+            elif prediction.planet == Planet.sun:
+                prediction.sun_analysis = llm_content
+            elif prediction.planet == Planet.mercury:
+                prediction.mercury_analysis = llm_content
+            elif prediction.planet == Planet.venus:
+                prediction.venus_analysis = llm_content
+            elif prediction.planet == Planet.mars:
+                prediction.mars_analysis = llm_content
+            else:
+                # Fallback для неизвестных планет
+                prediction.content = llm_content
+            
+            # Обновляем метаданные LLM
             prediction.llm_model = llm_model
             prediction.llm_tokens_used = tokens_used
             prediction.llm_temperature = temperature
             
             await session.commit()
-            logger.info(f"Prediction {prediction_id} updated with LLM content")
+            logger.info(f"Prediction {prediction_id} updated with LLM content in {prediction.planet.value} column")
             return True
     
     async def send_telegram_message(
@@ -316,8 +330,21 @@ class PredictionWorker:
         if user.first_name:
             message = f"Привет, {user.first_name}! {message}"
         
-        # Добавляем содержимое предсказания
-        content = prediction.content
+        # Добавляем содержимое предсказания из соответствующего столбца
+        content = None
+        if prediction.planet == Planet.moon and prediction.moon_analysis:
+            content = prediction.moon_analysis
+        elif prediction.planet == Planet.sun and prediction.sun_analysis:
+            content = prediction.sun_analysis
+        elif prediction.planet == Planet.mercury and prediction.mercury_analysis:
+            content = prediction.mercury_analysis
+        elif prediction.planet == Planet.venus and prediction.venus_analysis:
+            content = prediction.venus_analysis
+        elif prediction.planet == Planet.mars and prediction.mars_analysis:
+            content = prediction.mars_analysis
+        else:
+            # Fallback на content для совместимости
+            content = prediction.content or "Содержимое недоступно"
         
         # Обрезаем если слишком длинное (Telegram лимит 4096 символов)
         max_length = 4096 - len(message) - 100  # Оставляем место для подписи
