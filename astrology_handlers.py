@@ -493,13 +493,16 @@ async def check_existing_moon_prediction(user_id: int) -> bool:
             return False
 
         # Проверяем наличие активного бесплатного предсказания Луны
+        # с готовым анализом
         prediction_result = await session.execute(
             select(Prediction).where(
                 Prediction.user_id == user.user_id,
                 Prediction.planet == Planet.moon,
                 Prediction.prediction_type == PredictionType.free,
                 Prediction.is_active.is_(True),
-                Prediction.is_deleted.is_(False)
+                Prediction.is_deleted.is_(False),
+                # Проверяем, что анализ готов
+                Prediction.moon_analysis.is_not(None)
             )
         )
         existing_prediction = prediction_result.scalar_one_or_none()
