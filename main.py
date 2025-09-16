@@ -1550,8 +1550,9 @@ async def main():
     db_engine: AsyncEngine = _engine  # type: ignore[assignment]
     
     # Инициализируем обработчик платежей
-    payment_handler_instance = init_payment_handler(bot)
-    logger.info(f"Payment handler инициализирован: {payment_handler_instance is not None}")
+    global payment_handler
+    payment_handler = init_payment_handler(bot)
+    logger.info(f"Payment handler инициализирован: {payment_handler is not None}")
 
     # Автоинициализация схемы (однократно/идемпотентно):
     try:
