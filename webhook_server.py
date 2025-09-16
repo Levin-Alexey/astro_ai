@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from sqlalchemy import select
 import logging
 from datetime import datetime, timedelta
-from telegram import Bot
+from aiogram import Bot
 from config import BOT_TOKEN
 from db import engine
 from models import User
