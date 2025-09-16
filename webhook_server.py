@@ -45,7 +45,7 @@ class WebhookServer:
         return Response(
             status=200, 
             text="Webhook endpoint is working. Use POST for payment notifications.",
-            content_type="text/plain; charset=utf-8"
+            content_type="text/plain"
         )
 
     async def handle_webhook_fallback(self, request: Request) -> Response:
@@ -56,7 +56,7 @@ class WebhookServer:
             return Response(
                 status=200, 
                 text="Webhook endpoint is working. Use POST for payment notifications.",
-                content_type="text/plain; charset=utf-8"
+                content_type="text/plain"
             )
         elif request.method == "POST":
             return await self.handle_payment_webhook(request)
@@ -64,7 +64,7 @@ class WebhookServer:
             return Response(
                 status=405, 
                 text=f"Method {request.method} not allowed. Use GET or POST.",
-                content_type="text/plain; charset=utf-8"
+                content_type="text/plain"
             )
 
     async def handle_payment_webhook(self, request: Request) -> Response:
@@ -132,7 +132,7 @@ class WebhookServer:
         return Response(
             status=200, 
             text="Платеж успешно обработан! Вернитесь в Telegram бот.",
-            content_type="text/html; charset=utf-8"
+            content_type="text/html"
         )
 
     async def health_check(self, request: Request) -> Response:
