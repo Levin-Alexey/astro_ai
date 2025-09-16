@@ -22,14 +22,30 @@ class WebhookServer:
         self.app.router.add_post(
             '/webhook/payment', self.handle_payment_webhook
         )
+        self.app.router.add_post(
+            '/webhook', self.handle_payment_webhook
+        )
         self.app.router.add_get('/webhook/success', self.payment_success)
         self.app.router.add_get('/health', self.health_check)
     
     async def handle_payment_webhook(self, request: Request) -> Response:
         """Обрабатывает webhook от ЮKassa"""
         try:
+            # Логируем все запросы
+            logger.info(f"Webhook запрос: {request.method} {request.path}")
+            logger.info(f"Headers: {dict(request.headers)}")
+            
+            # Если это GET запрос, возвращаем информацию
+            if request.method == "GET":
+                return Response(
+                    status=200, 
+                    text="Webhook endpoint is working. Use POST for payment notifications.",
+                    content_type="text/plain; charset=utf-8"
+                )
+            
             # Получаем тело запроса
             body = await request.text()
+            logger.info(f"Request body: {body}")
             
             # Получаем заголовки (ЮKassa использует разные заголовки)
             signature = (
@@ -37,6 +53,8 @@ class WebhookServer:
                 request.headers.get('Authorization', '') or
                 request.headers.get('X-YooMoney-Signature', '')
             )
+            
+            logger.info(f"Signature: {signature}")
             
             # Проверяем подпись
             if not payment_handler or not payment_handler.verify_webhook(body, signature):
