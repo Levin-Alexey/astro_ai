@@ -1345,8 +1345,8 @@ async def on_payment_request(callback: CallbackQuery):
             description=description
         )
         
-        # Создаем URL для оплаты
-        payment_url = payment_handler.create_payment_url(payment_data)
+        # Создаем платеж через ЮKassa API
+        payment_url = await payment_handler.create_payment(payment_data)
         
         # Создаем клавиатуру с кнопкой оплаты
         kb = InlineKeyboardMarkup(

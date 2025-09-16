@@ -1,12 +1,18 @@
 import hashlib
 import hmac
 import logging
+import uuid
 from typing import Dict, Any
 from aiogram import Bot
+from yookassa import Configuration, Payment
 from config import (
     PAYMENT_SHOP_ID, PAYMENT_SECRET_KEY, 
     PAYMENT_TEST_AMOUNT, PAYMENT_CURRENCY
 )
+
+# Настройка ЮKassa
+Configuration.account_id = PAYMENT_SHOP_ID
+Configuration.secret_key = PAYMENT_SECRET_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +45,29 @@ class PaymentHandler:
                 "planet": planet
             }
         }
+    
+    async def create_payment(self, payment_data: Dict[str, Any]) -> str:
+        """Создает платеж через ЮKassa API"""
+        try:
+            # Создаем уникальный ID для платежа
+            payment_id = str(uuid.uuid4())
+            
+            # Создаем платеж через API
+            payment = Payment.create({
+                "amount": payment_data["amount"],
+                "confirmation": payment_data["confirmation"],
+                "capture": payment_data["capture"],
+                "description": payment_data["description"],
+                "metadata": payment_data["metadata"]
+            }, payment_id)
+            
+            # Возвращаем URL для оплаты
+            return payment.confirmation.confirmation_url
+            
+        except Exception as e:
+            logger.error(f"Ошибка при создании платежа: {e}")
+            # Fallback на старый метод
+            return self.create_payment_url(payment_data)
     
     def create_payment_url(self, payment_data: Dict[str, Any]) -> str:
         """Создает URL для оплаты (заглушка для тестирования)"""

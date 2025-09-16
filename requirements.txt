@@ -40,9 +40,26 @@ requests-html==0.10.0
 timezonefinder==6.2.0
 tzdata==2024.1
 
-
+# Redis
 redis==5.0.1
 aioredis==2.0.1
 
 # RabbitMQ
 aio-pika==9.3.1
+
+# ===== ДОПОЛНИТЕЛЬНЫЕ ЗАВИСИМОСТИ ДЛЯ ПЛАТЕЖЕЙ =====
+
+# ЮKassa API
+yookassa==2.3.0
+
+# HTTP клиент для webhook
+httpx==0.25.2
+
+# Файловые операции
+aiofiles==23.2.1
+
+# Криптография для подписей
+cryptography==41.0.7
+
+# Валидация данных
+validators==0.22.0
