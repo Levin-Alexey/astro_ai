@@ -4,6 +4,8 @@ import logging
 from aiohttp import web
 from aiohttp.web import Request, Response
 from payment_handler import payment_handler
+from aiogram import Bot
+from config import BOT_TOKEN
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +17,8 @@ class WebhookServer:
         self.host = host
         self.port = port
         self.app = web.Application()
+        self.bot = None
+        self.payment_handler = None
         self.setup_routes()
 
     def setup_routes(self):
@@ -106,9 +110,19 @@ class WebhookServer:
             #     logger.warning("Неверная подпись webhook")
             #     return Response(status=400, text="Invalid signature")
             
+            # Инициализируем payment_handler если нужно
+            if not self.payment_handler:
+                try:
+                    self.bot = Bot(token=BOT_TOKEN)
+                    from payment_handler import PaymentHandler
+                    self.payment_handler = PaymentHandler(self.bot)
+                    logger.info("Payment handler инициализирован")
+                except Exception as e:
+                    logger.error(f"Ошибка инициализации payment handler: {e}")
+            
             # Обрабатываем платеж
-            if payment_handler:
-                success = await payment_handler.process_payment_webhook(webhook_data)
+            if self.payment_handler:
+                success = await self.payment_handler.process_payment_webhook(webhook_data)
                 logger.info(f"Результат обработки webhook: {success}")
             else:
                 logger.warning("Payment handler не инициализирован")
