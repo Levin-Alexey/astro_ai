@@ -3,7 +3,6 @@ import json
 import logging
 from aiohttp import web
 from aiohttp.web import Request, Response
-from payment_handler import payment_handler
 from aiogram import Bot
 from config import BOT_TOKEN
 
@@ -17,7 +16,7 @@ class WebhookServer:
         self.host = host
         self.port = port
         self.app = web.Application()
-        self.bot = None
+        self.bot = Bot(token=BOT_TOKEN)
         self.payment_handler = None
         self.setup_routes()
 
@@ -113,7 +112,6 @@ class WebhookServer:
             # Инициализируем payment_handler если нужно
             if not self.payment_handler:
                 try:
-                    self.bot = Bot(token=BOT_TOKEN)
                     from payment_handler import PaymentHandler
                     self.payment_handler = PaymentHandler(self.bot)
                     logger.info("Payment handler инициализирован")
