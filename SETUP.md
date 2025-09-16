@@ -78,4 +78,4 @@ pip install -r requirements.txt
 
 ## Модели LLM
 
-- `deepseek/deepseek-chat-v3.1:free` - бесплатная модель для анализа Луны
+- `tngtech/deepseek-r1t2-chimera:free` - бесплатная модель для анализа Луны
