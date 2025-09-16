@@ -36,6 +36,7 @@ from astrology_handlers import (
     check_existing_moon_prediction
 )
 from handlers.recommendations_handler import handle_get_recommendations
+from payment_handler import init_payment_handler, payment_handler
 
 # Настройка логирования
 logging.basicConfig(level=getattr(logging, LOG_LEVEL), format=LOG_FORMAT)
@@ -1198,14 +1199,51 @@ async def on_buy_analysis(callback: CallbackQuery):
     """Обработчик кнопки 'Купить разбор'"""
     await callback.answer()
     cb_msg = cast(Message, callback.message)
+    
+    # Создаем клавиатуру с кнопками оплаты
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="☀️ Солнце - 10₽ (тест)",
+                    callback_data="pay_sun"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="☿️ Меркурий - 10₽ (тест)",
+                    callback_data="pay_mercury"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="♀️ Венера - 10₽ (тест)",
+                    callback_data="pay_venus"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="♂️ Марс - 10₽ (тест)",
+                    callback_data="pay_mars"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🏠 Главное меню",
+                    callback_data="back_to_menu"
+                )
+            ]
+        ]
+    )
+    
     await cb_msg.answer(
         "💳 Купить разбор\n\n"
-        "Доступные платные разборы:\n"
-        "☀️ Солнце - 500₽\n"
-        "☿️ Меркурий - 500₽\n"
-        "♀️ Венера - 500₽\n"
-        "♂️ Марс - 500₽\n\n"
-        "Функция в разработке... 🚧"
+        "Выбери планету для разбора (тестовая цена 10₽):\n\n"
+        "☀️ Солнце - твоя сущность и жизненная сила\n"
+        "☿️ Меркурий - мышление и общение\n"
+        "♀️ Венера - любовь и красота\n"
+        "♂️ Марс - энергия и действия",
+        reply_markup=kb
     )
 
 
@@ -1272,6 +1310,75 @@ async def on_back_to_menu(callback: CallbackQuery):
     """Обработчик кнопки 'Назад в меню'"""
     await callback.answer()
     await show_main_menu(callback)
+
+
+# Обработчики оплаты
+@dp.callback_query(F.data.startswith("pay_"))
+async def on_payment_request(callback: CallbackQuery):
+    """Обработчик кнопок оплаты"""
+    await callback.answer()
+    
+    planet_map = {
+        "pay_sun": ("☀️ Солнце", "sun"),
+        "pay_mercury": ("☿️ Меркурий", "mercury"), 
+        "pay_venus": ("♀️ Венера", "venus"),
+        "pay_mars": ("♂️ Марс", "mars")
+    }
+    
+    planet_name, planet_code = planet_map.get(
+        callback.data, ("Планета", "unknown")
+    )
+    
+    if not payment_handler:
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.answer("❌ Система оплаты временно недоступна")
+        return
+    
+    try:
+        user_id = callback.from_user.id
+        description = f"Астрологический разбор {planet_name}"
+        
+        # Создаем данные для платежа
+        payment_data = payment_handler.create_payment_data(
+            user_id=user_id,
+            planet=planet_code,
+            description=description
+        )
+        
+        # Создаем URL для оплаты
+        payment_url = payment_handler.create_payment_url(payment_data)
+        
+        # Создаем клавиатуру с кнопкой оплаты
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="💳 Оплатить 10₽",
+                        url=payment_url
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="❌ Отмена",
+                        callback_data="buy_analysis"
+                    )
+                ]
+            ]
+        )
+        
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.answer(
+            f"💳 Оплата разбора {planet_name}\n\n"
+            f"💰 Сумма: 10₽\n"
+            f"📝 Описание: {description}\n\n"
+            f"Нажми кнопку ниже для перехода к оплате:",
+            reply_markup=kb
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка при создании платежа: {e}")
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.answer("❌ Произошла ошибка при создании платежа")
 
 
 # Обработчики для кнопок после разбора Луны
@@ -1441,6 +1548,9 @@ async def main():
     init_engine()
     from db import engine as _engine
     db_engine: AsyncEngine = _engine  # type: ignore[assignment]
+    
+    # Инициализируем обработчик платежей
+    init_payment_handler(bot)
 
     # Автоинициализация схемы (однократно/идемпотентно):
     try:
