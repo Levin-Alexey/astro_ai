@@ -52,6 +52,10 @@ aio-pika==9.3.1
 # ЮKassa API
 yookassa==2.3.0
 
+# FastAPI для webhook
+fastapi==0.104.1
+uvicorn==0.24.0
+
 # HTTP клиент для webhook
 httpx==0.25.2
 

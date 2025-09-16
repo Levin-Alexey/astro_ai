@@ -1,174 +1,75 @@
-import asyncio
-import json
+from fastapi import FastAPI, Request
+from sqlalchemy import select
 import logging
-from aiohttp import web
-from aiohttp.web import Request, Response
-from aiogram import Bot
+from datetime import datetime, timedelta
+from telegram import Bot
 from config import BOT_TOKEN
+from db import engine
+from models import User
 
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+bot = Bot(token=BOT_TOKEN)
+app = FastAPI()
 
-class WebhookServer:
-    """Сервер для обработки webhook от ЮKassa"""
-    
-    def __init__(self, host: str = "0.0.0.0", port: int = 8080):
-        self.host = host
-        self.port = port
-        self.app = web.Application()
-        self.bot = Bot(token=BOT_TOKEN)
-        self.payment_handler = None
-        self.setup_routes()
+@app.post("/webhook")
+async def yookassa_webhook(request: Request):
+    try:
+        data = await request.json()
+        logger.info(f"Webhook received: {data}")
 
-    def setup_routes(self):
-        """Настраивает маршруты"""
-        # Webhook для платежей
-        self.app.router.add_post(
-            '/webhook/payment', self.handle_payment_webhook
-        )
-        self.app.router.add_post(
-            '/webhook', self.handle_payment_webhook
-        )
-        self.app.router.add_get(
-            '/webhook', self.handle_webhook_get
-        )
-        
-        # Дополнительные маршруты
-        self.app.router.add_get('/webhook/success', self.payment_success)
-        self.app.router.add_get('/health', self.health_check)
-        
-        # Обработка всех остальных запросов к webhook
-        self.app.router.add_route(
-            '*', '/webhook', self.handle_webhook_fallback
-        )
-    
-    async def handle_webhook_get(self, request: Request) -> Response:
-        """Обрабатывает GET запросы к webhook"""
-        logger.info(f"GET запрос к webhook: {request.path}")
-        return Response(
-            status=200, 
-            text="Webhook endpoint is working. Use POST for payment notifications.",
-            content_type="text/plain"
-        )
-
-    async def handle_webhook_fallback(self, request: Request) -> Response:
-        """Обрабатывает все остальные запросы к webhook"""
-        logger.info(f"Fallback запрос к webhook: {request.method} {request.path}")
-        
-        if request.method == "GET":
-            return Response(
-                status=200, 
-                text="Webhook endpoint is working. Use POST for payment notifications.",
-                content_type="text/plain"
-            )
-        elif request.method == "POST":
-            return await self.handle_payment_webhook(request)
-        else:
-            return Response(
-                status=405, 
-                text=f"Method {request.method} not allowed. Use GET or POST.",
-                content_type="text/plain"
-            )
-
-    async def handle_payment_webhook(self, request: Request) -> Response:
-        """Обрабатывает webhook от ЮKassa"""
-        try:
-            # Логируем все запросы
-            logger.info(f"Webhook запрос: {request.method} {request.path}")
-            logger.info(f"Headers: {dict(request.headers)}")
+        if data.get("event") == "payment.succeeded":
+            # Получаем метаданные из объекта платежа
+            metadata = data["object"].get("metadata", {})
+            user_id = metadata.get("user_id")
+            planet = metadata.get("planet")
             
-            # Получаем тело запроса
-            body = await request.text()
-            logger.info(f"Request body: {body}")
+            if not user_id or not planet:
+                logger.error("❌ Missing user_id or planet in metadata")
+                return {"status": "error", "detail": "Missing metadata"}
             
-            # Если тело пустое, возвращаем ошибку
-            if not body:
-                logger.warning("Пустое тело запроса")
-                return Response(status=400, text="Empty request body")
-            
-            # Парсим JSON
             try:
-                webhook_data = json.loads(body)
-                logger.info(f"Parsed webhook data: {webhook_data}")
-            except json.JSONDecodeError as e:
-                logger.error(f"Ошибка парсинга JSON: {e}")
-                return Response(status=400, text="Invalid JSON")
-            
-            # Получаем заголовки для проверки подписи
-            signature = (
-                request.headers.get('HTTP_AUTHORIZATION', '') or
-                request.headers.get('Authorization', '') or
-                request.headers.get('X-YooMoney-Signature', '') or
-                request.headers.get('X-YooMoney-Signature-256', '')
-            )
-            
-            logger.info(f"Signature: {signature}")
-            
-            # Проверяем подпись (пока отключаем для тестирования)
-            # if not payment_handler or not payment_handler.verify_webhook(body, signature):
-            #     logger.warning("Неверная подпись webhook")
-            #     return Response(status=400, text="Invalid signature")
-            
-            # Инициализируем payment_handler если нужно
-            if not self.payment_handler:
-                try:
-                    from payment_handler import PaymentHandler
-                    self.payment_handler = PaymentHandler(self.bot)
-                    logger.info("Payment handler инициализирован")
-                except Exception as e:
-                    logger.error(f"Ошибка инициализации payment handler: {e}")
-            
-            # Обрабатываем платеж
-            if self.payment_handler:
-                success = await self.payment_handler.process_payment_webhook(webhook_data)
-                logger.info(f"Результат обработки webhook: {success}")
-            else:
-                logger.warning("Payment handler не инициализирован")
-                success = False
-            
-            if success:
-                logger.info("Webhook успешно обработан")
-                return Response(status=200, text="OK")
-            else:
-                logger.warning("Webhook не обработан")
-                return Response(status=200, text="Not processed")
+                telegram_id = int(user_id)
+            except ValueError:
+                logger.error("❌ Invalid Telegram ID in metadata")
+                return {"status": "error", "detail": "Invalid Telegram ID"}
+
+            # Обновляем пользователя в базе данных
+            async with engine.begin() as conn:
+                result = await conn.execute(select(User).where(User.telegram_id == telegram_id))
+                user = result.scalar_one_or_none()
                 
-        except Exception as e:
-            logger.error(f"Ошибка при обработке webhook: {e}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            return Response(status=500, text="Internal server error")
+                if user:
+                    # Здесь можно добавить логику для предоставления доступа к разбору планеты
+                    # Например, сохранить в поле user.available_planets или создать отдельную таблицу
+                    logger.info(f"✅ Payment processed for Telegram ID {telegram_id}, planet: {planet}")
+                    
+                    # Уведомляем пользователя
+                    await bot.send_message(
+                        chat_id=telegram_id,
+                        text=f"✅ Платеж успешно обработан!\n\n"
+                             f"🌍 Планета: {planet}\n"
+                             f"💰 Сумма: 10₽\n\n"
+                             f"Теперь вы можете получить разбор этой планеты в боте!"
+                    )
+                    
+                    return {"status": "ok"}
+                else:
+                    logger.warning(f"⚠️ User with Telegram ID {telegram_id} not found")
+                    return {"status": "error", "detail": "User not found"}
 
-    async def payment_success(self, request: Request) -> Response:
-        """Страница успешной оплаты"""
-        return Response(
-            status=200, 
-            text="Платеж успешно обработан! Вернитесь в Telegram бот.",
-            content_type="text/html"
-        )
+        return {"status": "ignored"}
+        
+    except Exception as e:
+        logger.error(f"❌ Error processing webhook: {e}")
+        return {"status": "error", "detail": str(e)}
 
-    async def health_check(self, request: Request) -> Response:
-        """Проверка здоровья сервера"""
-        return Response(status=200, text="OK")
-    
-    async def start(self):
-        """Запускает сервер"""
-        logger.info(f"Запуск webhook сервера на {self.host}:{self.port}")
-        runner = web.AppRunner(self.app)
-        await runner.setup()
-        site = web.TCPSite(runner, self.host, self.port)
-        await site.start()
-        logger.info("Webhook сервер запущен")
-        return runner
+@app.get("/webhook")
+async def webhook_get():
+    return {"status": "ok", "message": "Webhook endpoint is working"}
 
-
-async def start_webhook_server():
-    """Запускает webhook сервер"""
-    server = WebhookServer()
-    runner = await server.start()
-    return runner
-
-if __name__ == "__main__":
-    # Для тестирования webhook сервера отдельно
-    logging.basicConfig(level=logging.INFO)
-    asyncio.run(start_webhook_server())
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}

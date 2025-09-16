@@ -1,37 +1,32 @@
 #!/usr/bin/env python3
 """
-Скрипт для запуска бота с webhook сервером
+Запуск бота с FastAPI webhook
 """
 import asyncio
 import logging
-from main import main as bot_main
-from webhook_server import start_webhook_server
+import uvicorn
+from main import main as start_bot
 
-# Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger(__name__)
 
-async def main():
-    """Основная функция запуска бота и webhook сервера"""
-    logger.info("Запуск бота с webhook сервером...")
+async def main_with_webhook():
+    logger.info("Запуск бота и FastAPI webhook сервера...")
     
-    # Запускаем webhook сервер
-    webhook_runner = await start_webhook_server()
+    # Запускаем бота в фоне
+    bot_task = asyncio.create_task(start_bot())
     
-    try:
-        # Запускаем бота
-        await bot_main()
-    except KeyboardInterrupt:
-        logger.info("Получен сигнал остановки")
-    except Exception as e:
-        logger.error(f"Ошибка при запуске: {e}")
-    finally:
-        # Останавливаем webhook сервер
-        await webhook_runner.cleanup()
-        logger.info("Webhook сервер остановлен")
+    # Запускаем FastAPI webhook сервер
+    config = uvicorn.Config(
+        "webhook_server:app",
+        host="0.0.0.0",
+        port=8080,
+        log_level="info"
+    )
+    server = uvicorn.Server(config)
+    
+    # Запускаем оба сервиса параллельно
+    await asyncio.gather(bot_task, server.serve())
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    logging.basicConfig(level=logging.INFO)
+    asyncio.run(main_with_webhook())
