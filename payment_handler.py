@@ -36,7 +36,7 @@ class PaymentHandler:
             },
             "confirmation": {
                 "type": "redirect",
-                "return_url": f"https://t.me/your_bot_username"  # Замените на ваш бот
+                "return_url": "https://pay.neyroastro.ru/webhook/success"
             },
             "capture": True,
             "description": description,
@@ -52,6 +52,10 @@ class PaymentHandler:
             # Создаем уникальный ID для платежа
             payment_id = str(uuid.uuid4())
             
+            logger.info(f"Создание платежа с ID: {payment_id}")
+            logger.info(f"Данные платежа: {payment_data}")
+            logger.info(f"Configuration account_id: {Configuration.account_id}")
+            
             # Создаем платеж через API
             payment = Payment.create({
                 "amount": payment_data["amount"],
@@ -61,11 +65,15 @@ class PaymentHandler:
                 "metadata": payment_data["metadata"]
             }, payment_id)
             
+            logger.info(f"Платеж создан успешно: {payment.id}")
+            logger.info(f"URL для оплаты: {payment.confirmation.confirmation_url}")
+            
             # Возвращаем URL для оплаты
             return payment.confirmation.confirmation_url
             
         except Exception as e:
             logger.error(f"Ошибка при создании платежа: {e}")
+            logger.error(f"Тип ошибки: {type(e).__name__}")
             # Fallback на старый метод
             return self.create_payment_url(payment_data)
     

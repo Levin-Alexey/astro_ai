@@ -22,6 +22,7 @@ class WebhookServer:
         self.app.router.add_post(
             '/webhook/payment', self.handle_payment_webhook
         )
+        self.app.router.add_get('/webhook/success', self.payment_success)
         self.app.router.add_get('/health', self.health_check)
     
     async def handle_payment_webhook(self, request: Request) -> Response:
@@ -30,8 +31,12 @@ class WebhookServer:
             # Получаем тело запроса
             body = await request.text()
             
-            # Получаем заголовки
-            signature = request.headers.get('X-YooMoney-Signature', '')
+            # Получаем заголовки (ЮKassa использует разные заголовки)
+            signature = (
+                request.headers.get('HTTP_AUTHORIZATION', '') or
+                request.headers.get('Authorization', '') or
+                request.headers.get('X-YooMoney-Signature', '')
+            )
             
             # Проверяем подпись
             if not payment_handler or not payment_handler.verify_webhook(body, signature):
@@ -61,6 +66,14 @@ class WebhookServer:
         except Exception as e:
             logger.error(f"Ошибка при обработке webhook: {e}")
             return Response(status=500, text="Internal server error")
+
+    async def payment_success(self, request: Request) -> Response:
+        """Страница успешной оплаты"""
+        return Response(
+            status=200, 
+            text="Платеж успешно обработан! Вернитесь в Telegram бот.",
+            content_type="text/html; charset=utf-8"
+        )
 
     async def health_check(self, request: Request) -> Response:
         """Проверка здоровья сервера"""
