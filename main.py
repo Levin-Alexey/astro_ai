@@ -36,7 +36,7 @@ from astrology_handlers import (
     check_existing_moon_prediction
 )
 from handlers.recommendations_handler import handle_get_recommendations
-from payment_handler import init_payment_handler, payment_handler
+from payment_handler import init_payment_handler
 
 # Настройка логирования
 logging.basicConfig(level=getattr(logging, LOG_LEVEL), format=LOG_FORMAT)
@@ -52,6 +52,9 @@ if BOT_TOKEN in ["YOUR_BOT_TOKEN_HERE", "ваш_токен_здесь"]:
 # Создание объектов бота и диспетчера
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
+
+# Глобальная переменная для payment_handler
+payment_handler = None
 
 
 @dp.message(Command("start"))
