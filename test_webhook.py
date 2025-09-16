@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
 """
-Тест webhook сервера
+Тест webhook
 """
 import requests
 import json
 
 def test_webhook():
-    """Тестирует webhook сервер"""
-    base_url = "https://pay.neyroastro.ru"
+    """Тестирует webhook"""
+    url = "https://pay.neyroastro.ru/webhook"
     
-    print("=== ТЕСТ WEBHOOK СЕРВЕРА ===")
+    print("=== ТЕСТ WEBHOOK ===")
     
-    # Тест 1: GET запрос
-    print("\n1. Тестирование GET запроса...")
+    # GET запрос
+    print("\n1. GET запрос...")
     try:
-        response = requests.get(f"{base_url}/webhook", timeout=10)
+        response = requests.get(url, timeout=10)
         print(f"Статус: {response.status_code}")
         print(f"Ответ: {response.text}")
     except Exception as e:
         print(f"Ошибка: {e}")
     
-    # Тест 2: POST запрос
-    print("\n2. Тестирование POST запроса...")
+    # POST запрос с payment.succeeded
+    print("\n2. POST запрос с payment.succeeded...")
     try:
-        test_data = {
+        data = {
             "event": "payment.succeeded",
             "object": {
                 "metadata": {
@@ -32,29 +32,7 @@ def test_webhook():
                 }
             }
         }
-        response = requests.post(
-            f"{base_url}/webhook", 
-            json=test_data,
-            timeout=10
-        )
-        print(f"Статус: {response.status_code}")
-        print(f"Ответ: {response.text}")
-    except Exception as e:
-        print(f"Ошибка: {e}")
-    
-    # Тест 3: Health check
-    print("\n3. Тестирование health check...")
-    try:
-        response = requests.get(f"{base_url}/health", timeout=10)
-        print(f"Статус: {response.status_code}")
-        print(f"Ответ: {response.text}")
-    except Exception as e:
-        print(f"Ошибка: {e}")
-    
-    # Тест 4: Success page
-    print("\n4. Тестирование success page...")
-    try:
-        response = requests.get(f"{base_url}/webhook/success", timeout=10)
+        response = requests.post(url, json=data, timeout=10)
         print(f"Статус: {response.status_code}")
         print(f"Ответ: {response.text}")
     except Exception as e:
