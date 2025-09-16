@@ -104,19 +104,36 @@ class PaymentHandler:
     async def process_payment_webhook(self, webhook_data: Dict[str, Any]) -> bool:
         """Обрабатывает webhook от ЮKassa"""
         try:
+            logger.info(f"Обработка webhook: {webhook_data}")
+            
             event = webhook_data.get('event')
+            logger.info(f"Событие: {event}")
+            
             if event == 'payment.succeeded':
                 payment = webhook_data.get('object', {})
+                logger.info(f"Данные платежа: {payment}")
+                
                 metadata = payment.get('metadata', {})
+                logger.info(f"Метаданные: {metadata}")
+                
                 user_id = int(metadata.get('user_id', 0))
                 planet = metadata.get('planet', '')
+                
+                logger.info(f"User ID: {user_id}, Planet: {planet}")
                 
                 if user_id and planet:
                     await self._grant_access(user_id, planet)
                     return True
+                else:
+                    logger.warning(f"Недостаточно данных: user_id={user_id}, planet={planet}")
+            else:
+                logger.info(f"Событие {event} не обрабатывается")
+                
             return False
         except Exception as e:
             logger.error(f"Ошибка при обработке webhook: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return False
     
     async def _grant_access(self, user_id: int, planet: str):
