@@ -37,28 +37,32 @@ async def yookassa_webhook(request: Request):
                 return {"status": "error", "detail": "Invalid Telegram ID"}
 
             # Обновляем пользователя в базе данных
-            async with engine.begin() as conn:
-                result = await conn.execute(select(User).where(User.telegram_id == telegram_id))
-                user = result.scalar_one_or_none()
-                
-                if user:
-                    # Здесь можно добавить логику для предоставления доступа к разбору планеты
-                    # Например, сохранить в поле user.available_planets или создать отдельную таблицу
-                    logger.info(f"✅ Payment processed for Telegram ID {telegram_id}, planet: {planet}")
+            try:
+                async with engine.begin() as conn:
+                    result = await conn.execute(select(User).where(User.telegram_id == telegram_id))
+                    user = result.scalar_one_or_none()
                     
-                    # Уведомляем пользователя
-                    await bot.send_message(
-                        chat_id=telegram_id,
-                        text=f"✅ Платеж успешно обработан!\n\n"
-                             f"🌍 Планета: {planet}\n"
-                             f"💰 Сумма: 10₽\n\n"
-                             f"Теперь вы можете получить разбор этой планеты в боте!"
-                    )
-                    
-                    return {"status": "ok"}
-                else:
-                    logger.warning(f"⚠️ User with Telegram ID {telegram_id} not found")
-                    return {"status": "error", "detail": "User not found"}
+                    if user:
+                        # Здесь можно добавить логику для предоставления доступа к разбору планеты
+                        # Например, сохранить в поле user.available_planets или создать отдельную таблицу
+                        logger.info(f"✅ Payment processed for Telegram ID {telegram_id}, planet: {planet}")
+                        
+                        # Уведомляем пользователя
+                        await bot.send_message(
+                            chat_id=telegram_id,
+                            text=f"✅ Платеж успешно обработан!\n\n"
+                                 f"🌍 Планета: {planet}\n"
+                                 f"💰 Сумма: 10₽\n\n"
+                                 f"Теперь вы можете получить разбор этой планеты в боте!"
+                        )
+                        
+                        return {"status": "ok"}
+                    else:
+                        logger.warning(f"⚠️ User with Telegram ID {telegram_id} not found")
+                        return {"status": "error", "detail": "User not found"}
+            except Exception as db_error:
+                logger.error(f"❌ Database error: {db_error}")
+                return {"status": "error", "detail": "Database error"}
 
         return {"status": "ignored"}
         
