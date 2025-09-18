@@ -227,6 +227,7 @@ class QuestionWorker:
                 user_id=user_id,
                 planet=Planet.moon,  # Вопросы привязаны к Луне
                 prediction_type=PredictionType.free,
+                content=answer,  # Сохраняем ответ в content для совместимости
                 question=question,
                 answer=answer,
                 llm_model=llm_model,

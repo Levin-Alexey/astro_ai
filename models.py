@@ -284,7 +284,7 @@ class Prediction(Base):
             "sun_analysis IS NOT NULL OR mercury_analysis IS NOT NULL OR "
             "venus_analysis IS NOT NULL OR mars_analysis IS NOT NULL OR "
             "recommendations IS NOT NULL OR answer IS NOT NULL OR "
-            "qa_responses IS NOT NULL",
+            "question IS NOT NULL OR qa_responses IS NOT NULL",
             name="at_least_one_content_type",
         ),
     )
