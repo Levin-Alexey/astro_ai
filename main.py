@@ -247,6 +247,12 @@ async def show_main_menu(message_or_callback):
                 InlineKeyboardButton(
                     text="🆘 Служба заботы", callback_data="support"
                 )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🗑️ Удалить разборы", 
+                    callback_data="delete_predictions"
+                )
             ]
         ]
     )
@@ -1313,11 +1319,123 @@ async def on_support(callback: CallbackQuery):
     )
 
 
+@dp.callback_query(F.data == "delete_predictions")
+async def on_delete_predictions(callback: CallbackQuery):
+    """Обработчик кнопки 'Удалить разборы'"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    
+    # Показываем подтверждение
+    await cb_msg.answer(
+        "🗑️ Удаление разборов\n\n"
+        "⚠️ ВНИМАНИЕ! Это действие необратимо!\n\n"
+        "Будут удалены ВСЕ твои разборы:\n"
+        "• Разбор Луны\n"
+        "• Разборы других планет\n"
+        "• Рекомендации\n"
+        "• Ответы на вопросы\n\n"
+        "Ты уверен, что хочешь продолжить?",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="✅ Да, удалить все",
+                        callback_data="confirm_delete_predictions"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="❌ Отмена",
+                        callback_data="back_to_menu"
+                    )
+                ]
+            ]
+        )
+    )
+
+
 @dp.callback_query(F.data == "back_to_menu")
 async def on_back_to_menu(callback: CallbackQuery):
     """Обработчик кнопки 'Назад в меню'"""
     await callback.answer()
     await show_main_menu(callback)
+
+
+@dp.callback_query(F.data == "confirm_delete_predictions")
+async def on_confirm_delete_predictions(callback: CallbackQuery):
+    """Обработчик подтверждения удаления разборов"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    
+    try:
+        # Получаем ID пользователя
+        user_id = callback.from_user.id if callback.from_user else 0
+        
+        # Удаляем все разборы пользователя
+        from db import get_session
+        from models import Prediction
+        from sqlalchemy import delete
+        
+        async with get_session() as session:
+            # Находим пользователя
+            from models import User
+            from sqlalchemy import select
+            user_result = await session.execute(
+                select(User).where(User.telegram_id == user_id)
+            )
+            user = user_result.scalar_one_or_none()
+            
+            if not user:
+                await cb_msg.answer(
+                    "❌ Пользователь не найден. Попробуйте /start"
+                )
+                return
+            
+            # Удаляем все разборы пользователя
+            delete_result = await session.execute(
+                delete(Prediction).where(Prediction.user_id == user.user_id)
+            )
+            
+            await session.commit()
+            
+            deleted_count = delete_result.rowcount
+            
+            await cb_msg.answer(
+                f"✅ Разборы успешно удалены!\n\n"
+                f"Удалено записей: {deleted_count}\n\n"
+                f"Все твои данные очищены. Можешь начать заново! 🔄",
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text="🏠 Главное меню",
+                                callback_data="back_to_menu"
+                            )
+                        ]
+                    ]
+                )
+            )
+            
+            logger.info(
+                f"Deleted {deleted_count} predictions for user {user_id}"
+            )
+            
+    except Exception as e:
+        logger.error(f"Error deleting predictions: {e}")
+        await cb_msg.answer(
+            "❌ Произошла ошибка при удалении разборов.\n\n"
+            "Попробуйте позже или обратитесь в поддержку.",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🏠 Главное меню",
+                            callback_data="back_to_menu"
+                        )
+                    ]
+                ]
+            )
+        )
 
 
 # Обработчики оплаты
@@ -1566,33 +1684,171 @@ async def on_explore_other_areas(callback: CallbackQuery):
     await callback.answer()
     cb_msg = cast(Message, callback.message)
     await cb_msg.answer(
-        "🔍 Исследовать другие сферы\n\n"
-        "Помимо Луны, в твоей натальной карте есть много других важных "
-        "планет:\n\n"
-        "☀️ Солнце - твоя сущность и жизненная сила\n"
-        "☿️ Меркурий - мышление и общение\n"
-        "♀️ Венера - любовь и красота\n"
-        "♂️ Марс - энергия и действия\n\n"
-        "Каждая планета расскажет что-то особенное о тебе!\n\n"
-        "Хочешь узнать больше?",
+        "Давай выберем планету, с которой начнем прямо сейчас 🌟\n\n"
+        "☀️ Солнце\n"
+        "результат: прилив энергии, уверенность, высокая самооценка, "
+        "непоколебимая опора, горящие глаза, осознание своей уникальности "
+        "и жизненной задачи\n\n"
+        "🧠 Меркурий\n"
+        "результат: развитие речи и мышления, умение убеждать и "
+        "договариваться, лёгкое обучение и ясная подача идей\n\n"
+        "💰💍 Венера\n"
+        "результат: разбор блоков в отношениях и финансах, женственность "
+        "и притягательность, построение гармоничных для себя отношений, "
+        "наслаждение от жизни, расширение финансовой ёмкости — одним словом, "
+        "изобилие\n\n"
+        "🔥 Марс\n"
+        "результат: рост мотивации и силы воли, решительность, спортивный "
+        "дух, умение разрешать конфликты и уверенно начинать новое\n\n"
+        "🔓 Пока бот на тесте, ты получаешь консультацию астролога почти "
+        "даром:\n\n"
+        "💸 Одна планета — 77₽ (вместо 999₽)\n"
+        "🌌 Все планеты сразу — 222₽ (вместо 5555₽) + 🎁: неограниченное "
+        "количество вопросов по своим разборам\n\n"
+        "Выбери разбор по кнопке ниже 😼👇🏼",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text="💳 Купить разбор",
-                        callback_data="buy_analysis"
+                        text="🌌 Все планеты",
+                        callback_data="explore_all_planets"
                     )
                 ],
                 [
                     InlineKeyboardButton(
-                        text="❓ Задать вопрос",
-                        callback_data="ask_question"
+                        text="☀️ Солнце",
+                        callback_data="explore_sun"
+                    ),
+                    InlineKeyboardButton(
+                        text="☿️ Меркурий",
+                        callback_data="explore_mercury"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="♀️ Венера",
+                        callback_data="explore_venus"
+                    ),
+                    InlineKeyboardButton(
+                        text="♂️ Марс",
+                        callback_data="explore_mars"
                     )
                 ],
                 [
                     InlineKeyboardButton(
                         text="🏠 Главное меню",
                         callback_data="back_to_menu"
+                    )
+                ]
+            ]
+        )
+    )
+
+
+# Обработчики для исследования планет
+@dp.callback_query(F.data == "explore_all_planets")
+async def on_explore_all_planets(callback: CallbackQuery):
+    """Обработчик кнопки 'Все планеты'"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "🌌 Все планеты\n\n"
+        "Здесь будет обработчик для всех планет\n\n"
+        "TODO: Реализовать функционал",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🔙 Назад",
+                        callback_data="explore_other_areas"
+                    )
+                ]
+            ]
+        )
+    )
+
+
+@dp.callback_query(F.data == "explore_sun")
+async def on_explore_sun(callback: CallbackQuery):
+    """Обработчик кнопки 'Солнце'"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "☀️ Солнце\n\n"
+        "Здесь будет обработчик для Солнца\n\n"
+        "TODO: Реализовать функционал",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🔙 Назад",
+                        callback_data="explore_other_areas"
+                    )
+                ]
+            ]
+        )
+    )
+
+
+@dp.callback_query(F.data == "explore_mercury")
+async def on_explore_mercury(callback: CallbackQuery):
+    """Обработчик кнопки 'Меркурий'"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "☿️ Меркурий\n\n"
+        "Здесь будет обработчик для Меркурия\n\n"
+        "TODO: Реализовать функционал",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🔙 Назад",
+                        callback_data="explore_other_areas"
+                    )
+                ]
+            ]
+        )
+    )
+
+
+@dp.callback_query(F.data == "explore_venus")
+async def on_explore_venus(callback: CallbackQuery):
+    """Обработчик кнопки 'Венера'"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "♀️ Венера\n\n"
+        "Здесь будет обработчик для Венеры\n\n"
+        "TODO: Реализовать функционал",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🔙 Назад",
+                        callback_data="explore_other_areas"
+                    )
+                ]
+            ]
+        )
+    )
+
+
+@dp.callback_query(F.data == "explore_mars")
+async def on_explore_mars(callback: CallbackQuery):
+    """Обработчик кнопки 'Марс'"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "♂️ Марс\n\n"
+        "Здесь будет обработчик для Марса\n\n"
+        "TODO: Реализовать функционал",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🔙 Назад",
+                        callback_data="explore_other_areas"
                     )
                 ]
             ]

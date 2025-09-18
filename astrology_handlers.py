@@ -95,8 +95,20 @@ def format_moon_data_for_llm(moon_data: dict) -> str:
 Аспекты Луны:
 """
 
-    # Добавляем аспекты
-    for aspect in aspects:
+    # Добавляем аспекты (сумма орбов не более 4 градусов)
+    # Сортируем по орбу по возрастанию
+    sorted_aspects = sorted(aspects, key=lambda x: x['orb'])
+    filtered_aspects = []
+    total_orb = 0.0
+    
+    for aspect in sorted_aspects:
+        if total_orb + aspect['orb'] <= 4.0:
+            filtered_aspects.append(aspect)
+            total_orb += aspect['orb']
+        else:
+            break
+    
+    for aspect in filtered_aspects:
         result += (
             f"- {aspect['aspecting_planet']} {aspect['type']} "
             f"{aspect['aspected_planet']} "
@@ -626,8 +638,23 @@ async def start_moon_analysis(callback: CallbackQuery, state: FSMContext):
 
 🔗 Аспекты Луны:"""
 
-                # Добавляем аспекты
-                for aspect in moon_data["moon_aspects"]:
+                # Добавляем аспекты (сумма орбов не более 4 градусов)
+                # Сортируем по орбу по возрастанию
+                sorted_aspects = sorted(
+                    moon_data["moon_aspects"], 
+                    key=lambda x: x['orb']
+                )
+                filtered_aspects = []
+                total_orb = 0.0
+                
+                for aspect in sorted_aspects:
+                    if total_orb + aspect['orb'] <= 4.0:
+                        filtered_aspects.append(aspect)
+                        total_orb += aspect['orb']
+                    else:
+                        break
+                
+                for aspect in filtered_aspects:
                     moon_message += (
                         f"\n• {aspect['aspecting_planet']} {aspect['type']} "
                         f"{aspect['aspected_planet']} "
