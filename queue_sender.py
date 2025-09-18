@@ -148,7 +148,10 @@ class QueueSender:
         Returns:
             True если сообщение отправлено успешно
         """
+        logger.info(f"send_question_for_processing called: user={user_telegram_id}, question='{question[:50]}...'")
+        
         if not self.channel:
+            logger.info("Channel not initialized, initializing...")
             await self.initialize()
 
         message_data = {
@@ -163,12 +166,13 @@ class QueueSender:
                 delivery_mode=aio_pika.DeliveryMode.PERSISTENT
             )
 
+            logger.info(f"Publishing message to queue '{QUESTIONS_QUEUE_NAME}'")
             await self.channel.default_exchange.publish(
                 message,
                 routing_key=QUESTIONS_QUEUE_NAME
             )
 
-            logger.info(f"Sent question from user {user_telegram_id} to queue")
+            logger.info(f"Successfully sent question from user {user_telegram_id} to queue")
             return True
 
         except Exception as e:

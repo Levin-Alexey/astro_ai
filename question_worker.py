@@ -368,7 +368,9 @@ class QuestionWorker:
         async def process_message(message: aio_pika.IncomingMessage):
             async with message.process():
                 try:
+                    logger.info(f"Received message from queue: {message.body.decode()[:100]}...")
                     message_data = json.loads(message.body.decode())
+                    logger.info(f"Parsed message data: {message_data}")
                     await self.process_question(message_data)
                 except Exception as e:
                     logger.error(f"Error processing message: {e}")

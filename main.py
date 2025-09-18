@@ -1532,19 +1532,21 @@ async def process_user_question(message: Message, state: FSMContext):
     try:
         # Отправляем вопрос в очередь для обработки
         from queue_sender import send_question_to_queue
+        user_telegram_id = message.from_user.id if message.from_user else 0
+        
+        logger.info(f"Attempting to send question to queue: user={user_telegram_id}, question='{question[:50]}...'")
+        
         success = await send_question_to_queue(
-            user_telegram_id=message.from_user.id if message.from_user else 0,
+            user_telegram_id=user_telegram_id,
             question=question
         )
         
         if success:
-            logger.info(
-                f"Question sent to queue for user "
-                f"{message.from_user.id if message.from_user else 0}"
-            )
+            logger.info(f"Question successfully sent to queue for user {user_telegram_id}")
             # Сбрасываем состояние
             await state.clear()
         else:
+            logger.error(f"Failed to send question to queue for user {user_telegram_id}")
             await message.answer(
                 "❌ Произошла ошибка при обработке вопроса.\n\n"
                 "Попробуйте позже или обратитесь в поддержку."
