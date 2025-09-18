@@ -101,12 +101,21 @@ def format_moon_data_for_llm(moon_data: dict) -> str:
     filtered_aspects = []
     total_orb = 0.0
     
+    # Логируем исходные аспекты
+    logger.info(f"Original aspects count: {len(aspects)}")
+    for i, aspect in enumerate(sorted_aspects):
+        logger.info(f"Aspect {i+1}: {aspect['aspecting_planet']} {aspect['type']} {aspect['aspected_planet']} (орб: {aspect['orb']:.2f}°)")
+    
     for aspect in sorted_aspects:
         if total_orb + aspect['orb'] <= 4.0:
             filtered_aspects.append(aspect)
             total_orb += aspect['orb']
+            logger.info(f"Added aspect: {aspect['aspecting_planet']} {aspect['type']} {aspect['aspected_planet']} (орб: {aspect['orb']:.2f}°), total_orb: {total_orb:.2f}°")
         else:
+            logger.info(f"Skipped aspect: {aspect['aspecting_planet']} {aspect['type']} {aspect['aspected_planet']} (орб: {aspect['orb']:.2f}°) - would exceed 4° limit")
             break
+    
+    logger.info(f"Final filtered aspects count: {len(filtered_aspects)}, total_orb: {total_orb:.2f}°")
     
     for aspect in filtered_aspects:
         result += (
@@ -647,12 +656,21 @@ async def start_moon_analysis(callback: CallbackQuery, state: FSMContext):
                 filtered_aspects = []
                 total_orb = 0.0
                 
+                # Логируем исходные аспекты
+                logger.info(f"Moon analysis - Original aspects count: {len(moon_data['moon_aspects'])}")
+                for i, aspect in enumerate(sorted_aspects):
+                    logger.info(f"Moon analysis - Aspect {i+1}: {aspect['aspecting_planet']} {aspect['type']} {aspect['aspected_planet']} (орб: {aspect['orb']:.2f}°)")
+                
                 for aspect in sorted_aspects:
                     if total_orb + aspect['orb'] <= 4.0:
                         filtered_aspects.append(aspect)
                         total_orb += aspect['orb']
+                        logger.info(f"Moon analysis - Added aspect: {aspect['aspecting_planet']} {aspect['type']} {aspect['aspected_planet']} (орб: {aspect['orb']:.2f}°), total_orb: {total_orb:.2f}°")
                     else:
+                        logger.info(f"Moon analysis - Skipped aspect: {aspect['aspecting_planet']} {aspect['type']} {aspect['aspected_planet']} (орб: {aspect['orb']:.2f}°) - would exceed 4° limit")
                         break
+                
+                logger.info(f"Moon analysis - Final filtered aspects count: {len(filtered_aspects)}, total_orb: {total_orb:.2f}°")
                 
                 for aspect in filtered_aspects:
                     moon_message += (

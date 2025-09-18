@@ -84,11 +84,18 @@ class OpenRouterClient:
         Returns:
             Dict с результатом генерации
         """
+        # Логируем данные, которые отправляем в LLM
+        logger.info(f"LLM Input - User: {user_name}, Gender: {user_gender}")
+        logger.info(f"LLM Input - Astrology data length: {len(astrology_data)} characters")
+        logger.info(f"LLM Input - Astrology data preview: {astrology_data[:500]}...")
+        
         prompt = MOON_ANALYSIS_PROMPT.format(
             astrology_data=astrology_data,
             user_name=user_name,
             user_gender=user_gender
         )
+        
+        logger.info(f"LLM Input - Full prompt length: {len(prompt)} characters")
         
         payload = {
             "model": "tngtech/deepseek-r1t2-chimera:free",

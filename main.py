@@ -1652,7 +1652,10 @@ async def process_user_question(message: Message, state: FSMContext):
         from queue_sender import send_question_to_queue
         user_telegram_id = message.from_user.id if message.from_user else 0
         
-        logger.info(f"Attempting to send question to queue: user={user_telegram_id}, question='{question[:50]}...'")
+        logger.info(
+            f"Attempting to send question to queue: user={user_telegram_id}, "
+            f"question='{question[:50]}...'"
+        )
         
         success = await send_question_to_queue(
             user_telegram_id=user_telegram_id,
@@ -1660,11 +1663,15 @@ async def process_user_question(message: Message, state: FSMContext):
         )
         
         if success:
-            logger.info(f"Question successfully sent to queue for user {user_telegram_id}")
+            logger.info(
+                f"Question successfully sent to queue for user {user_telegram_id}"
+            )
             # Сбрасываем состояние
             await state.clear()
         else:
-            logger.error(f"Failed to send question to queue for user {user_telegram_id}")
+            logger.error(
+                f"Failed to send question to queue for user {user_telegram_id}"
+            )
             await message.answer(
                 "❌ Произошла ошибка при обработке вопроса.\n\n"
                 "Попробуйте позже или обратитесь в поддержку."
@@ -1905,8 +1912,26 @@ async def cmd_help(message: Message):
 
 
 @dp.message()
-async def echo_message(message: Message):
+async def echo_message(message: Message, state: FSMContext):
     """Обработчик всех остальных сообщений"""
+    # Проверяем, находится ли пользователь в состоянии анкеты
+    current_state = await state.get_state()
+    if current_state in [
+        ProfileForm.waiting_for_first_name,
+        ProfileForm.waiting_for_birth_date,
+        ProfileForm.waiting_for_birth_city,
+        ProfileForm.waiting_for_birth_city_confirm,
+        ProfileForm.waiting_for_birth_time_accuracy,
+        ProfileForm.waiting_for_birth_time_local,
+        ProfileForm.waiting_for_birth_time_confirm,
+        ProfileForm.waiting_for_birth_time_approx_confirm,
+        ProfileForm.waiting_for_birth_time_unknown_confirm,
+        QuestionForm.waiting_for_question
+    ]:
+        # Если пользователь в состоянии анкеты, не обрабатываем сообщение здесь
+        # Пусть его обработает соответствующий обработчик состояния
+        return
+    
     # Обновляем последнюю активность пользователя
     async with get_session() as session:
         uid = cast(TgUser, message.from_user).id
@@ -1933,7 +1958,9 @@ async def main():
     # Инициализируем обработчик платежей
     global payment_handler
     payment_handler = init_payment_handler(bot)
-    logger.info(f"Payment handler инициализирован: {payment_handler is not None}")
+    logger.info(
+        f"Payment handler инициализирован: {payment_handler is not None}"
+    )
 
     # Автоинициализация схемы (однократно/идемпотентно):
     try:
