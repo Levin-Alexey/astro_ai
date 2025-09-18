@@ -225,8 +225,10 @@ class Prediction(Base):
     # Рекомендации по темам
     recommendations: Mapped[Optional[str]] = mapped_column(Text)
 
-    # Ответы на вопросы пользователя
-    qa_responses: Mapped[Optional[str]] = mapped_column(Text)
+    # Вопросы и ответы пользователя
+    question: Mapped[Optional[str]] = mapped_column(Text)  # Вопрос
+    answer: Mapped[Optional[str]] = mapped_column(Text)    # Ответ астролога
+    qa_responses: Mapped[Optional[str]] = mapped_column(Text)  # Совместимость
 
     # Метаданные LLM
     llm_model: Mapped[Optional[str]] = mapped_column(Text)
@@ -281,7 +283,8 @@ class Prediction(Base):
             "content IS NOT NULL OR moon_analysis IS NOT NULL OR "
             "sun_analysis IS NOT NULL OR mercury_analysis IS NOT NULL OR "
             "venus_analysis IS NOT NULL OR mars_analysis IS NOT NULL OR "
-            "recommendations IS NOT NULL OR qa_responses IS NOT NULL",
+            "recommendations IS NOT NULL OR answer IS NOT NULL OR "
+            "qa_responses IS NOT NULL",
             name="at_least_one_content_type",
         ),
     )

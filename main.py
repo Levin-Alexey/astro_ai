@@ -36,6 +36,7 @@ from astrology_handlers import (
     check_existing_moon_prediction
 )
 from handlers.recommendations_handler import handle_get_recommendations
+from handlers.ask_question_handler import handle_ask_question
 from payment_handler import init_payment_handler
 
 # Настройка логирования
@@ -173,6 +174,10 @@ class ProfileForm(StatesGroup):
     waiting_for_birth_time_confirm = State()
     waiting_for_birth_time_approx_confirm = State()
     waiting_for_birth_time_unknown_confirm = State()
+
+
+class QuestionForm(StatesGroup):
+    waiting_for_question = State()
 
 
 def build_gender_kb(selected: str | None) -> InlineKeyboardMarkup:
@@ -1329,7 +1334,7 @@ async def on_payment_request(callback: CallbackQuery):
     }
     
     planet_name, planet_code = planet_map.get(
-        callback.data, ("Планета", "unknown")
+        callback.data or "", ("Планета", "unknown")
     )
     
     if not payment_handler:
@@ -1392,50 +1397,165 @@ async def on_get_recommendations(callback: CallbackQuery, state: FSMContext):
 
 
 @dp.callback_query(F.data == "ask_question")
-async def on_ask_question(callback: CallbackQuery):
+async def on_ask_question(callback: CallbackQuery, state: FSMContext):
     """Обработчик кнопки 'Задать вопрос'"""
+    await handle_ask_question(callback, state)
+
+
+@dp.callback_query(F.data == "question_custom")
+async def on_question_custom(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Другой вопрос'"""
     await callback.answer()
     cb_msg = cast(Message, callback.message)
+    
+    # Импортируем функцию проверки лимита
+    from handlers.ask_question_handler import (
+        get_user_question_count, 
+        MAX_QUESTIONS_PER_USER
+    )
+    
+    user_id = callback.from_user.id if callback.from_user else 0
+    question_count = await get_user_question_count(user_id)
+    
+    if question_count >= MAX_QUESTIONS_PER_USER:
+        await cb_msg.answer(
+            f"❌ Лимит вопросов исчерпан\n\n"
+            f"Ты уже задал {question_count} вопросов. "
+            f"Максимальное количество: {MAX_QUESTIONS_PER_USER}\n\n"
+            "Но ты можешь получить рекомендации или исследовать другие сферы:",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="💡 Получить рекомендации",
+                            callback_data="get_recommendations"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🔍 Исследовать другие сферы",
+                            callback_data="explore_other_areas"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🏠 Главное меню",
+                            callback_data="back_to_menu"
+                        )
+                    ]
+                ]
+            )
+        )
+        return
+    
+    remaining_questions = MAX_QUESTIONS_PER_USER - question_count
     await cb_msg.answer(
-        "❓ Задать вопрос астрологу\n\n"
-        "Ты можешь задать любой вопрос, связанный с твоим разбором Луны:\n\n"
-        "• Уточнения по интерпретации\n"
-        "• Советы по конкретным ситуациям\n"
-        "• Рекомендации по развитию\n"
-        "• Вопросы о других планетах\n\n"
-        "Просто напиши свой вопрос текстом, и я отвечу! 💬\n\n"
-        "Или выбери одну из готовых тем:",
+        f"❓ Задай свой вопрос\n\n"
+        f"Осталось вопросов: {remaining_questions} из "
+        f"{MAX_QUESTIONS_PER_USER}\n\n"
+        "Напиши любой вопрос, связанный с твоим разбором Луны, "
+        "и я отвечу на основе твоей астрологической карты! 💫",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text="💕 Отношения",
-                        callback_data="question_relationships"
-                    ),
-                    InlineKeyboardButton(
-                        text="💼 Карьера",
-                        callback_data="question_career"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text="🏠 Семья",
-                        callback_data="question_family"
-                    ),
-                    InlineKeyboardButton(
-                        text="💪 Здоровье",
-                        callback_data="question_health"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text="🔍 Исследовать другие сферы",
-                        callback_data="explore_other_areas"
+                        text="🏠 Главное меню",
+                        callback_data="back_to_menu"
                     )
                 ]
             ]
         )
     )
+    
+    # Устанавливаем состояние ожидания вопроса
+    await state.set_state(QuestionForm.waiting_for_question)
+
+
+@dp.message(QuestionForm.waiting_for_question)
+async def process_user_question(message: Message, state: FSMContext):
+    """Обработчик текстового вопроса пользователя"""
+    question = message.text.strip() if message.text else ""
+    
+    if not question:
+        await message.answer(
+            "❌ Пожалуйста, напиши свой вопрос текстом."
+        )
+        return
+    
+    # Проверяем лимит вопросов еще раз
+    from handlers.ask_question_handler import (
+        get_user_question_count, 
+        MAX_QUESTIONS_PER_USER
+    )
+    
+    user_id = message.from_user.id if message.from_user else 0
+    question_count = await get_user_question_count(user_id)
+    
+    if question_count >= MAX_QUESTIONS_PER_USER:
+        await message.answer(
+            f"❌ Лимит вопросов исчерпан\n\n"
+            f"Ты уже задал {question_count} вопросов. "
+            f"Максимальное количество: {MAX_QUESTIONS_PER_USER}\n\n"
+            "Но ты можешь получить рекомендации или исследовать другие сферы:",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="💡 Получить рекомендации",
+                            callback_data="get_recommendations"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🔍 Исследовать другие сферы",
+                            callback_data="explore_other_areas"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🏠 Главное меню",
+                            callback_data="back_to_menu"
+                        )
+                    ]
+                ]
+            )
+        )
+        await state.clear()
+        return
+    
+    # Показываем сообщение о начале обработки
+    await message.answer(
+        "💭 Обрабатываю твой вопрос...\n\n"
+        "⏳ Это займет несколько секунд"
+    )
+    
+    try:
+        # Отправляем вопрос в очередь для обработки
+        from queue_sender import send_question_to_queue
+        success = await send_question_to_queue(
+            user_telegram_id=message.from_user.id if message.from_user else 0,
+            question=question
+        )
+        
+        if success:
+            logger.info(
+                f"Question sent to queue for user "
+                f"{message.from_user.id if message.from_user else 0}"
+            )
+            # Сбрасываем состояние
+            await state.clear()
+        else:
+            await message.answer(
+                "❌ Произошла ошибка при обработке вопроса.\n\n"
+                "Попробуйте позже или обратитесь в поддержку."
+            )
+            
+    except Exception as e:
+        logger.error(f"Error processing question: {e}")
+        await message.answer(
+            "❌ Произошла ошибка при обработке вопроса.\n\n"
+            "Попробуйте позже или обратитесь в поддержку."
+        )
 
 
 @dp.callback_query(F.data == "explore_other_areas")

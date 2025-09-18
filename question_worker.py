@@ -1,7 +1,7 @@
 """
-Воркер для генерации персональных рекомендаций на основе разбора Луны.
+Воркер для обработки вопросов пользователей на основе разбора Луны.
 
-Получает данные из очереди, отправляет в OpenRouter для генерации рекомендаций,
+Получает данные из очереди, отправляет в OpenRouter для генерации ответов,
 сохраняет результат в базу данных и отправляет пользователю.
 """
 
@@ -24,24 +24,34 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Конфигурация
-RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://astro_user:astro_password_123@31.128.40.111:5672/")
+RABBITMQ_URL = os.getenv(
+    "RABBITMQ_URL", 
+    "amqp://astro_user:astro_password_123@31.128.40.111:5672/"
+)
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-QUEUE_NAME = "recommendations"
+QUEUE_NAME = "questions"
 BOT_API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 # Проверяем наличие API ключа
 if not OPENROUTER_API_KEY:
-    logger.warning("OPENROUTER_API_KEY not set! LLM processing will be disabled.")
+    logger.warning(
+        "OPENROUTER_API_KEY not set! LLM processing will be disabled."
+    )
 
-# Промпт для генерации рекомендаций
-RECOMMENDATIONS_PROMPT = """Дай личные рекомендации для проработки Луны и ее нормальной работы. Просто списком по пунктам, без воды. После списка напиши какие будут положительные результаты, если следовать этим рекомендациям (например, эмоциональное спокойствие, отсутствие тревожности, доверие миру, ощущение себя в безопасности и так далее).
-
-Разбор Луны:
-{moon_analysis}
-
-Имя пользователя: {user_name}
-Пол: {user_gender}"""
+# Промпт для генерации ответов на вопросы
+QUESTION_PROMPT = (
+    "Ты профессиональный астролог. Пользователь задал вопрос на основе "
+    "своего разбора Луны.\n\n"
+    "Разбор Луны пользователя:\n"
+    "{moon_analysis}\n\n"
+    "Вопрос пользователя: {user_question}\n\n"
+    "Имя пользователя: {user_name}\n"
+    "Пол: {user_gender}\n\n"
+    "Ответь на вопрос пользователя, используя информацию из разбора Луны. "
+    "Дай персональный и полезный совет, связанный с его астрологической "
+    "картой. Будь дружелюбным и поддерживающим в своем ответе."
+)
 
 
 class OpenRouterClient:
@@ -51,25 +61,28 @@ class OpenRouterClient:
         self.api_key = api_key
         self.url = OPENROUTER_URL
     
-    async def generate_recommendations(
+    async def generate_answer(
         self, 
         moon_analysis: str, 
+        user_question: str,
         user_name: str, 
         user_gender: str
     ) -> Dict[str, Any]:
         """
-        Генерирует рекомендации через OpenRouter
+        Генерирует ответ на вопрос через OpenRouter
         
         Args:
             moon_analysis: Разбор Луны пользователя
+            user_question: Вопрос пользователя
             user_name: Имя пользователя
             user_gender: Пол пользователя
             
         Returns:
             Dict с результатом генерации
         """
-        prompt = RECOMMENDATIONS_PROMPT.format(
+        prompt = QUESTION_PROMPT.format(
             moon_analysis=moon_analysis,
+            user_question=user_question,
             user_name=user_name,
             user_gender=user_gender
         )
@@ -82,7 +95,7 @@ class OpenRouterClient:
                     "content": prompt
                 }
             ],
-            "max_tokens": 2000,
+            "max_tokens": 1500,
             "temperature": 0.7
         }
         
@@ -103,7 +116,7 @@ class OpenRouterClient:
                 ) as response:
                     if response.status == 200:
                         result = await response.json()
-                        logger.info(f"OpenRouter recommendations response received for {user_name}")
+                        logger.info(f"OpenRouter answer response received for {user_name}")
                         return {
                             "success": True,
                             "content": result["choices"][0]["message"]["content"],
@@ -132,8 +145,8 @@ class OpenRouterClient:
                 }
 
 
-class RecommendationsWorker:
-    """Воркер для обработки рекомендаций"""
+class QuestionWorker:
+    """Воркер для обработки вопросов"""
     
     def __init__(self):
         self.openrouter_client = None
@@ -156,7 +169,7 @@ class RecommendationsWorker:
         # Объявляем очередь
         await self.channel.declare_queue(QUEUE_NAME, durable=True)
         
-        logger.info("Recommendations worker initialized successfully")
+        logger.info("Question worker initialized successfully")
     
     async def get_user_info(self, user_id: int) -> Optional[Dict[str, Any]]:
         """Получает информацию о пользователе из БД"""
@@ -177,42 +190,55 @@ class RecommendationsWorker:
                 "gender": user.gender.value if user.gender else "unknown"
             }
     
-    async def save_recommendations(
+    async def get_moon_analysis(self, user_id: int) -> Optional[str]:
+        """Получает разбор Луны пользователя"""
+        async with get_session() as session:
+            result = await session.execute(
+                select(Prediction).where(
+                    Prediction.user_id == user_id,
+                    Prediction.planet == Planet.moon,
+                    Prediction.prediction_type == PredictionType.free,
+                    Prediction.is_active.is_(True),
+                    Prediction.is_deleted.is_(False),
+                    Prediction.moon_analysis.is_not(None)
+                )
+            )
+            prediction = result.scalar_one_or_none()
+            
+            if not prediction or not prediction.moon_analysis:
+                logger.warning(f"Moon analysis not found for user {user_id}")
+                return None
+            
+            return prediction.moon_analysis
+    
+    async def save_question_answer(
         self, 
-        prediction_id: int, 
-        recommendations: str,
+        user_id: int,
+        question: str,
+        answer: str,
         llm_model: str,
         tokens_used: int,
         temperature: float = 0.7
     ) -> bool:
-        """Сохраняет рекомендации в базу данных"""
+        """Сохраняет вопрос и ответ в базу данных"""
         async with get_session() as session:
-            # Находим исходное предсказание
-            result = await session.execute(
-                select(Prediction).where(Prediction.prediction_id == prediction_id)
-            )
-            prediction = result.scalar_one_or_none()
-            
-            if not prediction:
-                logger.error(f"Prediction {prediction_id} not found")
-                return False
-            
-            # Создаем новую запись для рекомендаций
-            recommendations_prediction = Prediction(
-                user_id=prediction.user_id,
-                planet=Planet.moon,  # Рекомендации привязаны к Луне
+            # Создаем новую запись для вопроса-ответа
+            question_prediction = Prediction(
+                user_id=user_id,
+                planet=Planet.moon,  # Вопросы привязаны к Луне
                 prediction_type=PredictionType.free,
-                recommendations=recommendations,
+                question=question,
+                answer=answer,
                 llm_model=llm_model,
                 llm_tokens_used=tokens_used,
                 llm_temperature=temperature,
                 expires_at=None
             )
             
-            session.add(recommendations_prediction)
+            session.add(question_prediction)
             await session.commit()
             
-            logger.info(f"Recommendations saved for prediction {prediction_id}")
+            logger.info(f"Question and answer saved for user {user_id}")
             return True
     
     async def send_telegram_message(
@@ -256,24 +282,22 @@ class RecommendationsWorker:
                 logger.error(f"Telegram API request failed: {e}")
                 return False
     
-    def format_recommendations_message(self, recommendations: str, user_name: str) -> str:
-        """Форматирует сообщение с рекомендациями"""
-        message = f"💡 Персональные рекомендации для {user_name}\n\n"
-        message += recommendations
-        message += f"\n\n✨ Создано: {asyncio.get_event_loop().time()}"
+    def format_answer_message(self, answer: str, user_name: str) -> str:
+        """Форматирует сообщение с ответом"""
+        message = f"🔮 Ответ для {user_name}\n\n"
+        message += answer
         return message
     
-    async def process_recommendation(self, message_data: Dict[str, Any]):
-        """Обрабатывает один запрос на рекомендации"""
-        prediction_id = message_data.get("prediction_id")
+    async def process_question(self, message_data: Dict[str, Any]):
+        """Обрабатывает один вопрос"""
         user_id = message_data.get("user_telegram_id")
-        moon_analysis = message_data.get("moon_analysis")
+        question = message_data.get("question")
         
-        if not prediction_id or not user_id or not moon_analysis:
+        if not user_id or not question:
             logger.error(f"Invalid message data: {message_data}")
             return
         
-        logger.info(f"Processing recommendations for prediction {prediction_id}, user {user_id}")
+        logger.info(f"Processing question for user {user_id}: {question[:50]}...")
         
         # Получаем информацию о пользователе
         user_info = await self.get_user_info(user_id)
@@ -281,10 +305,17 @@ class RecommendationsWorker:
             logger.error(f"User with telegram_id {user_id} not found")
             return
         
-        # Генерируем рекомендации через OpenRouter (если доступен)
+        # Получаем разбор Луны
+        moon_analysis = await self.get_moon_analysis(user_info["user_id"])
+        if not moon_analysis:
+            logger.error(f"Moon analysis not found for user {user_id}")
+            return
+        
+        # Генерируем ответ через OpenRouter (если доступен)
         if self.openrouter_client:
-            llm_result = await self.openrouter_client.generate_recommendations(
+            llm_result = await self.openrouter_client.generate_answer(
                 moon_analysis=moon_analysis,
+                user_question=question,
                 user_name=user_info["first_name"] or "Друг",
                 user_gender=user_info["gender"]
             )
@@ -293,19 +324,20 @@ class RecommendationsWorker:
                 logger.error(f"LLM generation failed: {llm_result['error']}")
                 return
             
-            # Сохраняем рекомендации в базу
-            await self.save_recommendations(
-                prediction_id=prediction_id,
-                recommendations=llm_result["content"],
+            # Сохраняем вопрос и ответ в базу
+            await self.save_question_answer(
+                user_id=user_info["user_id"],
+                question=question,
+                answer=llm_result["content"],
                 llm_model=llm_result.get("model", "deepseek-chat-v3.1"),
                 tokens_used=llm_result.get("usage", {}).get("total_tokens", 0),
                 temperature=0.7
             )
             
-            # Отправляем рекомендации пользователю
+            # Отправляем ответ пользователю
             try:
-                message = self.format_recommendations_message(
-                    recommendations=llm_result["content"],
+                message = self.format_answer_message(
+                    answer=llm_result["content"],
                     user_name=user_info["first_name"] or "Друг"
                 )
                 
@@ -315,16 +347,16 @@ class RecommendationsWorker:
                 )
                 
                 if success:
-                    logger.info(f"Recommendations sent to user {user_id}")
+                    logger.info(f"Answer sent to user {user_id}")
                 else:
-                    logger.error(f"Failed to send recommendations to user {user_id}")
+                    logger.error(f"Failed to send answer to user {user_id}")
                     
             except Exception as e:
-                logger.error(f"Error sending recommendations to user: {e}")
+                logger.error(f"Error sending answer to user: {e}")
         else:
-            logger.info(f"LLM processing skipped for recommendations - no API key")
+            logger.info(f"LLM processing skipped for question - no API key")
         
-        logger.info(f"Recommendations for prediction {prediction_id} processed successfully")
+        logger.info(f"Question for user {user_id} processed successfully")
     
     async def start_consuming(self):
         """Запускает потребление сообщений из очереди"""
@@ -337,7 +369,7 @@ class RecommendationsWorker:
             async with message.process():
                 try:
                     message_data = json.loads(message.body.decode())
-                    await self.process_recommendation(message_data)
+                    await self.process_question(message_data)
                 except Exception as e:
                     logger.error(f"Error processing message: {e}")
         
@@ -348,24 +380,24 @@ class RecommendationsWorker:
         """Останавливает воркера"""
         if self.connection:
             await self.connection.close()
-        logger.info("Recommendations worker stopped")
+        logger.info("Question worker stopped")
 
 
 async def main():
     """Основная функция запуска воркера"""
-    logger.info("Starting recommendations worker...")
+    logger.info("Starting question worker...")
     
     # Инициализируем подключение к БД
     init_engine()
     
-    worker = RecommendationsWorker()
+    worker = QuestionWorker()
     
     try:
         await worker.initialize()
         await worker.start_consuming()
         
         # Держим воркера запущенным
-        logger.info("Recommendations worker is running. Press Ctrl+C to stop.")
+        logger.info("Question worker is running. Press Ctrl+C to stop.")
         while True:
             await asyncio.sleep(1)
             
@@ -376,7 +408,7 @@ async def main():
     finally:
         await worker.stop()
         await dispose_engine()
-        logger.info("Recommendations worker shutdown complete")
+        logger.info("Question worker shutdown complete")
 
 
 if __name__ == "__main__":

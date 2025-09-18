@@ -11,9 +11,13 @@ import aio_pika
 
 logger = logging.getLogger(__name__)
 
-RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://astro_user:astro_password_123@31.128.40.111:5672/")
+RABBITMQ_URL = os.getenv(
+    "RABBITMQ_URL", 
+    "amqp://astro_user:astro_password_123@31.128.40.111:5672/"
+)
 QUEUE_NAME = "moon_predictions"
 RECOMMENDATIONS_QUEUE_NAME = "recommendations"
+QUESTIONS_QUEUE_NAME = "questions"
 
 
 class QueueSender:
@@ -31,6 +35,9 @@ class QueueSender:
         # Объявляем очереди
         await self.channel.declare_queue(QUEUE_NAME, durable=True)
         await self.channel.declare_queue(RECOMMENDATIONS_QUEUE_NAME, durable=True)
+        await self.channel.declare_queue(
+            QUESTIONS_QUEUE_NAME, durable=True
+        )
 
         logger.info("Queue sender initialized")
 
@@ -114,11 +121,58 @@ class QueueSender:
                 routing_key=RECOMMENDATIONS_QUEUE_NAME
             )
 
-            logger.info(f"Sent recommendation request for prediction {prediction_id} to queue")
+            logger.info(
+                f"Sent recommendation request for prediction {prediction_id} "
+                "to queue"
+            )
             return True
 
         except Exception as e:
-            logger.error(f"Failed to send recommendation message to queue: {e}")
+            logger.error(
+                f"Failed to send recommendation message to queue: {e}"
+            )
+            return False
+
+    async def send_question_for_processing(
+        self,
+        user_telegram_id: int,
+        question: str
+    ) -> bool:
+        """
+        Отправляет вопрос пользователя в очередь для обработки
+
+        Args:
+            user_telegram_id: Telegram ID пользователя
+            question: Текст вопроса пользователя
+
+        Returns:
+            True если сообщение отправлено успешно
+        """
+        if not self.channel:
+            await self.initialize()
+
+        message_data = {
+            "user_telegram_id": user_telegram_id,
+            "question": question,
+            "timestamp": asyncio.get_event_loop().time()
+        }
+
+        try:
+            message = aio_pika.Message(
+                body=json.dumps(message_data).encode(),
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+            )
+
+            await self.channel.default_exchange.publish(
+                message,
+                routing_key=QUESTIONS_QUEUE_NAME
+            )
+
+            logger.info(f"Sent question from user {user_telegram_id} to queue")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to send question message to queue: {e}")
             return False
 
     async def close(self):
@@ -175,4 +229,24 @@ async def send_recommendation_to_queue(
     sender = await get_queue_sender()
     return await sender.send_recommendation_for_processing(
         prediction_id, user_telegram_id, moon_analysis
+    )
+
+
+async def send_question_to_queue(
+    user_telegram_id: int, 
+    question: str
+) -> bool:
+    """
+    Удобная функция для отправки вопроса пользователя в очередь
+
+    Args:
+        user_telegram_id: Telegram ID пользователя
+        question: Текст вопроса пользователя
+
+    Returns:
+        True если сообщение отправлено успешно
+    """
+    sender = await get_queue_sender()
+    return await sender.send_question_for_processing(
+        user_telegram_id, question
     )
