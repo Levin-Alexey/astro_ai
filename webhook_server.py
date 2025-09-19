@@ -13,9 +13,12 @@ app = FastAPI()
 async def yookassa_webhook(request: Request):
     try:
         data = await request.json()
-        logger.info(f"Webhook received: {data}")
+        logger.info(f"🔥 WEBHOOK RECEIVED: {data}")
+        print(f"🔥 WEBHOOK RECEIVED: {data}")
 
         if data.get("event") == "payment.succeeded":
+            logger.info(f"🔥 PAYMENT SUCCEEDED EVENT!")
+            print(f"🔥 PAYMENT SUCCEEDED EVENT!")
             # Получаем метаданные из объекта платежа
             metadata = data["object"].get("metadata", {})
             user_id = metadata.get("user_id")
@@ -57,11 +60,22 @@ async def update_payment_status(user_id: int, planet: str, external_payment_id: 
         from sqlalchemy import select, update
         
         async with get_session() as session:
-            # Находим платеж по пользователю и планете
+            # Сначала находим user_id по telegram_id
+            from models import User
+            user_result = await session.execute(
+                select(User).where(User.telegram_id == user_id)
+            )
+            user = user_result.scalar_one_or_none()
+            
+            if not user:
+                logger.error(f"❌ User with telegram_id {user_id} not found")
+                return
+            
+            # Находим платеж по user_id и планете
             if planet == "all_planets":
                 result = await session.execute(
                     select(PlanetPayment).where(
-                        PlanetPayment.user_id == user_id,
+                        PlanetPayment.user_id == user.user_id,
                         PlanetPayment.payment_type == "all_planets",
                         PlanetPayment.status == PaymentStatus.pending
                     )
@@ -70,7 +84,7 @@ async def update_payment_status(user_id: int, planet: str, external_payment_id: 
                 planet_enum = Planet(planet)
                 result = await session.execute(
                     select(PlanetPayment).where(
-                        PlanetPayment.user_id == user_id,
+                        PlanetPayment.user_id == user.user_id,
                         PlanetPayment.planet == planet_enum,
                         PlanetPayment.status == PaymentStatus.pending
                     )
