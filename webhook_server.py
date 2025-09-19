@@ -197,7 +197,7 @@ async def generate_planet_analysis(user_id: int, planet: str):
                     prediction = prediction_result.scalar_one_or_none()
                     
                     if prediction:
-                        # Отправляем в очередь воркера
+                        # Отправляем в очередь воркера планет
                         await send_prediction_to_worker_queue(prediction.prediction_id, user_id)
                         logger.info(f"✅ Prediction {prediction.prediction_id} sent to worker queue for user {user_id}, planet {planet_name}")
                     else:
