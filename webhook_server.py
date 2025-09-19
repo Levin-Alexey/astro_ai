@@ -128,82 +128,19 @@ async def notify_user_payment_success(user_id: int, planet: str):
 async def generate_planet_analysis(user_id: int, planet: str):
     """Генерирует астрологический разбор планеты через воркер"""
     try:
-        from main import bot
-        from db import get_session
-        from models import User, Prediction, PredictionType, Planet
-        from sqlalchemy import select
-        from datetime import datetime, timezone, timedelta
-        import aio_pika
-        import json
+        logger.info(f"🚀 Starting planet analysis for user {user_id}, planet {planet}")
         
-        # Получаем данные пользователя
-        async with get_session() as session:
-            result = await session.execute(
-                select(User).where(User.telegram_id == user_id)
-            )
-            user = result.scalar_one_or_none()
+        # Для Солнца вызываем start_sun_analysis
+        if planet == "sun":
+            from astrology_handlers import start_sun_analysis
+            astrology_data = await start_sun_analysis(user_id)
             
-            if not user:
-                logger.error(f"❌ User {user_id} not found in database")
-                return
-            
-            # Проверяем, есть ли уже разбор для этой планеты
-            if planet == "all_planets":
-                # Для всех планет проверяем каждую отдельно
-                planets_to_check = ["sun", "mercury", "venus", "mars"]
+            if astrology_data:
+                logger.info(f"✅ Sun analysis data generated for user {user_id}")
             else:
-                planets_to_check = [planet]
-            
-            for planet_name in planets_to_check:
-                planet_enum = Planet(planet_name)
-                existing_prediction = await session.execute(
-                    select(Prediction).where(
-                        Prediction.user_id == user.user_id,
-                        Prediction.planet == planet_enum,
-                        Prediction.prediction_type == PredictionType.paid
-                    )
-                )
-                
-                if existing_prediction.scalar_one_or_none():
-                    logger.info(f"⚠️ Prediction already exists for user {user_id}, planet {planet_name}")
-                    continue
-                
-                # Генерируем астрологические данные через API
-                from astrology_handlers import start_sun_analysis, get_user_astrology_data
-                
-                # Получаем астрологические данные пользователя
-                user_data = await get_user_astrology_data(user_id)
-                if not user_data:
-                    logger.error(f"❌ Cannot get astrology data for user {user_id}")
-                    continue
-                
-                # Вызываем соответствующую функцию анализа
-                if planet_name == "sun":
-                    astrology_data = await start_sun_analysis(user_id)
-                else:
-                    # Для других планет пока используем заглушку
-                    logger.warning(f"⚠️ Analysis for {planet_name} not implemented yet")
-                    continue
-                
-                if astrology_data:
-                    # Находим созданное предсказание
-                    prediction_result = await session.execute(
-                        select(Prediction).where(
-                            Prediction.user_id == user.user_id,
-                            Prediction.planet == planet_enum,
-                            Prediction.prediction_type == PredictionType.paid
-                        ).order_by(Prediction.created_at.desc())
-                    )
-                    prediction = prediction_result.scalar_one_or_none()
-                    
-                    if prediction:
-                        # Отправляем в очередь воркера планет
-                        await send_prediction_to_worker_queue(prediction.prediction_id, user_id)
-                        logger.info(f"✅ Prediction {prediction.prediction_id} sent to worker queue for user {user_id}, planet {planet_name}")
-                    else:
-                        logger.error(f"❌ Prediction not found for user {user_id}, planet {planet_name}")
-                else:
-                    logger.error(f"❌ Failed to get astrology data for user {user_id}, planet {planet_name}")
+                logger.error(f"❌ Failed to generate sun analysis for user {user_id}")
+        else:
+            logger.warning(f"⚠️ Analysis for {planet} not implemented yet")
                     
     except Exception as e:
         logger.error(f"❌ Error generating planet analysis: {e}")
@@ -218,7 +155,7 @@ async def send_prediction_to_worker_queue(prediction_id: int, user_id: int):
         
         # Подключение к RabbitMQ
         RABBITMQ_URL = "amqp://astro_user:astro_password_123@31.128.40.111:5672/"
-        QUEUE_NAME = "planet_predictions"
+        QUEUE_NAME = "sun_predictions"
         
         connection = await aio_pika.connect_robust(RABBITMQ_URL)
         channel = await connection.channel()

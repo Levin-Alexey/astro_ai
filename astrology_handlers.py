@@ -20,6 +20,8 @@ from db import get_session
 from models import User, Prediction, Planet, PredictionType
 from sqlalchemy import select
 from queue_sender import send_prediction_to_queue
+import aio_pika
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -866,7 +868,7 @@ async def start_sun_analysis(user_id: int) -> Optional[Dict[str, Any]]:
 
         # Отправляем в очередь для обработки LLM
         try:
-            await send_prediction_to_queue(
+            await send_sun_prediction_to_queue(
                 prediction_id, user_data["telegram_id"]
             )
             logger.info(
@@ -880,3 +882,40 @@ async def start_sun_analysis(user_id: int) -> Optional[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Error in start_sun_analysis: {e}")
         return None
+
+
+async def send_sun_prediction_to_queue(prediction_id: int, user_id: int) -> bool:
+    """Отправляет предсказание Солнца в очередь sun_predictions"""
+    try:
+        # Подключение к RabbitMQ
+        RABBITMQ_URL = "amqp://astro_user:astro_password_123@31.128.40.111:5672/"
+        QUEUE_NAME = "sun_predictions"
+        
+        connection = await aio_pika.connect_robust(RABBITMQ_URL)
+        channel = await connection.channel()
+        
+        # Объявляем очередь
+        await channel.declare_queue(QUEUE_NAME, durable=True)
+        
+        # Создаем сообщение
+        message_data = {
+            "prediction_id": prediction_id,
+            "user_id": user_id
+        }
+        
+        # Отправляем сообщение
+        await channel.default_exchange.publish(
+            aio_pika.Message(
+                json.dumps(message_data).encode(),
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+            ),
+            routing_key=QUEUE_NAME
+        )
+        
+        await connection.close()
+        logger.info(f"✅ Sun prediction {prediction_id} sent to sun_predictions queue")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Error sending sun prediction to queue: {e}")
+        return False
