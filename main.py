@@ -18,6 +18,8 @@ from db import (
     ensure_zodiac_enum_ru,
     ensure_planet_enum,
     ensure_prediction_type_enum,
+    ensure_payment_type_enum,
+    ensure_payment_status_enum,
 )
 from models import create_all
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -1709,7 +1711,7 @@ async def on_explore_other_areas(callback: CallbackQuery):
         "дух, умение разрешать конфликты и уверенно начинать новое\n\n"
         "🔓 Пока бот на тесте, ты получаешь консультацию астролога почти "
         "даром:\n\n"
-        "💸 Одна планета — 77₽ (вместо 999₽)\n"
+        "💸 Одна планета — 10₽ (вместо 999₽)\n"
         "🌌 Все планеты сразу — 222₽ (вместо 5555₽) + 🎁: неограниченное "
         "количество вопросов по своим разборам\n\n"
         "Выбери разбор по кнопке ниже 😼👇🏼",
@@ -1758,21 +1760,71 @@ async def on_explore_all_planets(callback: CallbackQuery):
     """Обработчик кнопки 'Все планеты'"""
     await callback.answer()
     cb_msg = cast(Message, callback.message)
-    await cb_msg.answer(
-        "🌌 Все планеты\n\n"
-        "Здесь будет обработчик для всех планет\n\n"
-        "TODO: Реализовать функционал",
-        reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="🔙 Назад",
-                        callback_data="explore_other_areas"
-                    )
+    user_id = callback.from_user.id
+    
+    # Проверяем, есть ли у пользователя оплаченный доступ ко всем планетам
+    has_access = await check_user_payment_access(user_id, "all_planets")
+    
+    if has_access:
+        # Если доступ есть, отправляем разборы всех планет
+        await cb_msg.answer(
+            "🌌 Все планеты\n\n"
+            "🔮 Генерирую ваши персональные астрологические разборы "
+            "по всем планетам...\n\n"
+            "⏳ Пожалуйста, подождите, это может занять несколько минут.\n\n"
+            "📋 Будут проанализированы:\n"
+            "☀️ Солнце\n"
+            "☿️ Меркурий\n"
+            "♀️ Венера\n"
+            "♂️ Марс",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="explore_other_areas"
+                        )
+                    ]
                 ]
-            ]
+            )
         )
-    )
+        # TODO: Здесь будет вызов LLM для генерации разборов всех планет
+        logger.info(
+            f"Пользователь {user_id} запросил разборы всех планет (доступ есть)"
+        )
+    else:
+        # Если доступа нет, предлагаем оплату
+        await cb_msg.answer(
+            "🌌 Все планеты\n\n"
+            "💰 Для получения персональных астрологических разборов "
+            "по всем планетам необходимо произвести оплату.\n\n"
+            "💸 Стоимость: 222₽ (вместо 5555₽)\n\n"
+            "🎁 Бонус: неограниченное количество вопросов по своим разборам\n\n"
+            "📋 Что вы получите:\n"
+            "☀️ Солнце - энергия, уверенность, самооценка\n"
+            "☿️ Меркурий - речь, мышление, обучение\n"
+            "♀️ Венера - отношения, финансы, изобилие\n"
+            "♂️ Марс - мотивация, сила воли, решительность",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="💳 Оплатить 222₽",
+                            callback_data="pay_all_planets"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="explore_other_areas"
+                        )
+                    ]
+                ]
+            )
+        )
+        logger.info(
+            f"Пользователь {user_id} запросил разборы всех планет (доступа нет)"
+        )
 
 
 @dp.callback_query(F.data == "explore_sun")
@@ -1780,21 +1832,67 @@ async def on_explore_sun(callback: CallbackQuery):
     """Обработчик кнопки 'Солнце'"""
     await callback.answer()
     cb_msg = cast(Message, callback.message)
-    await cb_msg.answer(
-        "☀️ Солнце\n\n"
-        "Здесь будет обработчик для Солнца\n\n"
-        "TODO: Реализовать функционал",
-        reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="🔙 Назад",
-                        callback_data="explore_other_areas"
-                    )
+    user_id = callback.from_user.id
+    
+    # Проверяем, есть ли у пользователя оплаченный доступ к Солнцу
+    has_access = await check_user_payment_access(user_id, "sun")
+    
+    if has_access:
+        # Если доступ есть, получаем и отправляем разбор
+        await cb_msg.answer(
+            "☀️ Солнце\n\n"
+            "🔮 Получаю ваш персональный астрологический разбор...\n\n"
+            "⏳ Пожалуйста, подождите несколько секунд.",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="explore_other_areas"
+                        )
+                    ]
                 ]
-            ]
+            )
         )
-    )
+        
+        # Получаем разбор из БД
+        await send_existing_analysis(user_id, "sun", cb_msg)
+        
+        logger.info(
+            f"Пользователь {user_id} запросил разбор Солнца (доступ есть)"
+        )
+    else:
+        # Если доступа нет, предлагаем оплату
+        await cb_msg.answer(
+            "☀️ Солнце\n\n"
+            "💰 Для получения персонального астрологического разбора "
+            "по Солнцу необходимо произвести оплату.\n\n"
+            "💸 Стоимость: 10₽ (вместо 999₽)\n\n"
+            "🎯 Что вы получите:\n"
+            "• Прилив энергии и уверенности\n"
+            "• Высокая самооценка\n"
+            "• Осознание своей уникальности\n"
+            "• Понимание жизненной задачи",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="💳 Оплатить 10₽",
+                            callback_data="pay_sun"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="explore_other_areas"
+                        )
+                    ]
+                ]
+            )
+        )
+        logger.info(
+            f"Пользователь {user_id} запросил разбор Солнца (доступа нет)"
+        )
 
 
 @dp.callback_query(F.data == "explore_mercury")
@@ -1947,6 +2045,246 @@ async def echo_message(message: Message, state: FSMContext):
     )
 
 
+async def send_existing_analysis(user_id: int, planet: str, message_obj):
+    """Отправляет существующий разбор пользователю"""
+    try:
+        from models import User, Prediction, PredictionType, Planet
+        from sqlalchemy import select
+        
+        async with get_session() as session:
+            # Получаем пользователя
+            result = await session.execute(
+                select(User).where(User.telegram_id == user_id)
+            )
+            user = result.scalar_one_or_none()
+            
+            if not user:
+                await message_obj.answer("❌ Пользователь не найден в базе данных")
+                return
+            
+            # Получаем разбор планеты
+            planet_enum = Planet(planet)
+            prediction_result = await session.execute(
+                select(Prediction).where(
+                    Prediction.user_id == user.user_id,
+                    Prediction.planet == planet_enum,
+                    Prediction.prediction_type == PredictionType.paid
+                ).order_by(Prediction.created_at.desc())
+            )
+            
+            prediction = prediction_result.scalar_one_or_none()
+            
+            if prediction:
+                # Получаем текст разбора
+                analysis_text = getattr(prediction, f"{planet}_analysis", None)
+                
+                if analysis_text:
+                    # Отправляем разбор
+                    planet_emojis = {
+                        "sun": "☀️",
+                        "mercury": "☿️", 
+                        "venus": "♀️",
+                        "mars": "♂️"
+                    }
+                    
+                    emoji = planet_emojis.get(planet, "🔮")
+                    
+                    # Разбиваем длинный текст на части, если нужно
+                    max_length = 4000
+                    if len(analysis_text) <= max_length:
+                        await message_obj.answer(
+                            f"{emoji} **{planet.title()}**\n\n{analysis_text}"
+                        )
+                    else:
+                        # Разбиваем на части
+                        parts = [
+                            analysis_text[i:i+max_length] 
+                            for i in range(0, len(analysis_text), max_length)
+                        ]
+                        for i, part in enumerate(parts):
+                            if i == 0:
+                                await message_obj.answer(
+                                    f"{emoji} **{planet.title()}**\n\n{part}"
+                                )
+                            else:
+                                await message_obj.answer(part)
+                    
+                    logger.info(
+                        f"✅ Existing analysis sent to user {user_id} for planet {planet}"
+                    )
+                else:
+                    await message_obj.answer(
+                        f"❌ Разбор для {planet} не найден. "
+                        "Попробуйте позже или обратитесь в поддержку."
+                    )
+            else:
+                await message_obj.answer(
+                    f"❌ Разбор для {planet} не найден. "
+                    "Возможно, он еще генерируется. Попробуйте позже."
+                )
+                
+    except Exception as e:
+        logger.error(f"❌ Error sending existing analysis: {e}")
+        await message_obj.answer(
+            "❌ Произошла ошибка при получении разбора. Попробуйте позже."
+        )
+
+
+# Обработчики для оплаты планет
+@dp.callback_query(F.data == "pay_sun")
+async def on_pay_sun(callback: CallbackQuery):
+    """Обработчик кнопки оплаты за Солнце"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    user_id = callback.from_user.id
+    
+    if payment_handler is None:
+        await cb_msg.answer(
+            "❌ Ошибка: обработчик платежей не инициализирован",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="explore_sun"
+                        )
+                    ]
+                ]
+            )
+        )
+        return
+    
+    try:
+        # Создаем данные для платежа
+        payment_data = payment_handler.create_payment_data(
+            user_id=user_id,
+            planet="sun",
+            description="Астрологический разбор Солнца"
+        )
+        
+        # Создаем платеж через ЮKassa
+        payment_url = await payment_handler.create_payment(payment_data)
+        
+        # Сохраняем информацию о платеже в БД
+        from models import PlanetPayment, PaymentType, PaymentStatus, Planet
+        async with get_session() as session:
+            payment_record = PlanetPayment(
+                user_id=user_id,
+                payment_type=PaymentType.single_planet,
+                planet=Planet.sun,
+                status=PaymentStatus.pending,
+                amount_kopecks=1000,  # 10 рублей в копейках
+                payment_url=payment_url,
+                notes="Платеж за разбор Солнца"
+            )
+            session.add(payment_record)
+            await session.commit()
+            
+            logger.info(f"Создан платеж для пользователя {user_id} за Солнце")
+        
+        # Отправляем сообщение с кнопкой оплаты
+        await cb_msg.answer(
+            "☀️ Оплата за разбор Солнца\n\n"
+            "💰 Стоимость: 10₽\n\n"
+            "🎯 Что вы получите:\n"
+            "• Прилив энергии и уверенности\n"
+            "• Высокая самооценка\n"
+            "• Осознание своей уникальности\n"
+            "• Понимание жизненной задачи\n\n"
+            "💳 Нажмите кнопку ниже для оплаты:",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="💳 Оплатить 10₽",
+                            url=payment_url
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="explore_sun"
+                        )
+                    ]
+                ]
+            )
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка при создании платежа за Солнце: {e}")
+        await cb_msg.answer(
+            "❌ Произошла ошибка при создании платежа. Попробуйте позже.",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="explore_sun"
+                        )
+                    ]
+                ]
+            )
+        )
+
+
+@dp.callback_query(F.data == "pay_all_planets")
+async def on_pay_all_planets(callback: CallbackQuery):
+    """Обработчик кнопки оплаты за все планеты"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    user_id = callback.from_user.id
+    
+    # TODO: Здесь будет интеграция с платежной системой
+    # Пока что просто показываем сообщение
+    await cb_msg.answer(
+        "💳 Оплата за все планеты\n\n"
+        "🔧 Интеграция с платежной системой в разработке...\n\n"
+        "💰 Стоимость: 222₽\n"
+        "🎁 Бонус: неограниченные вопросы\n"
+        "⏳ После оплаты вы получите разборы всех планет",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🔙 Назад",
+                        callback_data="explore_all_planets"
+                    )
+                ]
+            ]
+        )
+    )
+    logger.info(f"Пользователь {user_id} нажал оплату за все планеты")
+
+
+async def check_user_payment_access(user_id: int, planet: str) -> bool:
+    """Проверяет, есть ли у пользователя оплаченный доступ к планете"""
+    from models import PlanetPayment, PaymentStatus, PaymentType, Planet
+    
+    async with get_session() as session:
+        # Проверяем, есть ли оплата за все планеты
+        all_planets_payment = await session.execute(
+            select(PlanetPayment).where(
+                PlanetPayment.user_id == user_id,
+                PlanetPayment.payment_type == PaymentType.all_planets,
+                PlanetPayment.status == PaymentStatus.completed
+            )
+        )
+        if all_planets_payment.scalar_one_or_none():
+            return True
+        
+        # Проверяем, есть ли оплата за конкретную планету
+        planet_enum = Planet(planet)
+        single_planet_payment = await session.execute(
+            select(PlanetPayment).where(
+                PlanetPayment.user_id == user_id,
+                PlanetPayment.payment_type == PaymentType.single_planet,
+                PlanetPayment.planet == planet_enum,
+                PlanetPayment.status == PaymentStatus.completed
+            )
+        )
+        return single_planet_payment.scalar_one_or_none() is not None
+
+
 async def main():
     """Основная функция запуска бота"""
     logger.info("Запуск бота...")
@@ -1969,6 +2307,8 @@ async def main():
         await ensure_zodiac_enum_ru(db_engine)
         await ensure_planet_enum(db_engine)
         await ensure_prediction_type_enum(db_engine)
+        await ensure_payment_type_enum(db_engine)
+        await ensure_payment_status_enum(db_engine)
     # create_all безопасен: создаст отсутствующие таблицы,
     # существующие не тронет
         await create_all(db_engine)

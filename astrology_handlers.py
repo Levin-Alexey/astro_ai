@@ -127,6 +127,109 @@ def format_moon_data_for_llm(moon_data: dict) -> str:
     return result
 
 
+def extract_sun_data(astrology_data: dict) -> dict:
+    """
+    Извлекает данные Солнца и его аспектов из ответа AstrologyAPI
+
+    Args:
+        astrology_data: Полный ответ от AstrologyAPI
+
+    Returns:
+        Dict с данными Солнца и его аспектами
+    """
+    sun_data: dict = {
+        "sun": None,
+        "sun_aspects": []
+    }
+
+    # Извлекаем данные Солнца из списка планет
+    if "planets" in astrology_data:
+        for planet in astrology_data["planets"]:
+            if planet.get("name") == "Sun":
+                sun_data["sun"] = {
+                    "name": planet.get("name"),
+                    "sign": planet.get("sign"),
+                    "house": planet.get("house"),
+                    "full_degree": planet.get("full_degree"),
+                    "norm_degree": planet.get("norm_degree"),
+                    "speed": planet.get("speed"),
+                    "is_retro": planet.get("is_retro"),
+                    "sign_id": planet.get("sign_id")
+                }
+                break
+
+    # Извлекаем аспекты Солнца
+    if "aspects" in astrology_data:
+        for aspect in astrology_data["aspects"]:
+            if aspect.get("aspecting_planet") == "Sun":
+                sun_data["sun_aspects"].append({
+                    "aspecting_planet": aspect.get("aspecting_planet"),
+                    "aspected_planet": aspect.get("aspected_planet"),
+                    "type": aspect.get("type"),
+                    "orb": aspect.get("orb"),
+                    "diff": aspect.get("diff")
+                })
+
+    return sun_data
+
+
+def format_sun_data_for_llm(sun_data: dict) -> str:
+    """
+    Форматирует данные Солнца для отправки в LLM
+
+    Args:
+        sun_data: Данные Солнца из extract_sun_data
+
+    Returns:
+        Отформатированная строка для LLM
+    """
+    if not sun_data["sun"]:
+        return "Данные Солнца не найдены"
+
+    sun = sun_data["sun"]
+    aspects = sun_data["sun_aspects"]
+
+    # Основная информация о Солнце
+    result = f"""Солнце в знаке {sun['sign']}, дом {sun['house']}
+Степень: {sun['norm_degree']:.2f}°
+Скорость: {sun['speed']:.2f}°/день
+Ретроградность: {'Да' if sun['is_retro'] == 'true' else 'Нет'}
+
+Аспекты Солнца:
+"""
+
+    # Добавляем аспекты (сумма орбов не более 4 градусов)
+    # Сортируем по орбу по возрастанию
+    sorted_aspects = sorted(aspects, key=lambda x: x['orb'])
+    filtered_aspects = []
+    total_orb = 0.0
+    
+    # Логируем исходные аспекты
+    logger.info(f"Original Sun aspects count: {len(aspects)}")
+    for i, aspect in enumerate(sorted_aspects):
+        logger.info(f"Sun Aspect {i+1}: {aspect['aspecting_planet']} {aspect['type']} {aspect['aspected_planet']} (орб: {aspect['orb']:.2f}°)")
+    
+    for aspect in sorted_aspects:
+        if total_orb + aspect['orb'] <= 4.0:
+            filtered_aspects.append(aspect)
+            total_orb += aspect['orb']
+            logger.info(f"Added Sun aspect: {aspect['aspecting_planet']} {aspect['type']} {aspect['aspected_planet']} (орб: {aspect['orb']:.2f}°), total_orb: {total_orb:.2f}°")
+        else:
+            logger.info(f"Skipped Sun aspect: {aspect['aspecting_planet']} {aspect['type']} {aspect['aspected_planet']} (орб: {aspect['orb']:.2f}°) - would exceed 4° limit")
+            break
+    
+    logger.info(f"Final filtered Sun aspects count: {len(filtered_aspects)}, total_orb: {total_orb:.2f}°")
+    
+    for aspect in filtered_aspects:
+        result += (
+            f"- {aspect['aspecting_planet']} {aspect['type']} "
+            f"{aspect['aspected_planet']} "
+            f"(орб: {aspect['orb']:.2f}°)\n"
+        )
+
+    return result
+
+
 class AstrologyAPIClient:
     """Клиент для работы с AstrologyAPI"""
 
@@ -702,3 +805,78 @@ ID предсказания: {prediction_id}"""
                 "❌ Произошла ошибка при анализе Луны.\n\n"
                 "Попробуй позже или обратись в поддержку."
             )
+
+
+async def start_sun_analysis(user_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Запускает анализ Солнца для пользователя
+
+    Args:
+        user_id: ID пользователя в Telegram
+
+    Returns:
+        Dict с данными астрологического API или None при ошибке
+    """
+    try:
+        # Получаем данные пользователя
+        user_data = await get_user_astrology_data(user_id)
+        if not user_data:
+            logger.warning(f"Cannot get astrology data for user {user_id}")
+            return None
+
+        # Инициализируем клиент AstrologyAPI
+        # TODO: Вынести в конфиг
+        api_client = AstrologyAPIClient(
+            user_id="645005",
+            api_key="f6c596e32bb8e29feebbae1c460aaf0913208c7c"
+        )
+
+        # Получаем данные от AstrologyAPI
+        astrology_data = await api_client.get_western_horoscope(
+            day=user_data["day"],
+            month=user_data["month"],
+            year=user_data["year"],
+            hour=user_data["hour"],
+            minute=user_data["minute"],
+            lat=user_data["lat"],
+            lon=user_data["lon"],
+            tzone=user_data["tzone"],
+            language="en"  # Английский для стандартных названий
+        )
+
+        # Извлекаем данные Солнца
+        sun_data = extract_sun_data(astrology_data)
+        formatted_sun_data = format_sun_data_for_llm(sun_data)
+
+        # Сохраняем отформатированные данные Солнца
+        raw_content = (
+            f"Sun Analysis Data:\n{formatted_sun_data}\n\n"
+            f"Raw AstrologyAPI data: {astrology_data}"
+        )
+
+        # Сохраняем в базу данных
+        prediction_id = await save_astrology_data(
+            user_id=user_id,
+            planet=Planet.sun,
+            prediction_type=PredictionType.paid,
+            content=raw_content,
+            llm_model="astrology_api",
+            expires_at=datetime.now(timezone.utc) + timedelta(days=30)  # 30 дней доступа
+        )
+
+        # Отправляем в очередь для обработки LLM
+        try:
+            await send_prediction_to_queue(
+                prediction_id, user_data["telegram_id"]
+            )
+            logger.info(
+                f"Sun prediction {prediction_id} sent to queue for LLM processing"
+            )
+        except Exception as e:
+            logger.error(f"Failed to send Sun prediction to queue: {e}")
+
+        return astrology_data
+
+    except Exception as e:
+        logger.error(f"Error in start_sun_analysis: {e}")
+        return None

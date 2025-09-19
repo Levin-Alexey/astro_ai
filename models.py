@@ -71,6 +71,18 @@ class PredictionType(str, Enum):
     paid = "paid"    # Платное предсказание
 
 
+class PaymentType(str, Enum):
+    single_planet = "single_planet"  # Оплата за одну планету
+    all_planets = "all_planets"      # Оплата за все планеты сразу
+
+
+class PaymentStatus(str, Enum):
+    pending = "pending"      # Ожидает оплаты
+    completed = "completed"  # Оплачено успешно
+    failed = "failed"        # Ошибка оплаты
+    refunded = "refunded"    # Возврат средств
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -296,6 +308,103 @@ class Prediction(Base):
         )
 
 
+class PlanetPayment(Base):
+    __tablename__ = "planet_payments"
+
+    # PK
+    payment_id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True, autoincrement=True
+    )
+
+    # Связь с пользователем
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+    # Тип платежа
+    payment_type: Mapped[PaymentType] = mapped_column(
+        PG_ENUM(
+            PaymentType,
+            name="payment_type",
+            create_type=False,
+            native_enum=True
+        ),
+        nullable=False,
+    )
+
+    # Планета (заполняется только для single_planet)
+    planet: Mapped[Optional[Planet]] = mapped_column(
+        PG_ENUM(
+            Planet, name="planet", create_type=False, native_enum=True
+        ),
+        nullable=True,
+    )
+
+    # Статус платежа
+    status: Mapped[PaymentStatus] = mapped_column(
+        PG_ENUM(
+            PaymentStatus,
+            name="payment_status",
+            create_type=False,
+            native_enum=True
+        ),
+        nullable=False,
+        server_default=text("'pending'"),
+    )
+
+    # Сумма платежа в копейках
+    amount_kopecks: Mapped[int] = mapped_column(
+        BigInteger, nullable=False
+    )
+
+    # ID платежа в платежной системе (YooKassa)
+    external_payment_id: Mapped[Optional[str]] = mapped_column(Text)
+
+    # URL для оплаты
+    payment_url: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Временные метки
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
+
+    # Дополнительные данные
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Ограничения таблицы (CHECK)
+    __table_args__ = (
+        # Для single_planet должна быть указана планета
+        CheckConstraint(
+            "(payment_type = 'all_planets') OR "
+            "(payment_type = 'single_planet' AND planet IS NOT NULL)",
+            name="single_planet_must_have_planet",
+        ),
+        # Сумма должна быть положительной
+        CheckConstraint(
+            "amount_kopecks > 0",
+            name="amount_positive",
+        ),
+        # Для completed статуса должно быть время завершения
+        CheckConstraint(
+            "(status != 'completed') OR "
+            "(status = 'completed' AND completed_at IS NOT NULL)",
+            name="completed_must_have_completion_time",
+        ),
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover - вспомогательное
+        planet_str = self.planet.value if self.planet else 'all'
+        return (
+            f"<PlanetPayment id={self.payment_id} user={self.user_id} "
+            f"type={self.payment_type.value} planet={planet_str} "
+            f"status={self.status.value}>"
+        )
+
+
 # Индексы (соответствуют заданным)
 Index("users_last_seen_idx", User.last_seen_at.desc())
 Index("users_birth_utc_idx", User.birth_datetime_utc)
@@ -309,6 +418,14 @@ Index("predictions_type_idx", Prediction.prediction_type)
 Index("predictions_created_at_idx", Prediction.created_at.desc())
 Index("predictions_expires_at_idx", Prediction.expires_at)
 Index("predictions_active_idx", Prediction.is_active)
+
+# Индексы для таблицы planet_payments
+Index("planet_payments_user_id_idx", PlanetPayment.user_id)
+Index("planet_payments_type_idx", PlanetPayment.payment_type)
+Index("planet_payments_planet_idx", PlanetPayment.planet)
+Index("planet_payments_status_idx", PlanetPayment.status)
+Index("planet_payments_created_at_idx", PlanetPayment.created_at.desc())
+Index("planet_payments_external_id_idx", PlanetPayment.external_payment_id)
 
 
 async def create_all(engine: AsyncEngine) -> None:

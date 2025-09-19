@@ -150,3 +150,41 @@ async def ensure_prediction_type_enum(engine: AsyncEngine) -> None:
                     "('free','paid')"
                 )
             )
+
+
+async def ensure_payment_type_enum(engine: AsyncEngine) -> None:
+    """Создаёт ENUM тип payment_type для типов платежей,
+    если отсутствует."""
+    async with engine.begin() as conn:
+        exists = await conn.scalar(
+            text(
+                "SELECT 1 FROM pg_type WHERE typname = 'payment_type' "
+                "LIMIT 1"
+            )
+        )
+        if not exists:
+            await conn.execute(
+                text(
+                    "CREATE TYPE payment_type AS ENUM "
+                    "('single_planet','all_planets')"
+                )
+            )
+
+
+async def ensure_payment_status_enum(engine: AsyncEngine) -> None:
+    """Создаёт ENUM тип payment_status для статусов платежей,
+    если отсутствует."""
+    async with engine.begin() as conn:
+        exists = await conn.scalar(
+            text(
+                "SELECT 1 FROM pg_type WHERE typname = 'payment_status' "
+                "LIMIT 1"
+            )
+        )
+        if not exists:
+            await conn.execute(
+                text(
+                    "CREATE TYPE payment_status AS ENUM "
+                    "('pending','completed','failed','refunded')"
+                )
+            )
