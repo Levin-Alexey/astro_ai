@@ -16,6 +16,10 @@ import aio_pika
 import aiohttp
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения из .env файла
+load_dotenv()
 
 from db import get_session, init_engine, dispose_engine
 from models import Prediction, User, Planet, PredictionType
@@ -120,7 +124,7 @@ class OpenRouterClient:
                     self.url,
                     headers=headers,
                     json=payload,
-                    timeout=aiohttp.ClientTimeout(total=60)
+                    timeout=aiohttp.ClientTimeout(total=120)
                 ) as response:
                     if response.status == 200:
                         result = await response.json()
