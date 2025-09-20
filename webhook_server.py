@@ -56,7 +56,7 @@ async def update_payment_status(user_id: int, planet: str, external_payment_id: 
     """Обновляет статус платежа в БД"""
     try:
         from db import get_session
-        from models import PlanetPayment, PaymentStatus, Planet
+        from models import PlanetPayment, PaymentStatus, PaymentType, Planet
         from sqlalchemy import select, update
         
         async with get_session() as session:
