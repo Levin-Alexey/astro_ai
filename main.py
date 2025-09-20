@@ -2163,21 +2163,27 @@ async def on_pay_sun(callback: CallbackQuery):
         return
     
     try:
+        logger.info(f"🔥 НАЧИНАЕМ СОЗДАНИЕ ПЛАТЕЖА для пользователя {user_id}")
+        
         # Создаем данные для платежа
         payment_data = payment_handler.create_payment_data(
             user_id=user_id,
             planet="sun",
             description="Астрологический разбор Солнца"
         )
+        logger.info(f"🔥 ДАННЫЕ ПЛАТЕЖА СОЗДАНЫ: {payment_data}")
         
         # Создаем платеж через ЮKassa
         payment_url = await payment_handler.create_payment(payment_data)
+        logger.info(f"🔥 ПЛАТЕЖ СОЗДАН В YOOKASSA: {payment_url}")
         
         # Сохраняем информацию о платеже в БД
+        logger.info(f"🔥 НАЧИНАЕМ СОХРАНЕНИЕ В БД...")
         from models import PlanetPayment, PaymentType, PaymentStatus, Planet, User
         from sqlalchemy import select
         async with get_session() as session:
             # Находим user_id по telegram_id
+            logger.info(f"🔥 ИЩЕМ ПОЛЬЗОВАТЕЛЯ с telegram_id: {user_id}")
             result = await session.execute(
                 select(User).where(User.telegram_id == user_id)
             )
@@ -2186,6 +2192,8 @@ async def on_pay_sun(callback: CallbackQuery):
             if not user:
                 logger.error(f"❌ User with telegram_id {user_id} not found")
                 return
+            
+            logger.info(f"🔥 ПОЛЬЗОВАТЕЛЬ НАЙДЕН: user_id={user.user_id}, telegram_id={user.telegram_id}")
             
             payment_record = PlanetPayment(
                 user_id=user.user_id,  # Используем user_id из таблицы users
@@ -2196,9 +2204,12 @@ async def on_pay_sun(callback: CallbackQuery):
                 payment_url=payment_url,
                 notes="Платеж за разбор Солнца"
             )
+            logger.info(f"🔥 СОЗДАЕМ ЗАПИСЬ ПЛАТЕЖА: {payment_record}")
+            
             session.add(payment_record)
             await session.commit()
             
+            logger.info(f"🔥 ПЛАТЕЖ СОХРАНЕН В БД! ID: {payment_record.payment_id}")
             logger.info(f"Создан платеж для пользователя {user_id} (user_id: {user.user_id}) за Солнце")
         
         # Отправляем сообщение с кнопкой оплаты
@@ -2230,7 +2241,11 @@ async def on_pay_sun(callback: CallbackQuery):
         )
         
     except Exception as e:
-        logger.error(f"Ошибка при создании платежа за Солнце: {e}")
+        logger.error(f"❌ ОШИБКА ПРИ СОЗДАНИИ ПЛАТЕЖА ЗА СОЛНЦЕ: {e}")
+        logger.error(f"❌ ТИП ОШИБКИ: {type(e)}")
+        logger.error(f"❌ ДЕТАЛИ ОШИБКИ: {str(e)}")
+        import traceback
+        logger.error(f"❌ TRACEBACK: {traceback.format_exc()}")
         await cb_msg.answer(
             "❌ Произошла ошибка при создании платежа. Попробуйте позже.",
             reply_markup=InlineKeyboardMarkup(

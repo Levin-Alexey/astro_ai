@@ -76,7 +76,7 @@ async def update_payment_status(user_id: int, planet: str, external_payment_id: 
                 result = await session.execute(
                     select(PlanetPayment).where(
                         PlanetPayment.user_id == user.user_id,
-                        PlanetPayment.payment_type == "all_planets",
+                        PlanetPayment.payment_type == PaymentType.all_planets,
                         PlanetPayment.status == PaymentStatus.pending
                     )
                 )
@@ -85,6 +85,7 @@ async def update_payment_status(user_id: int, planet: str, external_payment_id: 
                 result = await session.execute(
                     select(PlanetPayment).where(
                         PlanetPayment.user_id == user.user_id,
+                        PlanetPayment.payment_type == PaymentType.single_planet,
                         PlanetPayment.planet == planet_enum,
                         PlanetPayment.status == PaymentStatus.pending
                     )
