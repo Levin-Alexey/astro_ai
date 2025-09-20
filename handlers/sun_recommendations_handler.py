@@ -8,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 
 from db import get_session
 from models import User, Prediction, Planet, PredictionType
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from queue_sender import send_sun_recommendation_to_queue
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ async def handle_get_sun_recommendations(callback: CallbackQuery, state: FSMCont
                 )
             return
         
-        # Находим готовый разбор Солнца
+        # Находим готовый разбор Солнца (самый свежий)
         prediction_result = await session.execute(
             select(Prediction).where(
                 Prediction.user_id == user.user_id,
@@ -51,7 +51,7 @@ async def handle_get_sun_recommendations(callback: CallbackQuery, state: FSMCont
                 Prediction.is_active.is_(True),
                 Prediction.is_deleted.is_(False),
                 Prediction.sun_analysis.is_not(None)  # Готовый анализ
-            )
+            ).order_by(desc(Prediction.created_at)).limit(1)
         )
         prediction = prediction_result.scalar_one_or_none()
         
