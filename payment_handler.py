@@ -36,7 +36,7 @@ class PaymentHandler:
             },
             "confirmation": {
                 "type": "redirect",
-                "return_url": "https://pay.neyroastro.ru/webhook/success"
+                "return_url": "https://t.me/NeyroAstroBot"
             },
             "capture": True,
             "description": description,

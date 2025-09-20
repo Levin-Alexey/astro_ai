@@ -1441,73 +1441,7 @@ async def on_confirm_delete_predictions(callback: CallbackQuery):
         )
 
 
-# Обработчики оплаты
-@dp.callback_query(F.data.startswith("pay_"))
-async def on_payment_request(callback: CallbackQuery):
-    """Обработчик кнопок оплаты"""
-    await callback.answer()
-    
-    planet_map = {
-        "pay_sun": ("☀️ Солнце", "sun"),
-        "pay_mercury": ("☿️ Меркурий", "mercury"), 
-        "pay_venus": ("♀️ Венера", "venus"),
-        "pay_mars": ("♂️ Марс", "mars")
-    }
-    
-    planet_name, planet_code = planet_map.get(
-        callback.data or "", ("Планета", "unknown")
-    )
-    
-    if not payment_handler:
-        cb_msg = cast(Message, callback.message)
-        await cb_msg.answer("❌ Система оплаты временно недоступна")
-        return
-    
-    try:
-        user_id = callback.from_user.id
-        description = f"Астрологический разбор {planet_name}"
-        
-        # Создаем данные для платежа
-        payment_data = payment_handler.create_payment_data(
-            user_id=user_id,
-            planet=planet_code,
-            description=description
-        )
-        
-        # Создаем платеж через ЮKassa API
-        payment_url = await payment_handler.create_payment(payment_data)
-        
-        # Создаем клавиатуру с кнопкой оплаты
-        kb = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="💳 Оплатить 10₽",
-                        url=payment_url
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text="❌ Отмена",
-                        callback_data="buy_analysis"
-                    )
-                ]
-            ]
-        )
-        
-        cb_msg = cast(Message, callback.message)
-        await cb_msg.answer(
-            f"💳 Оплата разбора {planet_name}\n\n"
-            f"💰 Сумма: 10₽\n"
-            f"📝 Описание: {description}\n\n"
-            f"Нажми кнопку ниже для перехода к оплате:",
-            reply_markup=kb
-        )
-        
-    except Exception as e:
-        logger.error(f"Ошибка при создании платежа: {e}")
-        cb_msg = cast(Message, callback.message)
-        await cb_msg.answer("❌ Произошла ошибка при создании платежа")
+# Старый обработчик удален - теперь используется on_pay_sun
 
 
 # Обработчики для кнопок после разбора Луны
