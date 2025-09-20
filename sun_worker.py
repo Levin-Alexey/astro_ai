@@ -337,7 +337,7 @@ class SunWorker:
                 [
                     {
                         "text": "💡 Получить рекомендации",
-                        "callback_data": "get_recommendations"
+                        "callback_data": "get_sun_recommendations"
                     }
                 ],
                 [

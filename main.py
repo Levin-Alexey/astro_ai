@@ -38,6 +38,7 @@ from astrology_handlers import (
     check_existing_moon_prediction
 )
 from handlers.recommendations_handler import handle_get_recommendations
+from handlers.sun_recommendations_handler import handle_get_sun_recommendations
 from handlers.ask_question_handler import handle_ask_question
 from payment_handler import init_payment_handler
 
@@ -1516,6 +1517,13 @@ async def on_get_recommendations(callback: CallbackQuery, state: FSMContext):
     await handle_get_recommendations(callback, state)
 
 
+# Обработчики для кнопок после разбора Солнца
+@dp.callback_query(F.data == "get_sun_recommendations")
+async def on_get_sun_recommendations(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Получить рекомендации' для Солнца"""
+    await handle_get_sun_recommendations(callback, state)
+
+
 @dp.callback_query(F.data == "ask_question")
 async def on_ask_question(callback: CallbackQuery, state: FSMContext):
     """Обработчик кнопки 'Задать вопрос'"""
@@ -2166,10 +2174,21 @@ async def on_pay_sun(callback: CallbackQuery):
         payment_url = await payment_handler.create_payment(payment_data)
         
         # Сохраняем информацию о платеже в БД
-        from models import PlanetPayment, PaymentType, PaymentStatus, Planet
+        from models import PlanetPayment, PaymentType, PaymentStatus, Planet, User
+        from sqlalchemy import select
         async with get_session() as session:
+            # Находим user_id по telegram_id
+            result = await session.execute(
+                select(User).where(User.telegram_id == user_id)
+            )
+            user = result.scalar_one_or_none()
+            
+            if not user:
+                logger.error(f"❌ User with telegram_id {user_id} not found")
+                return
+            
             payment_record = PlanetPayment(
-                user_id=user_id,
+                user_id=user.user_id,  # Используем user_id из таблицы users
                 payment_type=PaymentType.single_planet,
                 planet=Planet.sun,
                 status=PaymentStatus.pending,
@@ -2180,7 +2199,7 @@ async def on_pay_sun(callback: CallbackQuery):
             session.add(payment_record)
             await session.commit()
             
-            logger.info(f"Создан платеж для пользователя {user_id} за Солнце")
+            logger.info(f"Создан платеж для пользователя {user_id} (user_id: {user.user_id}) за Солнце")
         
         # Отправляем сообщение с кнопкой оплаты
         await cb_msg.answer(

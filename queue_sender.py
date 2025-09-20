@@ -17,6 +17,7 @@ RABBITMQ_URL = os.getenv(
 )
 QUEUE_NAME = "moon_predictions"
 RECOMMENDATIONS_QUEUE_NAME = "recommendations"
+SUN_RECOMMENDATIONS_QUEUE_NAME = "sun_recommendations"
 QUESTIONS_QUEUE_NAME = "questions"
 
 
@@ -35,6 +36,7 @@ class QueueSender:
         # Объявляем очереди
         await self.channel.declare_queue(QUEUE_NAME, durable=True)
         await self.channel.declare_queue(RECOMMENDATIONS_QUEUE_NAME, durable=True)
+        await self.channel.declare_queue(SUN_RECOMMENDATIONS_QUEUE_NAME, durable=True)
         await self.channel.declare_queue(
             QUESTIONS_QUEUE_NAME, durable=True
         )
@@ -130,6 +132,56 @@ class QueueSender:
         except Exception as e:
             logger.error(
                 f"Failed to send recommendation message to queue: {e}"
+            )
+            return False
+
+    async def send_sun_recommendation_for_processing(
+        self,
+        prediction_id: int,
+        user_telegram_id: int,
+        sun_analysis: str
+    ) -> bool:
+        """
+        Отправляет запрос на генерацию рекомендаций по Солнцу в очередь
+
+        Args:
+            prediction_id: ID исходного предсказания
+            user_telegram_id: Telegram ID пользователя
+            sun_analysis: Разбор Солнца для генерации рекомендаций
+
+        Returns:
+            True если сообщение отправлено успешно
+        """
+        if not self.channel:
+            await self.initialize()
+
+        message_data = {
+            "prediction_id": prediction_id,
+            "user_telegram_id": user_telegram_id,
+            "sun_analysis": sun_analysis,
+            "timestamp": asyncio.get_event_loop().time()
+        }
+
+        try:
+            message = aio_pika.Message(
+                body=json.dumps(message_data).encode(),
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+            )
+
+            await self.channel.default_exchange.publish(
+                message,
+                routing_key=SUN_RECOMMENDATIONS_QUEUE_NAME
+            )
+
+            logger.info(
+                f"Sent sun recommendation request for prediction {prediction_id} "
+                "to queue"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(
+                f"Failed to send sun recommendation message to queue: {e}"
             )
             return False
 
@@ -233,6 +285,28 @@ async def send_recommendation_to_queue(
     sender = await get_queue_sender()
     return await sender.send_recommendation_for_processing(
         prediction_id, user_telegram_id, moon_analysis
+    )
+
+
+async def send_sun_recommendation_to_queue(
+    prediction_id: int, 
+    user_telegram_id: int, 
+    sun_analysis: str
+) -> bool:
+    """
+    Удобная функция для отправки запроса на рекомендации по Солнцу в очередь
+
+    Args:
+        prediction_id: ID исходного предсказания
+        user_telegram_id: Telegram ID пользователя
+        sun_analysis: Разбор Солнца для генерации рекомендаций
+
+    Returns:
+        True если сообщение отправлено успешно
+    """
+    sender = await get_queue_sender()
+    return await sender.send_sun_recommendation_for_processing(
+        prediction_id, user_telegram_id, sun_analysis
     )
 
 
