@@ -2122,7 +2122,7 @@ async def on_explore_mars(callback: CallbackQuery):
 
 # Обработчики для тематических вопросов по Солнцу
 @dp.callback_query(F.data.startswith("sun_question_"))
-async def on_sun_question_topic(callback: CallbackQuery):
+async def on_sun_question_topic(callback: CallbackQuery, state: FSMContext):
     """Обработчик тематических вопросов по Солнцу"""
     topic = (callback.data or "").replace("sun_question_", "")
 
@@ -2151,6 +2151,9 @@ async def on_sun_question_topic(callback: CallbackQuery):
         "• Какие цели ставить перед собой?\n\n"
         "Я дам персональный ответ на основе твоего разбора Солнца! ☀️"
     )
+    
+    # Устанавливаем состояние ожидания вопроса по Солнцу
+    await state.set_state(QuestionForm.waiting_for_sun_question)
 
 
 # Обработчики для тематических вопросов
