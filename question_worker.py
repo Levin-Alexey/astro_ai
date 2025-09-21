@@ -42,15 +42,18 @@ if not OPENROUTER_API_KEY:
 # Промпт для генерации ответов на вопросы
 QUESTION_PROMPT = (
     "Ты профессиональный астролог. Пользователь задал вопрос на основе "
-    "своего разбора Луны.\n\n"
-    "Разбор Луны пользователя:\n"
-    "{moon_analysis}\n\n"
+    "своего астрологического разбора.\n\n"
+    "Астрологический разбор пользователя:\n"
+    "{analysis}\n\n"
     "Вопрос пользователя: {user_question}\n\n"
     "Имя пользователя: {user_name}\n"
     "Пол: {user_gender}\n\n"
-    "Ответь на вопрос пользователя, используя информацию из разбора Луны. "
-    "Дай персональный и полезный совет, связанный с его астрологической "
-    "картой. Будь дружелюбным и поддерживающим в своем ответе."
+    "Ответь на вопрос пользователя, основываясь на его астрологической карте. "
+    "Будь конкретным, полезным и вдохновляющим. "
+    "Используй астрологические знания для объяснения ситуации и дай практические советы. "
+    "В ответе НЕ упоминай конкретные планеты (Луну, Солнце и т.д.), "
+    "говори об астрологических аспектах в общем. "
+    "Ответ должен быть на русском языке, объемом 200-400 слов."
 )
 
 
@@ -63,7 +66,7 @@ class OpenRouterClient:
     
     async def generate_answer(
         self, 
-        moon_analysis: str, 
+        analysis: str, 
         user_question: str,
         user_name: str, 
         user_gender: str
@@ -72,7 +75,7 @@ class OpenRouterClient:
         Генерирует ответ на вопрос через OpenRouter
         
         Args:
-            moon_analysis: Разбор Луны пользователя
+            analysis: Астрологический разбор пользователя
             user_question: Вопрос пользователя
             user_name: Имя пользователя
             user_gender: Пол пользователя
@@ -83,11 +86,11 @@ class OpenRouterClient:
         # Логируем данные, которые отправляем в LLM
         logger.info(f"Question LLM Input - User: {user_name}, Gender: {user_gender}")
         logger.info(f"Question LLM Input - Question: {user_question}")
-        logger.info(f"Question LLM Input - Moon analysis length: {len(moon_analysis)} characters")
-        logger.info(f"Question LLM Input - Moon analysis preview: {moon_analysis[:300]}...")
+        logger.info(f"Question LLM Input - Analysis length: {len(analysis)} characters")
+        logger.info(f"Question LLM Input - Analysis preview: {analysis[:300]}...")
         
         prompt = QUESTION_PROMPT.format(
-            moon_analysis=moon_analysis,
+            analysis=analysis,
             user_question=user_question,
             user_name=user_name,
             user_gender=user_gender
@@ -96,7 +99,7 @@ class OpenRouterClient:
         logger.info(f"Question LLM Input - Full prompt length: {len(prompt)} characters")
         
         payload = {
-            "model": "tngtech/deepseek-r1t2-chimera:free",
+            "model": "deepseek/deepseek-chat-v3.1:free",
             "messages": [
                 {
                     "role": "user",
@@ -314,16 +317,16 @@ class QuestionWorker:
             logger.error(f"User with telegram_id {user_id} not found")
             return
         
-        # Получаем разбор Луны
-        moon_analysis = await self.get_moon_analysis(user_info["user_id"])
-        if not moon_analysis:
+        # Всегда используем разбор Луны как основу для ответов
+        analysis = await self.get_moon_analysis(user_info["user_id"])
+        if not analysis:
             logger.error(f"Moon analysis not found for user {user_id}")
             return
         
         # Генерируем ответ через OpenRouter (если доступен)
         if self.openrouter_client:
             llm_result = await self.openrouter_client.generate_answer(
-                moon_analysis=moon_analysis,
+                analysis=analysis,
                 user_question=question,
                 user_name=user_info["first_name"] or "Друг",
                 user_gender=user_info["gender"]
