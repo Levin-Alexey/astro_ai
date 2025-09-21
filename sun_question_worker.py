@@ -331,15 +331,21 @@ async def main():
     
     try:
         await worker.initialize()
-        logger.info("Sun question worker is running. Press Ctrl+C to stop.")
         await worker.start_consuming()
+        
+        # Держим воркера запущенным
+        logger.info("Sun question worker is running. Press Ctrl+C to stop.")
+        while True:
+            await asyncio.sleep(1)
+            
     except KeyboardInterrupt:
-        logger.info("Stopping sun question worker...")
+        logger.info("Received interrupt signal")
     except Exception as e:
         logger.error(f"Sun question worker error: {e}")
     finally:
         await worker.close()
-        dispose_engine()
+        await dispose_engine()
+        logger.info("Sun question worker shutdown complete")
 
 
 if __name__ == "__main__":
