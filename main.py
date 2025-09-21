@@ -1806,10 +1806,10 @@ async def process_user_sun_question(message: Message, state: FSMContext):
             from queue_sender import send_sun_question_to_queue
             user_telegram_id = message.from_user.id if message.from_user else 0
             
-        logger.info(
-            f"Attempting to send sun question to queue: "
-            f"user={user_telegram_id}, question='{question[:50]}...'"
-        )
+            logger.info(
+                f"Attempting to send sun question to queue: "
+                f"user={user_telegram_id}, question='{question[:50]}...'"
+            )
             
             success = await send_sun_question_to_queue(
                 user_telegram_id=user_telegram_id,
