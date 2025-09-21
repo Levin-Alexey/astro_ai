@@ -342,7 +342,7 @@ class SunWorker:
                 [
                     {
                         "text": "❓ Задать вопрос",
-                        "callback_data": "ask_question"
+                        "callback_data": "ask_sun_question"
                     }
                 ],
                 [

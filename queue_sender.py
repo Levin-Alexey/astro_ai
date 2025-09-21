@@ -19,6 +19,7 @@ QUEUE_NAME = "moon_predictions"
 RECOMMENDATIONS_QUEUE_NAME = "recommendations"
 SUN_RECOMMENDATIONS_QUEUE_NAME = "sun_recommendations"
 QUESTIONS_QUEUE_NAME = "questions"
+SUN_QUESTIONS_QUEUE_NAME = "sun_questions"
 
 
 class QueueSender:
@@ -39,6 +40,9 @@ class QueueSender:
         await self.channel.declare_queue(SUN_RECOMMENDATIONS_QUEUE_NAME, durable=True)
         await self.channel.declare_queue(
             QUESTIONS_QUEUE_NAME, durable=True
+        )
+        await self.channel.declare_queue(
+            SUN_QUESTIONS_QUEUE_NAME, durable=True
         )
 
         logger.info("Queue sender initialized")
@@ -231,6 +235,55 @@ class QueueSender:
             logger.error(f"Failed to send question message to queue: {e}")
             return False
 
+    async def send_sun_question_for_processing(
+        self,
+        user_telegram_id: int,
+        question: str,
+        sun_analysis: str
+    ) -> bool:
+        """
+        Отправляет вопрос пользователя по Солнцу в очередь для обработки
+
+        Args:
+            user_telegram_id: Telegram ID пользователя
+            question: Текст вопроса пользователя
+            sun_analysis: Разбор Солнца для контекста
+
+        Returns:
+            True если сообщение отправлено успешно
+        """
+        logger.info(f"send_sun_question_for_processing called: user={user_telegram_id}, question='{question[:50]}...'")
+        
+        if not self.channel:
+            logger.info("Channel not initialized, initializing...")
+            await self.initialize()
+
+        message_data = {
+            "user_telegram_id": user_telegram_id,
+            "question": question,
+            "sun_analysis": sun_analysis,
+            "timestamp": asyncio.get_event_loop().time()
+        }
+
+        try:
+            message = aio_pika.Message(
+                body=json.dumps(message_data).encode(),
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+            )
+
+            logger.info(f"Publishing message to queue '{SUN_QUESTIONS_QUEUE_NAME}'")
+            await self.channel.default_exchange.publish(
+                message,
+                routing_key=SUN_QUESTIONS_QUEUE_NAME
+            )
+
+            logger.info(f"Successfully sent sun question from user {user_telegram_id} to queue")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to send sun question message to queue: {e}")
+            return False
+
     async def close(self):
         """Закрывает подключение"""
         if self.connection:
@@ -327,4 +380,26 @@ async def send_question_to_queue(
     sender = await get_queue_sender()
     return await sender.send_question_for_processing(
         user_telegram_id, question
+    )
+
+
+async def send_sun_question_to_queue(
+    user_telegram_id: int, 
+    question: str,
+    sun_analysis: str
+) -> bool:
+    """
+    Удобная функция для отправки вопроса по Солнцу в очередь
+
+    Args:
+        user_telegram_id: Telegram ID пользователя
+        question: Текст вопроса пользователя
+        sun_analysis: Разбор Солнца для контекста
+
+    Returns:
+        True если сообщение отправлено успешно
+    """
+    sender = await get_queue_sender()
+    return await sender.send_sun_question_for_processing(
+        user_telegram_id, question, sun_analysis
     )

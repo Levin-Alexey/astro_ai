@@ -40,6 +40,7 @@ from astrology_handlers import (
 from handlers.recommendations_handler import handle_get_recommendations
 from handlers.sun_recommendations_handler import handle_get_sun_recommendations
 from handlers.ask_question_handler import handle_ask_question
+from handlers.ask_sun_question_handler import handle_ask_sun_question
 from payment_handler import init_payment_handler
 
 # Настройка логирования
@@ -181,6 +182,7 @@ class ProfileForm(StatesGroup):
 
 class QuestionForm(StatesGroup):
     waiting_for_question = State()
+    waiting_for_sun_question = State()
 
 
 def build_gender_kb(selected: str | None) -> InlineKeyboardMarkup:
@@ -1464,6 +1466,81 @@ async def on_ask_question(callback: CallbackQuery, state: FSMContext):
     await handle_ask_question(callback, state)
 
 
+@dp.callback_query(F.data == "ask_sun_question")
+async def on_ask_sun_question(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Задать вопрос' для Солнца"""
+    await handle_ask_sun_question(callback, state)
+
+
+@dp.callback_query(F.data == "sun_question_custom")
+async def on_sun_question_custom(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Другой вопрос' для Солнца"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    
+    # Импортируем функцию проверки лимита
+    from handlers.ask_sun_question_handler import (
+        get_user_sun_question_count,
+        MAX_QUESTIONS_PER_USER
+    )
+    
+    user_id = callback.from_user.id if callback.from_user else 0
+    question_count = await get_user_sun_question_count(user_id)
+    
+    if question_count >= MAX_QUESTIONS_PER_USER:
+        await cb_msg.answer(
+            f"❌ Лимит вопросов исчерпан\n\n"
+            f"Ты уже задал {question_count} вопросов по Солнцу. "
+            f"Максимальное количество: {MAX_QUESTIONS_PER_USER}\n\n"
+            "Но ты можешь получить рекомендации или исследовать другие сферы:",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="💡 Получить рекомендации по Солнцу",
+                            callback_data="get_sun_recommendations"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🔍 Исследовать другие сферы",
+                            callback_data="explore_other_areas"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🏠 Главное меню",
+                            callback_data="back_to_menu"
+                        )
+                    ]
+                ]
+            )
+        )
+        return
+    
+    remaining_questions = MAX_QUESTIONS_PER_USER - question_count
+    await cb_msg.answer(
+        f"❓ Задай свой вопрос по Солнцу\n\n"
+        f"Осталось вопросов: {remaining_questions} из "
+        f"{MAX_QUESTIONS_PER_USER}\n\n"
+        "Напиши любой вопрос, связанный с твоим разбором Солнца, "
+        "и я отвечу на основе твоей астрологической карты! ☀️",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🏠 Главное меню",
+                        callback_data="back_to_menu"
+                    )
+                ]
+            ]
+        )
+    )
+    
+    # Устанавливаем состояние ожидания вопроса по Солнцу
+    await state.set_state(QuestionForm.waiting_for_sun_question)
+
+
 @dp.callback_query(F.data == "question_custom")
 async def on_question_custom(callback: CallbackQuery, state: FSMContext):
     """Обработчик кнопки 'Другой вопрос'"""
@@ -1623,6 +1700,142 @@ async def process_user_question(message: Message, state: FSMContext):
             
     except Exception as e:
         logger.error(f"Error processing question: {e}")
+        await message.answer(
+            "❌ Произошла ошибка при обработке вопроса.\n\n"
+            "Попробуйте позже или обратитесь в поддержку."
+        )
+
+
+@dp.message(QuestionForm.waiting_for_sun_question)
+async def process_user_sun_question(message: Message, state: FSMContext):
+    """Обработчик текстового вопроса пользователя по Солнцу"""
+    question = message.text.strip() if message.text else ""
+    
+    if not question:
+        await message.answer(
+            "❌ Пожалуйста, напиши свой вопрос текстом."
+        )
+        return
+    
+    # Проверяем лимит вопросов еще раз
+    from handlers.ask_sun_question_handler import (
+        get_user_sun_question_count,
+        MAX_QUESTIONS_PER_USER
+    )
+    
+    user_id = message.from_user.id if message.from_user else 0
+    question_count = await get_user_sun_question_count(user_id)
+    
+    if question_count >= MAX_QUESTIONS_PER_USER:
+        await message.answer(
+            f"❌ Лимит вопросов исчерпан\n\n"
+            f"Ты уже задал {question_count} вопросов по Солнцу. "
+            f"Максимальное количество: {MAX_QUESTIONS_PER_USER}\n\n"
+            "Но ты можешь получить рекомендации или исследовать другие сферы:",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="💡 Получить рекомендации по Солнцу",
+                            callback_data="get_sun_recommendations"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🔍 Исследовать другие сферы",
+                            callback_data="explore_other_areas"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🏠 Главное меню",
+                            callback_data="back_to_menu"
+                        )
+                    ]
+                ]
+            )
+        )
+        await state.clear()
+        return
+    
+    # Показываем сообщение о начале обработки
+    await message.answer(
+        "💭 Обрабатываю твой вопрос по Солнцу...\n\n"
+        "⏳ Это займет несколько секунд"
+    )
+    
+    try:
+        # Получаем разбор Солнца для контекста
+        from db import get_session
+        from models import User, Prediction, Planet, PredictionType
+        from sqlalchemy import select
+        
+        async with get_session() as session:
+            # Находим пользователя
+            user_result = await session.execute(
+                select(User).where(User.telegram_id == user_id)
+            )
+            user = user_result.scalar_one_or_none()
+            
+            if not user:
+                await message.answer("❌ Пользователь не найден")
+                await state.clear()
+                return
+            
+            # Находим готовый разбор Солнца
+            prediction_result = await session.execute(
+                select(Prediction).where(
+                    Prediction.user_id == user.user_id,
+                    Prediction.planet == Planet.sun,
+                    Prediction.prediction_type == PredictionType.paid,
+                    Prediction.is_active.is_(True),
+                    Prediction.is_deleted.is_(False),
+                    Prediction.sun_analysis.is_not(None)
+                )
+            )
+            prediction = prediction_result.scalar_one_or_none()
+            
+            if not prediction or not prediction.sun_analysis:
+                await message.answer(
+                    "❌ Разбор Солнца не найден или еще не готов"
+                )
+                await state.clear()
+                return
+            
+            # Отправляем вопрос в очередь для обработки
+            from queue_sender import send_sun_question_to_queue
+            user_telegram_id = message.from_user.id if message.from_user else 0
+            
+        logger.info(
+            f"Attempting to send sun question to queue: "
+            f"user={user_telegram_id}, question='{question[:50]}...'"
+        )
+            
+            success = await send_sun_question_to_queue(
+                user_telegram_id=user_telegram_id,
+                question=question,
+                sun_analysis=prediction.sun_analysis
+            )
+            
+            if success:
+                logger.info(
+                    f"Sun question successfully sent to queue "
+                    f"for user {user_telegram_id}"
+                )
+                # Сбрасываем состояние
+                await state.clear()
+            else:
+                logger.error(
+                    f"Failed to send sun question to queue "
+                    f"for user {user_telegram_id}"
+                )
+                await message.answer(
+                    "❌ Произошла ошибка при обработке вопроса.\n\n"
+                    "Попробуйте позже или обратитесь в поддержку."
+                )
+                
+    except Exception as e:
+        logger.error(f"Error processing sun question: {e}")
         await message.answer(
             "❌ Произошла ошибка при обработке вопроса.\n\n"
             "Попробуйте позже или обратитесь в поддержку."
@@ -1905,6 +2118,39 @@ async def on_explore_mars(callback: CallbackQuery):
 
 # Старые обработчики тематических рекомендаций удалены
 # Теперь используется единый обработчик handle_get_recommendations
+
+
+# Обработчики для тематических вопросов по Солнцу
+@dp.callback_query(F.data.startswith("sun_question_"))
+async def on_sun_question_topic(callback: CallbackQuery):
+    """Обработчик тематических вопросов по Солнцу"""
+    topic = (callback.data or "").replace("sun_question_", "")
+
+    topic_names = {
+        "relationships": "💕 Отношения",
+        "career": "💼 Карьера",
+        "family": "🏠 Семья",
+        "health": "💪 Здоровье",
+        "finances": "💰 Финансы",
+        "goals": "🎯 Цели и мечты"
+    }
+
+    topic_name = topic_names.get(topic, topic)
+
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        f"{topic_name}\n\n"
+        "Отлично! Теперь напиши свой конкретный вопрос по этой теме.\n\n"
+        "Например:\n"
+        "• Как улучшить отношения с партнером?\n"
+        "• В какой сфере лучше развиваться?\n"
+        "• Как наладить отношения в семье?\n"
+        "• Что делать для поддержания здоровья?\n"
+        "• Как правильно распоряжаться финансами?\n"
+        "• Какие цели ставить перед собой?\n\n"
+        "Я дам персональный ответ на основе твоего разбора Солнца! ☀️"
+    )
 
 
 # Обработчики для тематических вопросов
