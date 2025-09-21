@@ -82,7 +82,7 @@ class OpenRouterClient:
         logger.info(f"Recommendations LLM Input - Full prompt length: {len(prompt)} characters")
         
         payload = {
-            "model": "meta-llama/llama-3.2-3b-instruct:free",
+            "model": "deepseek/deepseek-chat-v3.1:free",
             "messages": [
                 {
                     "role": "user",
