@@ -303,7 +303,16 @@ class SunQuestionWorker:
                         logger.error(f"Error processing message: {e}")
             
             logger.info(f"Started consuming from queue {SUN_QUESTIONS_QUEUE_NAME}")
+            
+            # Начинаем потребление и ждем бесконечно
             await queue.consume(process_message)
+            
+            # Ждем бесконечно, пока не будет прервано
+            try:
+                while True:
+                    await asyncio.sleep(1)
+            except KeyboardInterrupt:
+                logger.info("Received interrupt signal")
             
         except Exception as e:
             logger.error(f"Error starting consumer: {e}")
