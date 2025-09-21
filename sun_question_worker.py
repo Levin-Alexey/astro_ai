@@ -10,13 +10,73 @@ from typing import Dict, Any
 
 import aio_pika
 from aiogram import Bot
-from openrouter import OpenRouterClient
 from db import get_session
 from models import User, Prediction, Planet, PredictionType
 from sqlalchemy import select
 from config import BOT_TOKEN
 
 logger = logging.getLogger(__name__)
+
+
+class OpenRouterClient:
+    """Клиент для работы с OpenRouter API"""
+    
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        self.base_url = "https://openrouter.ai/api/v1"
+        self.headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://neyroastro.ru",
+            "X-Title": "Astro Bot"
+        }
+    
+    async def generate_response(self, prompt: str, model: str = "deepseek-chat-v3.1", 
+                              max_tokens: int = 1000, temperature: float = 0.7) -> Dict[str, Any]:
+        """Генерирует ответ через OpenRouter API"""
+        import aiohttp
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                payload = {
+                    "model": model,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    "max_tokens": max_tokens,
+                    "temperature": temperature
+                }
+                
+                async with session.post(
+                    f"{self.base_url}/chat/completions",
+                    headers=self.headers,
+                    json=payload
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return {
+                            "success": True,
+                            "content": data["choices"][0]["message"]["content"],
+                            "model": model,
+                            "usage": data.get("usage", {})
+                        }
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"OpenRouter API error: {response.status} - {error_text}")
+                        return {
+                            "success": False,
+                            "error": f"API error: {response.status}"
+                        }
+        except Exception as e:
+            logger.error(f"Error calling OpenRouter API: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
 
 # Настройки
 RABBITMQ_URL = os.getenv(
@@ -48,7 +108,7 @@ class SunQuestionWorker:
         
         # Инициализация OpenRouter
         if OPENROUTER_API_KEY:
-            self.openrouter_client = OpenRouterClient(api_key=OPENROUTER_API_KEY)
+            self.openrouter_client = OpenRouterClient(OPENROUTER_API_KEY)
             logger.info("OpenRouter client initialized")
         else:
             logger.warning("OpenRouter API key not found - LLM processing disabled")
