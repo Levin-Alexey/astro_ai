@@ -2077,8 +2077,7 @@ async def echo_message(message: Message, state: FSMContext):
         ProfileForm.waiting_for_birth_time_local,
         ProfileForm.waiting_for_birth_time_confirm,
         ProfileForm.waiting_for_birth_time_approx_confirm,
-        ProfileForm.waiting_for_birth_time_unknown_confirm,
-        QuestionForm.waiting_for_question
+        ProfileForm.waiting_for_birth_time_unknown_confirm
     ]:
         # Если пользователь в состоянии анкеты, не обрабатываем сообщение здесь
         # Пусть его обработает соответствующий обработчик состояния
