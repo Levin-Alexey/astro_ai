@@ -10,7 +10,7 @@ from typing import Dict, Any
 
 import aio_pika
 from aiogram import Bot
-from db import get_session
+from db import get_session, init_engine, dispose_engine
 from models import User, Prediction, Planet, PredictionType
 from sqlalchemy import select
 from config import BOT_TOKEN
@@ -297,22 +297,15 @@ class SunQuestionWorker:
             async def process_message(message: aio_pika.IncomingMessage):
                 async with message.process():
                     try:
+                        logger.info(f"Received sun question message: {message.body.decode()[:100]}...")
                         message_data = json.loads(message.body.decode())
+                        logger.info(f"Parsed sun question data: {message_data}")
                         await self.process_question(message_data)
                     except Exception as e:
-                        logger.error(f"Error processing message: {e}")
+                        logger.error(f"Error processing sun question message: {e}")
             
-            logger.info(f"Started consuming from queue {SUN_QUESTIONS_QUEUE_NAME}")
-            
-            # Начинаем потребление и ждем бесконечно
             await queue.consume(process_message)
-            
-            # Ждем бесконечно, пока не будет прервано
-            try:
-                while True:
-                    await asyncio.sleep(1)
-            except KeyboardInterrupt:
-                logger.info("Received interrupt signal")
+            logger.info(f"Started consuming from queue {SUN_QUESTIONS_QUEUE_NAME}")
             
         except Exception as e:
             logger.error(f"Error starting consumer: {e}")
@@ -329,6 +322,11 @@ class SunQuestionWorker:
 
 async def main():
     """Главная функция воркера"""
+    logger.info("Starting sun question worker...")
+    
+    # Инициализируем подключение к БД
+    init_engine()
+    
     worker = SunQuestionWorker()
     
     try:
@@ -341,6 +339,7 @@ async def main():
         logger.error(f"Sun question worker error: {e}")
     finally:
         await worker.close()
+        dispose_engine()
 
 
 if __name__ == "__main__":
