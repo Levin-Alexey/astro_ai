@@ -168,7 +168,7 @@ async def process_mercury_prediction(
     """
     try:
         prediction_id = data.get("prediction_id")
-        user_telegram_id = data.get("user_telegram_id")
+        user_telegram_id = data.get("user_telegram_id") or data.get("user__telegram_id")  # Support both formats
         
         if not prediction_id or not user_telegram_id:
             logger.error(f"☿️ Missing required data: prediction_id={prediction_id}, user_telegram_id={user_telegram_id}")
@@ -187,14 +187,14 @@ async def process_mercury_prediction(
                 logger.error(f"☿️ Prediction {prediction_id} not found")
                 return False
             
-            # Получаем пользователя
+            # Получаем пользователя по telegram_id
             user_result = await session.execute(
-                select(User).where(User.user_id == prediction.user_id)
+                select(User).where(User.telegram_id == user_telegram_id)
             )
             user = user_result.scalar_one_or_none()
             
             if not user:
-                logger.error(f"☿️ User not found for prediction {prediction_id}")
+                logger.error(f"☿️ User with telegram_id {user_telegram_id} not found")
                 return False
             
             logger.info(f"☿️ Found user: {user.first_name} (telegram_id: {user.telegram_id})")
@@ -229,7 +229,13 @@ async def process_mercury_prediction(
                 return True
             
             # Генерируем разбор через OpenRouter
-            astrology_data = prediction.astrology_data or "Нет данных астрологии"
+            # Извлекаем данные астрологии из content (как в sun_worker)
+            content = prediction.content
+            if content and "Mercury Analysis Data:" in content:
+                # Извлекаем только данные для LLM
+                astrology_data = content.split("Mercury Analysis Data:")[1].split("Raw AstrologyAPI data:")[0].strip()
+            else:
+                astrology_data = content or "Нет данных астрологии"
             
             llm_result = await openrouter_client.generate_mercury_analysis(
                 astrology_data=astrology_data,
