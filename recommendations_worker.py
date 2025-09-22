@@ -35,12 +35,41 @@ if not OPENROUTER_API_KEY:
     logger.warning("OPENROUTER_API_KEY not set! LLM processing will be disabled.")
 
 # Промпт для генерации рекомендаций
-RECOMMENDATIONS_PROMPT = """Дай личные рекомендации для проработки Луны и ее нормальной работы. Просто списком по пунктам, без воды. После списка напиши какие будут положительные результаты, если следовать этим рекомендациям (например, эмоциональное спокойствие, отсутствие тревожности, доверие миру, ощущение себя в безопасности и так далее).
+RECOMMENDATIONS_PROMPT = """Ты опытный астролог-практик. На основе разбора Луны создай персональные рекомендации для гармонизации лунной энергии. 
+
+ВАЖНО: Пиши ТОЛЬКО на русском языке! Никаких английских слов!
+
+Создай рекомендации в формате:
+
+🌙 ЕЖЕДНЕВНЫЕ ПРАКТИКИ:
+• [3-4 конкретные практики для ежедневного выполнения]
+
+🏠 ДОМАШНЯЯ ОБСТАНОВКА:
+• [2-3 рекомендации по созданию комфортной среды]
+
+😌 ЭМОЦИОНАЛЬНАЯ ГИГИЕНА:
+• [3-4 способа работы с эмоциями и тревожностью]
+
+💤 СОН И ОТДЫХ:
+• [2-3 рекомендации по режиму сна и восстановлению]
+
+🍃 ПИТАНИЕ И РИТМЫ:
+• [2-3 совета по питанию и биоритмам]
+
+👥 ОТНОШЕНИЯ:
+• [2-3 рекомендации по выстраиванию отношений]
+
+После рекомендаций напиши раздел:
+
+✨ РЕЗУЛЬТАТЫ ПРАКТИК:
+Если будешь следовать этим рекомендациям, {user_name}, ты получишь: [перечисли конкретные позитивные изменения]
+
+Пиши просто, по делу, без воды. Обращайся к пользователю по имени. Учитывай особенности пола при рекомендациях.
 
 Разбор Луны:
 {moon_analysis}
 
-Имя пользователя: {user_name}
+Имя: {user_name}
 Пол: {user_gender}"""
 
 
@@ -89,7 +118,7 @@ class OpenRouterClient:
                     "content": prompt
                 }
             ],
-            "max_tokens": 2000,
+            "max_tokens": 2500,
             "temperature": 0.7
         }
         
@@ -102,12 +131,18 @@ class OpenRouterClient:
         
         async with aiohttp.ClientSession() as session:
             try:
+                logger.info(f"Sending recommendations request for {user_name}...")
+                start_time = asyncio.get_event_loop().time()
+                
                 async with session.post(
                     self.url,
                     headers=headers,
                     json=payload,
-                    timeout=aiohttp.ClientTimeout(total=60)
+                    timeout=aiohttp.ClientTimeout(total=180)
                 ) as response:
+                    end_time = asyncio.get_event_loop().time()
+                    logger.info(f"Recommendations response time: {end_time - start_time:.2f}s")
+                    
                     if response.status == 200:
                         result = await response.json()
                         logger.info(f"OpenRouter recommendations response received for {user_name}")
@@ -126,10 +161,10 @@ class OpenRouterClient:
                         }
                         
             except asyncio.TimeoutError:
-                logger.error("OpenRouter request timeout")
+                logger.error(f"Recommendations request timeout for {user_name}")
                 return {
                     "success": False,
-                    "error": "Request timeout"
+                    "error": "Request timeout - try again later"
                 }
             except Exception as e:
                 logger.error(f"OpenRouter request failed: {e}")
@@ -265,9 +300,15 @@ class RecommendationsWorker:
     
     def format_recommendations_message(self, recommendations: str, user_name: str) -> str:
         """Форматирует сообщение с рекомендациями"""
+        from datetime import datetime
+        
         message = f"💡 Персональные рекомендации для {user_name}\n\n"
         message += recommendations
-        message += f"\n\n✨ Создано: {asyncio.get_event_loop().time()}"
+        
+        # Добавляем время создания
+        now = datetime.now()
+        message += f"\n\n✨ Создано: {now.strftime('%d.%m.%Y в %H:%M')}"
+        
         return message
     
     async def process_recommendation(self, message_data: Dict[str, Any]):
