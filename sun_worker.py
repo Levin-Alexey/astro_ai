@@ -506,7 +506,7 @@ async def main():
         logger.error(f"Sun worker error: {e}")
     finally:
         await worker.stop()
-        await dispose_engine()
+        dispose_engine()
         logger.info("Sun worker shutdown complete")
 
 

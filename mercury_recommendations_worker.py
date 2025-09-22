@@ -441,7 +441,7 @@ async def main():
         logger.error(f"Worker error: {e}")
     finally:
         await worker.stop()
-        await dispose_engine()
+        dispose_engine()
         logger.info("Mercury recommendations worker shutdown complete")
 
 

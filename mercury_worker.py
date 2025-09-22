@@ -381,7 +381,7 @@ async def main():
     logger.info("☿️ Starting Mercury predictions worker...")
     
     # Инициализируем движок БД
-    await init_engine()
+    init_engine()
     
     # Создаем клиент OpenRouter если есть API ключ
     openrouter_client = None
@@ -435,7 +435,7 @@ async def main():
         logger.error(f"☿️ Mercury worker error: {e}")
     finally:
         # Закрываем соединение с БД
-        await dispose_engine()
+        dispose_engine()
         logger.info("☿️ Mercury worker finished")
 
 
