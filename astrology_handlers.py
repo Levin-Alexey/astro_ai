@@ -232,6 +232,109 @@ def format_sun_data_for_llm(sun_data: dict) -> str:
     return result
 
 
+def extract_mercury_data(astrology_data: dict) -> dict:
+    """
+    Извлекает данные Меркурия и его аспектов из ответа AstrologyAPI
+
+    Args:
+        astrology_data: Полный ответ от AstrologyAPI
+
+    Returns:
+        Dict с данными Меркурия и его аспектами
+    """
+    mercury_data: dict = {
+        "mercury": None,
+        "mercury_aspects": []
+    }
+
+    # Извлекаем данные Меркурия из списка планет
+    if "planets" in astrology_data:
+        for planet in astrology_data["planets"]:
+            if planet.get("name") == "Mercury":
+                mercury_data["mercury"] = {
+                    "name": planet.get("name"),
+                    "sign": planet.get("sign"),
+                    "house": planet.get("house"),
+                    "full_degree": planet.get("full_degree"),
+                    "norm_degree": planet.get("norm_degree"),
+                    "speed": planet.get("speed"),
+                    "is_retro": planet.get("is_retro"),
+                    "sign_id": planet.get("sign_id")
+                }
+                break
+
+    # Извлекаем аспекты Меркурия
+    if "aspects" in astrology_data:
+        for aspect in astrology_data["aspects"]:
+            if aspect.get("aspecting_planet") == "Mercury":
+                mercury_data["mercury_aspects"].append({
+                    "aspecting_planet": aspect.get("aspecting_planet"),
+                    "aspected_planet": aspect.get("aspected_planet"),
+                    "type": aspect.get("type"),
+                    "orb": aspect.get("orb"),
+                    "diff": aspect.get("diff")
+                })
+
+    return mercury_data
+
+
+def format_mercury_data_for_llm(mercury_data: dict) -> str:
+    """
+    Форматирует данные Меркурия для отправки в LLM
+
+    Args:
+        mercury_data: Данные Меркурия из extract_mercury_data
+
+    Returns:
+        Отформатированная строка для LLM
+    """
+    if not mercury_data["mercury"]:
+        return "Данные Меркурия не найдены"
+
+    mercury = mercury_data["mercury"]
+    aspects = mercury_data["mercury_aspects"]
+
+    # Основная информация о Меркурии
+    result = f"""Меркурий в знаке {mercury['sign']}, дом {mercury['house']}
+Степень: {mercury['norm_degree']:.2f}°
+Скорость: {mercury['speed']:.2f}°/день
+Ретроградность: {'Да' if mercury['is_retro'] == 'true' else 'Нет'}
+
+Аспекты Меркурия:
+"""
+
+    # Добавляем аспекты (сумма орбов не более 4 градусов)
+    # Сортируем по орбу по возрастанию
+    sorted_aspects = sorted(aspects, key=lambda x: x['orb'])
+    filtered_aspects = []
+    total_orb = 0.0
+    
+    # Логируем исходные аспекты
+    logger.info(f"Original Mercury aspects count: {len(aspects)}")
+    for i, aspect in enumerate(sorted_aspects):
+        logger.info(f"Mercury Aspect {i+1}: {aspect['aspecting_planet']} {aspect['type']} {aspect['aspected_planet']} (орб: {aspect['orb']:.2f}°)")
+    
+    for aspect in sorted_aspects:
+        if total_orb + aspect['orb'] <= 4.0:
+            filtered_aspects.append(aspect)
+            total_orb += aspect['orb']
+            logger.info(f"Added Mercury aspect: {aspect['aspecting_planet']} {aspect['type']} {aspect['aspected_planet']} (орб: {aspect['orb']:.2f}°), total_orb: {total_orb:.2f}°")
+        else:
+            logger.info(f"Skipped Mercury aspect: {aspect['aspecting_planet']} {aspect['type']} {aspect['aspected_planet']} (орб: {aspect['orb']:.2f}°) - would exceed 4° limit")
+            break
+    
+    logger.info(f"Final filtered Mercury aspects count: {len(filtered_aspects)}, total_orb: {total_orb:.2f}°")
+    
+    for aspect in filtered_aspects:
+        result += (
+            f"- {aspect['aspecting_planet']} {aspect['type']} "
+            f"{aspect['aspected_planet']} "
+            f"(орб: {aspect['orb']:.2f}°)\n"
+        )
+
+    return result
+
+
 class AstrologyAPIClient:
     """Клиент для работы с AstrologyAPI"""
 
@@ -884,6 +987,81 @@ async def start_sun_analysis(user_id: int) -> Optional[Dict[str, Any]]:
         return None
 
 
+async def start_mercury_analysis(user_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Запускает анализ Меркурия для пользователя
+
+    Args:
+        user_id: ID пользователя в Telegram
+
+    Returns:
+        Dict с данными астрологического API или None при ошибке
+    """
+    try:
+        # Получаем данные пользователя
+        user_data = await get_user_astrology_data(user_id)
+        if not user_data:
+            logger.warning(f"Cannot get astrology data for user {user_id}")
+            return None
+
+        # Инициализируем клиент AstrologyAPI
+        # TODO: Вынести в конфиг
+        api_client = AstrologyAPIClient(
+            user_id="645005",
+            api_key="f6c596e32bb8e29feebbae1c460aaf0913208c7c"
+        )
+
+        # Получаем данные от AstrologyAPI
+        astrology_data = await api_client.get_western_horoscope(
+            day=user_data["day"],
+            month=user_data["month"],
+            year=user_data["year"],
+            hour=user_data["hour"],
+            minute=user_data["minute"],
+            lat=user_data["lat"],
+            lon=user_data["lon"],
+            tzone=user_data["tzone"],
+            language="en"  # Английский для стандартных названий
+        )
+
+        # Извлекаем данные Меркурия
+        mercury_data = extract_mercury_data(astrology_data)
+        formatted_mercury_data = format_mercury_data_for_llm(mercury_data)
+
+        # Сохраняем отформатированные данные Меркурия
+        raw_content = (
+            f"Mercury Analysis Data:\n{formatted_mercury_data}\n\n"
+            f"Raw AstrologyAPI data: {astrology_data}"
+        )
+
+        # Сохраняем в базу данных
+        prediction_id = await save_astrology_data(
+            user_id=user_id,
+            planet=Planet.mercury,
+            prediction_type=PredictionType.paid,
+            content=raw_content,
+            llm_model="astrology_api",
+            expires_at=datetime.now(timezone.utc) + timedelta(days=30)  # 30 дней доступа
+        )
+
+        # Отправляем в очередь для обработки LLM
+        try:
+            await send_mercury_prediction_to_queue(
+                prediction_id, user_data["telegram_id"]
+            )
+            logger.info(
+                f"☿️ Mercury prediction {prediction_id} sent to queue for LLM processing"
+            )
+        except Exception as e:
+            logger.error(f"Failed to send Mercury prediction to queue: {e}")
+
+        return astrology_data
+
+    except Exception as e:
+        logger.error(f"Error in start_mercury_analysis: {e}")
+        return None
+
+
 async def send_sun_prediction_to_queue(prediction_id: int, user_id: int) -> bool:
     """Отправляет предсказание Солнца в очередь sun_predictions"""
     try:
@@ -918,4 +1096,21 @@ async def send_sun_prediction_to_queue(prediction_id: int, user_id: int) -> bool
         
     except Exception as e:
         logger.error(f"❌ Error sending sun prediction to queue: {e}")
+        return False
+
+
+async def send_mercury_prediction_to_queue(prediction_id: int, user_id: int) -> bool:
+    """Отправляет предсказание Меркурия в очередь mercury_predictions"""
+    try:
+        from queue_sender import send_mercury_prediction_to_queue as queue_send
+        
+        success = await queue_send(prediction_id, user_id)
+        if success:
+            logger.info(f"☿️ Mercury prediction {prediction_id} sent to mercury_predictions queue")
+        else:
+            logger.error(f"❌ Failed to send Mercury prediction {prediction_id} to queue")
+        return success
+        
+    except Exception as e:
+        logger.error(f"❌ Error sending mercury prediction to queue: {e}")
         return False

@@ -16,8 +16,11 @@ RABBITMQ_URL = os.getenv(
     "amqp://astro_user:astro_password_123@31.128.40.111:5672/"
 )
 QUEUE_NAME = "moon_predictions"
+SUN_QUEUE_NAME = "sun_predictions"
+MERCURY_QUEUE_NAME = "mercury_predictions"
 RECOMMENDATIONS_QUEUE_NAME = "recommendations"
 SUN_RECOMMENDATIONS_QUEUE_NAME = "sun_recommendations"
+MERCURY_RECOMMENDATIONS_QUEUE_NAME = "mercury_recommendations"
 QUESTIONS_QUEUE_NAME = "questions"
 
 
@@ -35,8 +38,17 @@ class QueueSender:
 
         # Объявляем очереди
         await self.channel.declare_queue(QUEUE_NAME, durable=True)
-        await self.channel.declare_queue(RECOMMENDATIONS_QUEUE_NAME, durable=True)
-        await self.channel.declare_queue(SUN_RECOMMENDATIONS_QUEUE_NAME, durable=True)
+        await self.channel.declare_queue(SUN_QUEUE_NAME, durable=True)
+        await self.channel.declare_queue(MERCURY_QUEUE_NAME, durable=True)
+        await self.channel.declare_queue(
+            RECOMMENDATIONS_QUEUE_NAME, durable=True
+        )
+        await self.channel.declare_queue(
+            SUN_RECOMMENDATIONS_QUEUE_NAME, durable=True
+        )
+        await self.channel.declare_queue(
+            MERCURY_RECOMMENDATIONS_QUEUE_NAME, durable=True
+        )
         await self.channel.declare_queue(
             QUESTIONS_QUEUE_NAME, durable=True
         )
@@ -83,6 +95,48 @@ class QueueSender:
 
         except Exception as e:
             logger.error(f"Failed to send message to queue: {e}")
+            return False
+
+    async def send_mercury_prediction_for_processing(
+        self,
+        prediction_id: int,
+        user_telegram_id: int
+    ) -> bool:
+        """
+        Отправляет предсказание Меркурия на обработку в очередь
+
+        Args:
+            prediction_id: ID предсказания
+            user_telegram_id: Telegram ID пользователя
+
+        Returns:
+            True если сообщение отправлено успешно
+        """
+        if not self.channel:
+            await self.initialize()
+
+        message_data = {
+            "prediction_id": prediction_id,
+            "user_telegram_id": user_telegram_id,
+            "timestamp": asyncio.get_event_loop().time()
+        }
+
+        try:
+            message = aio_pika.Message(
+                body=json.dumps(message_data).encode(),
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+            )
+
+            await self.channel.default_exchange.publish(
+                message,
+                routing_key=MERCURY_QUEUE_NAME
+            )
+
+            logger.info(f"☿️ Sent Mercury prediction {prediction_id} to queue")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Failed to send Mercury message to queue: {e}")
             return False
 
     async def send_recommendation_for_processing(
@@ -182,6 +236,56 @@ class QueueSender:
         except Exception as e:
             logger.error(
                 f"Failed to send sun recommendation message to queue: {e}"
+            )
+            return False
+
+    async def send_mercury_recommendation_for_processing(
+        self,
+        prediction_id: int,
+        user_telegram_id: int,
+        mercury_analysis: str
+    ) -> bool:
+        """
+        Отправляет запрос на генерацию рекомендаций по Меркурию в очередь
+
+        Args:
+            prediction_id: ID исходного предсказания
+            user_telegram_id: Telegram ID пользователя
+            mercury_analysis: Разбор Меркурия для генерации рекомендаций
+
+        Returns:
+            True если сообщение отправлено успешно
+        """
+        if not self.channel:
+            await self.initialize()
+
+        message_data = {
+            "prediction_id": prediction_id,
+            "user_telegram_id": user_telegram_id,
+            "mercury_analysis": mercury_analysis,
+            "timestamp": asyncio.get_event_loop().time()
+        }
+
+        try:
+            message = aio_pika.Message(
+                body=json.dumps(message_data).encode(),
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+            )
+
+            await self.channel.default_exchange.publish(
+                message,
+                routing_key=MERCURY_RECOMMENDATIONS_QUEUE_NAME
+            )
+
+            logger.info(
+                f"Sent mercury recommendation request for prediction "
+                f"{prediction_id} to queue"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(
+                f"Failed to send mercury recommendation message to queue: {e}"
             )
             return False
 
@@ -328,6 +432,48 @@ async def send_question_to_queue(
     sender = await get_queue_sender()
     return await sender.send_question_for_processing(
         user_telegram_id, question
+    )
+
+
+async def send_mercury_recommendation_to_queue(
+    prediction_id: int,
+    user_telegram_id: int,
+    mercury_analysis: str
+) -> bool:
+    """
+    Удобная функция для отправки запроса на рекомендации по Меркурию в очередь
+
+    Args:
+        prediction_id: ID исходного предсказания
+        user_telegram_id: Telegram ID пользователя
+        mercury_analysis: Разбор Меркурия для генерации рекомендаций
+
+    Returns:
+        True если сообщение отправлено успешно
+    """
+    sender = await get_queue_sender()
+    return await sender.send_mercury_recommendation_for_processing(
+        prediction_id, user_telegram_id, mercury_analysis
+    )
+
+
+async def send_mercury_prediction_to_queue(
+    prediction_id: int,
+    user_telegram_id: int
+) -> bool:
+    """
+    Удобная функция для отправки Mercury prediction в очередь
+
+    Args:
+        prediction_id: ID предсказания
+        user_telegram_id: Telegram ID пользователя
+
+    Returns:
+        True если сообщение отправлено успешно
+    """
+    sender = await get_queue_sender()
+    return await sender.send_mercury_prediction_for_processing(
+        prediction_id, user_telegram_id
     )
 
 

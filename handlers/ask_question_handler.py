@@ -3,16 +3,17 @@
 """
 
 import logging
+
 from aiogram.types import (
-    CallbackQuery, 
-    InlineKeyboardMarkup, 
+    CallbackQuery,
+    InlineKeyboardMarkup,
     InlineKeyboardButton
 )
 from aiogram.fsm.context import FSMContext
+from sqlalchemy import select, func
 
 from db import get_session
 from models import User, Prediction, Planet, PredictionType
-from sqlalchemy import select, func
 
 logger = logging.getLogger(__name__)
 
@@ -122,45 +123,9 @@ async def handle_ask_question(callback: CallbackQuery, state: FSMContext):
                 )
             return
     
-    # Создаем клавиатуру с тематическими вопросами
+    # Создаем простую клавиатуру только с кнопкой "Главное меню"
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="💕 Отношения",
-                    callback_data="question_relationships"
-                ),
-                InlineKeyboardButton(
-                    text="💼 Карьера",
-                    callback_data="question_career"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="💰 Финансы",
-                    callback_data="question_finances"
-                ),
-                InlineKeyboardButton(
-                    text="🏠 Семья",
-                    callback_data="question_family"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="🎯 Цели и мечты",
-                    callback_data="question_goals"
-                ),
-                InlineKeyboardButton(
-                    text="🧘 Здоровье",
-                    callback_data="question_health"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="❓ Другой вопрос",
-                    callback_data="question_custom"
-                )
-            ],
             [
                 InlineKeyboardButton(
                     text="🏠 Главное меню",
@@ -170,15 +135,19 @@ async def handle_ask_question(callback: CallbackQuery, state: FSMContext):
         ]
     )
     
-    # Отправляем сообщение с выбором темы вопроса
+    # Отправляем сообщение с предложением задать вопрос
     remaining_questions = MAX_QUESTIONS_PER_USER - question_count
     if callback.message:
         await callback.message.answer(
-            f"❓ Задать вопрос астрологу\n\n"
+            f"❓ Задай свой вопрос\n\n"
             f"Осталось вопросов: {remaining_questions} из "
             f"{MAX_QUESTIONS_PER_USER}\n\n"
-            "Выбери тему, по которой хочешь задать вопрос:\n\n"
-            "💡 Я отвечу на основе твоей астрологической карты и дам "
-            "персональные советы!",
+            "Напиши любой вопрос, и я отвечу на основе твоей "
+            "астрологической карты! 🔮",
             reply_markup=keyboard
         )
+        
+        # Устанавливаем состояние ожидания вопроса
+        # Импортируем здесь, чтобы избежать циклических импортов
+        from main import QuestionForm
+        await state.set_state(QuestionForm.waiting_for_question)

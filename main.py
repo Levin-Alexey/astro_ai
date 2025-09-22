@@ -39,6 +39,7 @@ from astrology_handlers import (
 )
 from handlers.recommendations_handler import handle_get_recommendations
 from handlers.sun_recommendations_handler import handle_get_sun_recommendations
+from handlers.mercury_recommendations_handler import handle_get_mercury_recommendations
 from handlers.ask_question_handler import handle_ask_question
 from payment_handler import init_payment_handler
 
@@ -1458,6 +1459,13 @@ async def on_get_sun_recommendations(callback: CallbackQuery, state: FSMContext)
     await handle_get_sun_recommendations(callback, state)
 
 
+# Обработчики для кнопок после разбора Меркурия
+@dp.callback_query(F.data == "get_mercury_recommendations")
+async def on_get_mercury_recommendations(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Получить рекомендации' для Меркурия"""
+    await handle_get_mercury_recommendations(callback, state)
+
+
 @dp.callback_query(F.data == "ask_question")
 async def on_ask_question(callback: CallbackQuery, state: FSMContext):
     """Обработчик кнопки 'Задать вопрос'"""
@@ -1467,6 +1475,12 @@ async def on_ask_question(callback: CallbackQuery, state: FSMContext):
 @dp.callback_query(F.data == "ask_sun_question")
 async def on_ask_sun_question(callback: CallbackQuery, state: FSMContext):
     """Обработчик кнопки 'Задать вопрос' для Солнца"""
+    await handle_ask_question(callback, state)
+
+
+@dp.callback_query(F.data == "ask_mercury_question")
+async def on_ask_mercury_question(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Задать вопрос' для Меркурия"""
     await handle_ask_question(callback, state)
 
 
@@ -1918,21 +1932,67 @@ async def on_explore_mercury(callback: CallbackQuery):
     """Обработчик кнопки 'Меркурий'"""
     await callback.answer()
     cb_msg = cast(Message, callback.message)
-    await cb_msg.answer(
-        "☿️ Меркурий\n\n"
-        "Здесь будет обработчик для Меркурия\n\n"
-        "TODO: Реализовать функционал",
-        reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="🔙 Назад",
-                        callback_data="explore_other_areas"
-                    )
+    user_id = callback.from_user.id
+    
+    # Проверяем, есть ли у пользователя оплаченный доступ к Меркурию
+    has_access = await check_user_payment_access(user_id, "mercury")
+    
+    if has_access:
+        # Если доступ есть, получаем и отправляем разбор
+        await cb_msg.answer(
+            "☿️ Меркурий\n\n"
+            "🔮 Получаю ваш персональный астрологический разбор...\n\n"
+            "⏳ Пожалуйста, подождите несколько секунд.",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="explore_other_areas"
+                        )
+                    ]
                 ]
-            ]
+            )
         )
-    )
+        
+        # Получаем разбор из БД
+        await send_existing_analysis(user_id, "mercury", cb_msg)
+        
+        logger.info(
+            f"Пользователь {user_id} запросил разбор Меркурия (доступ есть)"
+        )
+    else:
+        # Если доступа нет, предлагаем оплату
+        await cb_msg.answer(
+            "☿️ Меркурий\n\n"
+            "💰 Для получения персонального астрологического разбора "
+            "по Меркурию необходимо произвести оплату.\n\n"
+            "💸 Стоимость: 10₽ (вместо 999₽)\n\n"
+            "🎯 Что вы получите:\n"
+            "• Развитие речи и мышления\n"
+            "• Умение убеждать и договариваться\n"
+            "• Лёгкое обучение и ясная подача идей\n"
+            "• Понимание стиля общения",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="💳 Оплатить 10₽",
+                            callback_data="pay_mercury"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="explore_other_areas"
+                        )
+                    ]
+                ]
+            )
+        )
+        logger.info(
+            f"Пользователь {user_id} запросил разбор Меркурия (доступа нет)"
+        )
 
 
 @dp.callback_query(F.data == "explore_venus")
@@ -2300,6 +2360,128 @@ async def on_pay_sun(callback: CallbackQuery):
                         InlineKeyboardButton(
                             text="🔙 Назад",
                             callback_data="explore_sun"
+                        )
+                    ]
+                ]
+            )
+        )
+
+
+@dp.callback_query(F.data == "pay_mercury")
+async def on_pay_mercury(callback: CallbackQuery):
+    """Обработчик кнопки оплаты за Меркурий"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    user_id = callback.from_user.id
+    
+    if payment_handler is None:
+        await cb_msg.answer(
+            "❌ Ошибка: обработчик платежей не инициализирован",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="explore_mercury"
+                        )
+                    ]
+                ]
+            )
+        )
+        return
+    
+    try:
+        logger.info(f"☿️ НАЧИНАЕМ СОЗДАНИЕ ПЛАТЕЖА для пользователя {user_id}")
+        
+        # Создаем данные для платежа
+        payment_data = payment_handler.create_payment_data(
+            user_id=user_id,
+            planet="mercury",
+            description="Астрологический разбор Меркурия"
+        )
+        logger.info(f"☿️ ДАННЫЕ ПЛАТЕЖА СОЗДАНЫ: {payment_data}")
+        
+        # Создаем платеж через ЮKassa
+        payment_url = await payment_handler.create_payment(payment_data)
+        logger.info(f"☿️ ПЛАТЕЖ СОЗДАН В YOOKASSA: {payment_url}")
+        
+        # Сохраняем информацию о платеже в БД
+        logger.info(f"☿️ НАЧИНАЕМ СОХРАНЕНИЕ В БД...")
+        from models import PlanetPayment, PaymentType, PaymentStatus, Planet, User
+        from sqlalchemy import select
+        async with get_session() as session:
+            # Находим user_id по telegram_id
+            logger.info(f"☿️ ИЩЕМ ПОЛЬЗОВАТЕЛЯ с telegram_id: {user_id}")
+            result = await session.execute(
+                select(User).where(User.telegram_id == user_id)
+            )
+            user = result.scalar_one_or_none()
+            
+            if not user:
+                logger.error(f"❌ User with telegram_id {user_id} not found")
+                return
+            
+            logger.info(f"☿️ ПОЛЬЗОВАТЕЛЬ НАЙДЕН: user_id={user.user_id}, telegram_id={user.telegram_id}")
+            
+            payment_record = PlanetPayment(
+                user_id=user.user_id,  # Используем user_id из таблицы users
+                payment_type=PaymentType.single_planet,
+                planet=Planet.mercury,
+                status=PaymentStatus.pending,
+                amount_kopecks=1000,  # 10 рублей в копейках
+                payment_url=payment_url,
+                notes="Платеж за разбор Меркурия"
+            )
+            logger.info(f"☿️ СОЗДАЕМ ЗАПИСЬ ПЛАТЕЖА: {payment_record}")
+            
+            session.add(payment_record)
+            await session.commit()
+            
+            logger.info(f"☿️ ПЛАТЕЖ СОХРАНЕН В БД! ID: {payment_record.payment_id}")
+            logger.info(f"Создан платеж для пользователя {user_id} (user_id: {user.user_id}) за Меркурий")
+        
+        # Отправляем сообщение с кнопкой оплаты
+        await cb_msg.answer(
+            "☿️ Оплата за разбор Меркурия\n\n"
+            "💰 Стоимость: 10₽\n\n"
+            "🎯 Что вы получите:\n"
+            "• Развитие речи и мышления\n"
+            "• Умение убеждать и договариваться\n"
+            "• Лёгкое обучение и ясная подача идей\n"
+            "• Понимание стиля общения\n\n"
+            "💳 Нажмите кнопку ниже для оплаты:",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="💳 Оплатить 10₽",
+                            url=payment_url
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="explore_mercury"
+                        )
+                    ]
+                ]
+            )
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ ОШИБКА ПРИ СОЗДАНИИ ПЛАТЕЖА ЗА МЕРКУРИЙ: {e}")
+        logger.error(f"❌ ТИП ОШИБКИ: {type(e)}")
+        logger.error(f"❌ ДЕТАЛИ ОШИБКИ: {str(e)}")
+        import traceback
+        logger.error(f"❌ TRACEBACK: {traceback.format_exc()}")
+        await cb_msg.answer(
+            "❌ Произошла ошибка при создании платежа. Попробуйте позже.",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="explore_mercury"
                         )
                     ]
                 ]
