@@ -2700,7 +2700,6 @@ async def on_pay_mercury(callback: CallbackQuery):
                 status=PaymentStatus.pending,
                 amount_kopecks=1000,  # 10 рублей в копейках
                 payment_url=payment_url,
-                external_payment_id=payment_data["payment_id"],
                 notes="Платеж за разбор Меркурия",
                 # Новые поля для защиты платежей
                 retry_count=0,
