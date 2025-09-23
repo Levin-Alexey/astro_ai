@@ -2610,7 +2610,6 @@ async def on_pay_venus(callback: CallbackQuery):
                 payment_type=PaymentType.single_planet,
                 status=PaymentStatus.pending,
                 amount_kopecks=1000,  # 10 рублей в копейках
-                external_payment_id=payment_data['payment_id'],
                 payment_url=payment_url,
                 notes="Платеж за разбор Венеры"
             )
