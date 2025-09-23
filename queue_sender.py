@@ -18,9 +18,11 @@ RABBITMQ_URL = os.getenv(
 QUEUE_NAME = "moon_predictions"
 SUN_QUEUE_NAME = "sun_predictions"
 MERCURY_QUEUE_NAME = "mercury_predictions"
+VENUS_QUEUE_NAME = "venus_predictions"
 RECOMMENDATIONS_QUEUE_NAME = "recommendations"
 SUN_RECOMMENDATIONS_QUEUE_NAME = "sun_recommendations"
 MERCURY_RECOMMENDATIONS_QUEUE_NAME = "mercury_recommendations"
+VENUS_RECOMMENDATIONS_QUEUE_NAME = "venus_recommendations"
 QUESTIONS_QUEUE_NAME = "questions"
 
 
@@ -40,6 +42,7 @@ class QueueSender:
         await self.channel.declare_queue(QUEUE_NAME, durable=True)
         await self.channel.declare_queue(SUN_QUEUE_NAME, durable=True)
         await self.channel.declare_queue(MERCURY_QUEUE_NAME, durable=True)
+        await self.channel.declare_queue(VENUS_QUEUE_NAME, durable=True)
         await self.channel.declare_queue(
             RECOMMENDATIONS_QUEUE_NAME, durable=True
         )
@@ -48,6 +51,9 @@ class QueueSender:
         )
         await self.channel.declare_queue(
             MERCURY_RECOMMENDATIONS_QUEUE_NAME, durable=True
+        )
+        await self.channel.declare_queue(
+            VENUS_RECOMMENDATIONS_QUEUE_NAME, durable=True
         )
         await self.channel.declare_queue(
             QUESTIONS_QUEUE_NAME, durable=True
@@ -289,6 +295,98 @@ class QueueSender:
             )
             return False
 
+    async def send_venus_prediction_for_processing(
+        self,
+        prediction_id: int,
+        user_telegram_id: int
+    ) -> bool:
+        """
+        Отправляет предсказание Венеры на обработку в очередь
+
+        Args:
+            prediction_id: ID предсказания
+            user_telegram_id: Telegram ID пользователя
+
+        Returns:
+            True если сообщение отправлено успешно
+        """
+        if not self.channel:
+            await self.initialize()
+
+        message_data = {
+            "prediction_id": prediction_id,
+            "user_telegram_id": user_telegram_id,
+            "timestamp": asyncio.get_event_loop().time()
+        }
+
+        try:
+            message = aio_pika.Message(
+                body=json.dumps(message_data).encode(),
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+            )
+
+            await self.channel.default_exchange.publish(
+                message,
+                routing_key=VENUS_QUEUE_NAME
+            )
+
+            logger.info(f"♀️ Sent Venus prediction {prediction_id} to queue")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Failed to send Venus message to queue: {e}")
+            return False
+
+    async def send_venus_recommendation_for_processing(
+        self,
+        prediction_id: int,
+        user_telegram_id: int,
+        venus_analysis: str
+    ) -> bool:
+        """
+        Отправляет запрос на генерацию рекомендаций по Венере в очередь
+
+        Args:
+            prediction_id: ID исходного предсказания
+            user_telegram_id: Telegram ID пользователя
+            venus_analysis: Разбор Венеры для генерации рекомендаций
+
+        Returns:
+            True если сообщение отправлено успешно
+        """
+        if not self.channel:
+            await self.initialize()
+
+        message_data = {
+            "prediction_id": prediction_id,
+            "user_telegram_id": user_telegram_id,
+            "venus_analysis": venus_analysis,
+            "timestamp": asyncio.get_event_loop().time()
+        }
+
+        try:
+            message = aio_pika.Message(
+                body=json.dumps(message_data).encode(),
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+            )
+
+            await self.channel.default_exchange.publish(
+                message,
+                routing_key=VENUS_RECOMMENDATIONS_QUEUE_NAME
+            )
+
+            logger.info(
+                f"Sent venus recommendation request for prediction "
+                f"{prediction_id} to queue"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(
+                f"Failed to send venus recommendation message to queue: {e}"
+            )
+            return False
+
     async def send_question_for_processing(
         self,
         user_telegram_id: int,
@@ -474,6 +572,48 @@ async def send_mercury_prediction_to_queue(
     sender = await get_queue_sender()
     return await sender.send_mercury_prediction_for_processing(
         prediction_id, user_telegram_id
+    )
+
+
+async def send_venus_prediction_to_queue(
+    prediction_id: int,
+    user_telegram_id: int
+) -> bool:
+    """
+    Удобная функция для отправки Venus prediction в очередь
+
+    Args:
+        prediction_id: ID предсказания
+        user_telegram_id: Telegram ID пользователя
+
+    Returns:
+        True если сообщение отправлено успешно
+    """
+    sender = await get_queue_sender()
+    return await sender.send_venus_prediction_for_processing(
+        prediction_id, user_telegram_id
+    )
+
+
+async def send_venus_recommendation_to_queue(
+    prediction_id: int,
+    user_telegram_id: int,
+    venus_analysis: str
+) -> bool:
+    """
+    Удобная функция для отправки запроса на рекомендации по Венере в очередь
+
+    Args:
+        prediction_id: ID исходного предсказания
+        user_telegram_id: Telegram ID пользователя
+        venus_analysis: Разбор Венеры для генерации рекомендаций
+
+    Returns:
+        True если сообщение отправлено успешно
+    """
+    sender = await get_queue_sender()
+    return await sender.send_venus_recommendation_for_processing(
+        prediction_id, user_telegram_id, venus_analysis
     )
 
 

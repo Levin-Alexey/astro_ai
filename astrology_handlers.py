@@ -335,6 +335,115 @@ def format_mercury_data_for_llm(mercury_data: dict) -> str:
     return result
 
 
+def extract_venus_data(astrology_data: dict) -> dict:
+    """
+    Извлекает данные Венеры и её аспектов из ответа AstrologyAPI
+
+    Args:
+        astrology_data: Полный ответ от AstrologyAPI
+
+    Returns:
+        Dict с данными Венеры и её аспектами
+    """
+    venus_data: dict = {
+        "venus": None,
+        "venus_aspects": []
+    }
+
+    # Извлекаем данные Венеры из списка планет
+    if "planets" in astrology_data:
+        for planet in astrology_data["planets"]:
+            if planet.get("name") == "Venus":
+                venus_data["venus"] = {
+                    "name": planet.get("name"),
+                    "sign": planet.get("sign"),
+                    "house": planet.get("house"),
+                    "full_degree": planet.get("full_degree"),
+                    "norm_degree": planet.get("norm_degree"),
+                    "speed": planet.get("speed"),
+                    "is_retro": planet.get("is_retro"),
+                    "sign_id": planet.get("sign_id")
+                }
+                break
+
+    # Извлекаем аспекты Венеры
+    if "aspects" in astrology_data:
+        for aspect in astrology_data["aspects"]:
+            if aspect.get("aspecting_planet") == "Venus":
+                venus_data["venus_aspects"].append({
+                    "aspecting_planet": aspect.get("aspecting_planet"),
+                    "aspected_planet": aspect.get("aspected_planet"),
+                    "type": aspect.get("type"),
+                    "orb": aspect.get("orb"),
+                    "diff": aspect.get("diff")
+                })
+
+    return venus_data
+
+
+def format_venus_data_for_llm(venus_data: dict) -> str:
+    """
+    Форматирует данные Венеры для отправки в LLM
+
+    Args:
+        venus_data: Данные Венеры из extract_venus_data
+
+    Returns:
+        Отформатированная строка для LLM
+    """
+    if not venus_data["venus"]:
+        return "Данные Венеры не найдены"
+
+    venus = venus_data["venus"]
+    aspects = venus_data["venus_aspects"]
+
+    # Основная информация о Венере
+    result = f"""Венера в знаке {venus['sign']}, дом {venus['house']}
+Степень: {venus['norm_degree']:.2f}°
+Скорость: {venus['speed']:.2f}°/день
+Ретроградность: {'Да' if venus['is_retro'] == 'true' else 'Нет'}
+
+Аспекты Венеры:
+"""
+
+    # Добавляем аспекты (сумма орбов не более 4 градусов)
+    # Сортируем по орбу по возрастанию
+    sorted_aspects = sorted(aspects, key=lambda x: x['orb'])
+    filtered_aspects = []
+    total_orb = 0.0
+    
+    # Логируем исходные аспекты
+    logger.info(f"Original Venus aspects count: {len(aspects)}")
+    for i, aspect in enumerate(sorted_aspects):
+        logger.info(f"Venus Aspect {i+1}: {aspect['aspecting_planet']} {aspect['type']} {aspect['aspected_planet']} (орб: {aspect['orb']:.2f}°)")
+    
+    # Отбираем аспекты с общим орбом не более 4 градусов
+    for aspect in sorted_aspects:
+        if total_orb + aspect['orb'] <= 4.0:
+            filtered_aspects.append(aspect)
+            total_orb += aspect['orb']
+            logger.info(f"Venus Aspect INCLUDED: {aspect['aspecting_planet']} {aspect['type']} {aspect['aspected_planet']} (орб: {aspect['orb']:.2f}°)")
+        else:
+            logger.info(f"Venus Aspect EXCLUDED (total orb would be {total_orb + aspect['orb']:.2f}°): {aspect['aspecting_planet']} {aspect['type']} {aspect['aspected_planet']} (орб: {aspect['orb']:.2f}°)")
+
+    # Если нет подходящих аспектов, берем самый сильный (с минимальным орбом)
+    if not filtered_aspects and aspects:
+        filtered_aspects = [sorted_aspects[0]]
+        logger.info(f"Venus: No aspects under 4° total, taking strongest: {sorted_aspects[0]['aspecting_planet']} {sorted_aspects[0]['type']} {sorted_aspects[0]['aspected_planet']}")
+
+    # Форматируем отобранные аспекты
+    logger.info(f"Final filtered Venus aspects count: {len(filtered_aspects)}, total_orb: {total_orb:.2f}°")
+    
+    for aspect in filtered_aspects:
+        result += (
+            f"- {aspect['aspecting_planet']} {aspect['type']} "
+            f"{aspect['aspected_planet']} "
+            f"(орб: {aspect['orb']:.2f}°)\n"
+        )
+
+    return result
+
+
 class AstrologyAPIClient:
     """Клиент для работы с AstrologyAPI"""
 
@@ -1113,4 +1222,96 @@ async def send_mercury_prediction_to_queue(prediction_id: int, user_id: int) -> 
         
     except Exception as e:
         logger.error(f"❌ Error sending mercury prediction to queue: {e}")
+        return False
+
+
+async def start_venus_analysis(user_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Запускает анализ Венеры для пользователя
+
+    Args:
+        user_id: ID пользователя в Telegram
+
+    Returns:
+        Dict с данными астрологического API или None при ошибке
+    """
+    try:
+        # Получаем данные пользователя
+        user_data = await get_user_astrology_data(user_id)
+        if not user_data:
+            logger.warning(f"Cannot get astrology data for user {user_id}")
+            return None
+
+        # Инициализируем клиент AstrologyAPI
+        # TODO: Вынести в конфиг
+        api_client = AstrologyAPIClient(
+            user_id="645005",
+            api_key="f6c596e32bb8e29feebbae1c460aaf0913208c7c"
+        )
+
+        # Получаем данные от AstrologyAPI
+        astrology_data = await api_client.get_western_horoscope(
+            day=user_data["day"],
+            month=user_data["month"],
+            year=user_data["year"],
+            hour=user_data["hour"],
+            minute=user_data["minute"],
+            lat=user_data["lat"],
+            lon=user_data["lon"],
+            tzone=user_data["tzone"],
+            language="en"  # Английский для стандартных названий
+        )
+
+        # Извлекаем данные Венеры
+        venus_data = extract_venus_data(astrology_data)
+        formatted_venus_data = format_venus_data_for_llm(venus_data)
+
+        # Сохраняем отформатированные данные Венеры
+        raw_content = (
+            f"Venus Analysis Data:\n{formatted_venus_data}\n\n"
+            f"Raw AstrologyAPI data: {astrology_data}"
+        )
+
+        # Сохраняем в базу данных
+        prediction_id = await save_astrology_data(
+            user_id=user_id,
+            planet=Planet.venus,
+            prediction_type=PredictionType.paid,
+            content=raw_content,
+            llm_model="astrology_api",
+            expires_at=datetime.now(timezone.utc) + timedelta(days=30)  # 30 дней доступа
+        )
+
+        # Отправляем в очередь для обработки LLM
+        try:
+            await send_venus_prediction_to_queue(
+                prediction_id, user_data["telegram_id"]
+            )
+            logger.info(
+                f"♀️ Venus prediction {prediction_id} sent to queue for LLM processing"
+            )
+        except Exception as e:
+            logger.error(f"Failed to send Venus prediction to queue: {e}")
+
+        return astrology_data
+
+    except Exception as e:
+        logger.error(f"Error in start_venus_analysis: {e}")
+        return None
+
+
+async def send_venus_prediction_to_queue(prediction_id: int, user_id: int) -> bool:
+    """Отправляет предсказание Венеры в очередь venus_predictions"""
+    try:
+        from queue_sender import send_venus_prediction_to_queue as queue_send
+        
+        success = await queue_send(prediction_id, user_id)
+        if success:
+            logger.info(f"♀️ Venus prediction {prediction_id} sent to venus_predictions queue")
+        else:
+            logger.error(f"❌ Failed to send Venus prediction {prediction_id} to queue")
+        return success
+        
+    except Exception as e:
+        logger.error(f"❌ Error sending venus prediction to queue: {e}")
         return False

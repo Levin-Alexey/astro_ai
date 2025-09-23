@@ -40,6 +40,7 @@ from astrology_handlers import (
 from handlers.recommendations_handler import handle_get_recommendations
 from handlers.sun_recommendations_handler import handle_get_sun_recommendations
 from handlers.mercury_recommendations_handler import handle_get_mercury_recommendations
+from handlers.venus_recommendations_handler import handle_get_venus_recommendations
 from handlers.ask_question_handler import handle_ask_question
 from payment_handler import init_payment_handler
 
@@ -1466,6 +1467,13 @@ async def on_get_mercury_recommendations(callback: CallbackQuery, state: FSMCont
     await handle_get_mercury_recommendations(callback, state)
 
 
+# Обработчики для кнопок после разбора Венеры
+@dp.callback_query(F.data == "get_venus_recommendations")
+async def on_get_venus_recommendations(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Получить рекомендации' для Венеры"""
+    await handle_get_venus_recommendations(callback, state)
+
+
 @dp.callback_query(F.data == "ask_question")
 async def on_ask_question(callback: CallbackQuery, state: FSMContext):
     """Обработчик кнопки 'Задать вопрос'"""
@@ -1481,6 +1489,12 @@ async def on_ask_sun_question(callback: CallbackQuery, state: FSMContext):
 @dp.callback_query(F.data == "ask_mercury_question")
 async def on_ask_mercury_question(callback: CallbackQuery, state: FSMContext):
     """Обработчик кнопки 'Задать вопрос' для Меркурия"""
+    await handle_ask_question(callback, state)
+
+
+@dp.callback_query(F.data == "ask_venus_question")
+async def on_ask_venus_question(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Задать вопрос' для Венеры"""
     await handle_ask_question(callback, state)
 
 
@@ -2000,21 +2014,67 @@ async def on_explore_venus(callback: CallbackQuery):
     """Обработчик кнопки 'Венера'"""
     await callback.answer()
     cb_msg = cast(Message, callback.message)
-    await cb_msg.answer(
-        "♀️ Венера\n\n"
-        "Здесь будет обработчик для Венеры\n\n"
-        "TODO: Реализовать функционал",
-        reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="🔙 Назад",
-                        callback_data="explore_other_areas"
-                    )
+    user_id = callback.from_user.id
+    
+    # Проверяем, есть ли у пользователя оплаченный доступ к Венере
+    has_access = await check_user_payment_access(user_id, "venus")
+    
+    if has_access:
+        # Если доступ есть, получаем и отправляем разбор
+        await cb_msg.answer(
+            "♀️ Венера\n\n"
+            "🔮 Получаю ваш персональный астрологический разбор...\n\n"
+            "⏳ Пожалуйста, подождите несколько секунд.",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="explore_other_areas"
+                        )
+                    ]
                 ]
-            ]
+            )
         )
-    )
+        
+        # Получаем разбор из БД
+        await send_existing_analysis(user_id, "venus", cb_msg)
+        
+        logger.info(
+            f"Пользователь {user_id} запросил разбор Венеры (доступ есть)"
+        )
+    else:
+        # Если доступа нет, предлагаем оплату
+        await cb_msg.answer(
+            "♀️ Венера\n\n"
+            "💰 Для получения персонального астрологического разбора "
+            "по Венере необходимо произвести оплату.\n\n"
+            "💸 Стоимость: 10₽ (вместо 999₽)\n\n"
+            "🎯 Что вы получите:\n"
+            "• Раскрытие женской энергии и привлекательности\n"
+            "• Понимание в отношениях и любви\n"
+            "• Развитие творческих способностей\n"
+            "• Гармонизация эмоциональной сферы",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="� Оплатить 10₽",
+                            callback_data="pay_venus"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="�🔙 Назад",
+                            callback_data="explore_other_areas"
+                        )
+                    ]
+                ]
+            )
+        )
+        logger.info(
+            f"Пользователь {user_id} запросил разбор Венеры (доступа нет)"
+        )
 
 
 @dp.callback_query(F.data == "explore_mars")
@@ -2482,6 +2542,123 @@ async def on_pay_mercury(callback: CallbackQuery):
                         InlineKeyboardButton(
                             text="🔙 Назад",
                             callback_data="explore_mercury"
+                        )
+                    ]
+                ]
+            )
+        )
+
+
+@dp.callback_query(F.data == "pay_venus")
+async def on_pay_venus(callback: CallbackQuery):
+    """Обработчик кнопки оплаты за Венеру"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    user_id = callback.from_user.id
+    
+    if payment_handler is None:
+        await cb_msg.answer(
+            "❌ Ошибка: обработчик платежей не инициализирован",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="explore_venus"
+                        )
+                    ]
+                ]
+            )
+        )
+        return
+    
+    try:
+        logger.info(f"♀️ НАЧИНАЕМ СОЗДАНИЕ ПЛАТЕЖА для пользователя {user_id}")
+        
+        # Создаем данные для платежа
+        payment_data = payment_handler.create_payment_data(
+            user_id=user_id,
+            planet="venus",
+            description="Астрологический разбор Венеры"
+        )
+        logger.info(f"♀️ ДАННЫЕ ПЛАТЕЖА СОЗДАНЫ: {payment_data}")
+        
+        # Создаем платеж через ЮKassa
+        payment_url = await payment_handler.create_payment(payment_data)
+        logger.info(f"♀️ ПЛАТЕЖ СОЗДАН В YOOKASSA: {payment_url}")
+        
+        # Сохраняем информацию о платеже в БД
+        logger.info(f"♀️ НАЧИНАЕМ СОХРАНЕНИЕ В БД...")
+        from models import PlanetPayment, PaymentType, PaymentStatus, Planet, User
+        
+        async with get_session() as session:
+            # Получаем пользователя
+            result = await session.execute(
+                select(User).where(User.telegram_id == user_id)
+            )
+            user = result.scalar_one_or_none()
+            
+            if not user:
+                await cb_msg.answer("❌ Пользователь не найден")
+                return
+            
+            # Создаем запись о платеже
+            planet_payment = PlanetPayment(
+                user_id=user.user_id,
+                planet=Planet.venus,
+                payment_type=PaymentType.paid,
+                payment_status=PaymentStatus.pending,
+                amount=10.0,
+                payment_id=payment_data['payment_id']
+            )
+            
+            session.add(planet_payment)
+            await session.commit()
+        
+        logger.info(f"♀️ ПЛАТЕЖ СОХРАНЕН В БД")
+        
+        # Отправляем пользователю ссылку на оплату
+        await cb_msg.answer(
+            "♀️ Венера\n\n"
+            "💰 Стоимость: 10₽\n\n"
+            "🎯 Что вы получите:\n"
+            "• Раскрытие женской энергии и привлекательности\n"
+            "• Понимание в отношениях и любви\n"
+            "• Развитие творческих способностей\n"
+            "• Гармонизация эмоциональной сферы\n\n"
+            "💳 Нажмите кнопку ниже для оплаты:",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="💳 Оплатить 10₽",
+                            url=payment_url
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="explore_venus"
+                        )
+                    ]
+                ]
+            )
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ ОШИБКА ПРИ СОЗДАНИИ ПЛАТЕЖА ЗА ВЕНЕРУ: {e}")
+        logger.error(f"❌ ТИП ОШИБКИ: {type(e)}")
+        logger.error(f"❌ ДЕТАЛИ ОШИБКИ: {str(e)}")
+        import traceback
+        logger.error(f"❌ TRACEBACK: {traceback.format_exc()}")
+        await cb_msg.answer(
+            "❌ Произошла ошибка при создании платежа. Попробуйте позже.",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="explore_venus"
                         )
                     ]
                 ]
