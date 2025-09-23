@@ -63,15 +63,17 @@ class OpenRouterClient:
         self, 
         astrology_data: str, 
         user_name: str, 
-        user_gender: str
+        user_gender: str,
+        max_retries: int = 3
     ) -> Dict[str, Any]:
         """
-        Генерирует анализ Венеры через OpenRouter
+        Генерирует анализ Венеры через OpenRouter с повторными попытками
         
         Args:
             astrology_data: Данные астрологии для анализа
             user_name: Имя пользователя
             user_gender: Пол пользователя
+            max_retries: Максимальное количество попыток при ошибке 429
             
         Returns:
             Dict с результатом генерации
@@ -101,6 +103,14 @@ class OpenRouterClient:
             "temperature": 0.7
         }
         
+        # Резервные модели при ошибке 429
+        fallback_models = [
+            "deepseek/deepseek-chat-v3.1:free",
+            "anthropic/claude-3-haiku:beta",
+            "meta-llama/llama-3.1-8b-instruct:free",
+            "microsoft/wizardlm-2-8x22b:free"
+        ]
+        
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -108,49 +118,68 @@ class OpenRouterClient:
             "X-Title": "Astro Bot"
         }
         
-        async with aiohttp.ClientSession() as session:
-            try:
-                logger.info(f"♀️ Sending Venus request to OpenRouter for {user_name}...")
-                start_time = asyncio.get_event_loop().time()
-                
-                async with session.post(
-                    self.url,
-                    headers=headers,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=180)
-                ) as response:
-                    end_time = asyncio.get_event_loop().time()
-                    logger.info(f"♀️ OpenRouter response time: {end_time - start_time:.2f}s")
+        # Попытки с экспоненциальной задержкой
+        for attempt in range(max_retries + 1):
+            async with aiohttp.ClientSession() as session:
+                try:
+                    if attempt > 0:
+                        delay = 2 ** attempt  # 2, 4, 8 секунд
+                        logger.info(f"♀️ Rate limit hit, waiting {delay}s before retry {attempt}/{max_retries}")
+                        await asyncio.sleep(delay)
                     
-                    if response.status == 200:
-                        result = await response.json()
-                        logger.info(f"♀️ OpenRouter response received for {user_name}")
-                        return {
-                            "success": True,
-                            "content": result["choices"][0]["message"]["content"],
-                            "usage": result.get("usage", {}),
-                            "model": result.get("model", "unknown")
-                        }
-                    else:
-                        error_text = await response.text()
-                        logger.error(f"♀️ OpenRouter error {response.status}: {error_text}")
-                        return {
-                            "success": False,
-                            "error": f"API error: {response.status} - {error_text}"
-                        }
+                    logger.info(f"♀️ Sending Venus request to OpenRouter for {user_name} (attempt {attempt + 1}/{max_retries + 1})")
+                    start_time = asyncio.get_event_loop().time()
+                    
+                    async with session.post(
+                        self.url,
+                        headers=headers,
+                        json=payload,
+                        timeout=aiohttp.ClientTimeout(total=180)
+                    ) as response:
+                        end_time = asyncio.get_event_loop().time()
+                        logger.info(f"♀️ OpenRouter response time: {end_time - start_time:.2f}s")
                         
-            except asyncio.TimeoutError:
-                logger.error(f"♀️ OpenRouter request timeout for {user_name}")
-                return {
-                    "success": False,
-                    "error": "Request timeout - try again later"
-                }
-            except Exception as e:
-                logger.error(f"♀️ OpenRouter error for {user_name}: {e}")
-                return {
-                    "success": False,
-                    "error": f"Request failed: {str(e)}"
-                }
+                        if response.status == 200:
+                            result = await response.json()
+                            logger.info(f"♀️ OpenRouter response received for {user_name}")
+                            return {
+                                "success": True,
+                                "content": result["choices"][0]["message"]["content"],
+                                "usage": result.get("usage", {}),
+                                "model": result.get("model", "unknown")
+                            }
+                        elif response.status == 429:
+                            error_text = await response.text()
+                            logger.warning(f"♀️ Rate limit hit (429) for {user_name}: {error_text}")
+                            
+                            if attempt < max_retries:
+                                continue  # Попробуем еще раз
+                            else:
+                                logger.error(f"♀️ Max retries ({max_retries}) exceeded for {user_name}")
+                                return {
+                                    "success": False,
+                                    "error": f"Rate limited after {max_retries} retries. Try again later."
+                                }
+                        else:
+                            error_text = await response.text()
+                            logger.error(f"♀️ OpenRouter error {response.status}: {error_text}")
+                            return {
+                                "success": False,
+                                "error": f"API error: {response.status} - {error_text}"
+                            }
+                            
+                except asyncio.TimeoutError:
+                    logger.error(f"♀️ OpenRouter request timeout for {user_name}")
+                    return {
+                        "success": False,
+                        "error": "Request timeout - try again later"
+                    }
+                except Exception as e:
+                    logger.error(f"♀️ OpenRouter error for {user_name}: {e}")
+                    return {
+                        "success": False,
+                        "error": f"Request failed: {str(e)}"
+                    }
 
 
 async def process_venus_prediction(
