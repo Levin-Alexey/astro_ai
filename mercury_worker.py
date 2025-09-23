@@ -108,48 +108,78 @@ class OpenRouterClient:
         }
         
         async with aiohttp.ClientSession() as session:
-            try:
-                logger.info(f"☿️ Sending Mercury request to OpenRouter for {user_name}...")
-                start_time = asyncio.get_event_loop().time()
-                
-                async with session.post(
-                    self.url,
-                    headers=headers,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=180)
-                ) as response:
-                    end_time = asyncio.get_event_loop().time()
-                    logger.info(f"☿️ OpenRouter response time: {end_time - start_time:.2f}s")
+            max_retries = 3
+            retry_delays = [2, 4, 8]  # Exponential backoff delays
+            
+            for attempt in range(max_retries):
+                try:
+                    logger.info(f"☿️ Sending Mercury request to OpenRouter for {user_name} (attempt {attempt + 1}/{max_retries})...")
+                    start_time = asyncio.get_event_loop().time()
                     
-                    if response.status == 200:
-                        result = await response.json()
-                        logger.info(f"☿️ OpenRouter response received for {user_name}")
-                        return {
-                            "success": True,
-                            "content": result["choices"][0]["message"]["content"],
-                            "usage": result.get("usage", {}),
-                            "model": result.get("model", "unknown")
-                        }
+                    async with session.post(
+                        self.url,
+                        headers=headers,
+                        json=payload,
+                        timeout=aiohttp.ClientTimeout(total=180)
+                    ) as response:
+                        end_time = asyncio.get_event_loop().time()
+                        logger.info(f"☿️ OpenRouter response time: {end_time - start_time:.2f}s")
+                        
+                        if response.status == 200:
+                            result = await response.json()
+                            logger.info(f"☿️ OpenRouter response received for {user_name}")
+                            return {
+                                "success": True,
+                                "content": result["choices"][0]["message"]["content"],
+                                "usage": result.get("usage", {}),
+                                "model": result.get("model", "unknown")
+                            }
+                        elif response.status == 429:
+                            # Rate limiting - try again with delay
+                            if attempt < max_retries - 1:
+                                delay = retry_delays[attempt]
+                                logger.warning(f"☿️ Rate limited (429), retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
+                                await asyncio.sleep(delay)
+                                continue
+                            else:
+                                error_text = await response.text()
+                                logger.error(f"☿️ Final rate limit error: {error_text}")
+                                return {
+                                    "success": False,
+                                    "error": f"Rate limit exceeded after {max_retries} attempts"
+                                }
+                        else:
+                            error_text = await response.text()
+                            logger.error(f"☿️ OpenRouter error {response.status}: {error_text}")
+                            return {
+                                "success": False,
+                                "error": f"API error: {response.status} - {error_text}"
+                            }
+                            
+                except asyncio.TimeoutError:
+                    if attempt < max_retries - 1:
+                        delay = retry_delays[attempt]
+                        logger.warning(f"☿️ Request timeout, retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
+                        await asyncio.sleep(delay)
+                        continue
                     else:
-                        error_text = await response.text()
-                        logger.error(f"☿️ OpenRouter error {response.status}: {error_text}")
+                        logger.error(f"☿️ Final timeout after all retry attempts for {user_name}")
                         return {
                             "success": False,
-                            "error": f"API error: {response.status} - {error_text}"
+                            "error": "Request timeout after retries"
                         }
-                        
-            except asyncio.TimeoutError:
-                logger.error(f"☿️ OpenRouter request timeout for {user_name}")
-                return {
-                    "success": False,
-                    "error": "Request timeout - try again later"
-                }
-            except Exception as e:
-                logger.error(f"☿️ OpenRouter error for {user_name}: {e}")
-                return {
-                    "success": False,
-                    "error": f"Request failed: {str(e)}"
-                }
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        delay = retry_delays[attempt]
+                        logger.warning(f"☿️ Request failed: {e}, retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
+                        await asyncio.sleep(delay)
+                        continue
+                    else:
+                        logger.error(f"☿️ Final error after all retry attempts for {user_name}: {e}")
+                        return {
+                            "success": False,
+                            "error": str(e)
+                        }
 
 
 async def process_mercury_prediction(
@@ -176,6 +206,18 @@ async def process_mercury_prediction(
         
         logger.info(f"☿️ Processing Mercury prediction {prediction_id} for user {user_telegram_id}")
         
+        # Интеграция с системой защиты платежей
+        try:
+            import sys
+            sys.path.append('.')
+            from payment_access import mark_analysis_started, mark_analysis_completed, mark_analysis_failed
+            
+            # Отмечаем начало анализа
+            await mark_analysis_started(user_telegram_id, "mercury")
+            logger.info(f"☿️ Marked Mercury analysis as started for user {user_telegram_id}")
+        except Exception as e:
+            logger.error(f"☿️ Failed to mark analysis as started: {e}")
+            # Продолжаем выполнение, даже если не удалось обновить статус
         async with get_session() as session:
             # Получаем предсказание
             result = await session.execute(
@@ -226,6 +268,14 @@ async def process_mercury_prediction(
                 # Отправляем пользователю
                 await send_mercury_analysis_to_user(user.telegram_id, analysis_content)
                 logger.info(f"☿️ Test Mercury analysis sent to user {user.telegram_id}")
+                
+                # Отмечаем анализ как завершенный
+                try:
+                    await mark_analysis_completed(user_telegram_id, "mercury")
+                    logger.info(f"☿️ Marked Mercury analysis as delivered for user {user_telegram_id}")
+                except Exception as e:
+                    logger.error(f"☿️ Failed to mark analysis as delivered: {e}")
+                
                 return True
             
             # Генерируем разбор через OpenRouter
@@ -254,6 +304,14 @@ async def process_mercury_prediction(
                 
                 logger.info(f"☿️ Mercury analysis generated and sent to user {user.telegram_id}")
                 logger.info(f"☿️ LLM usage: {llm_result.get('usage', 'No usage data')}")
+                
+                # Отмечаем анализ как завершенный
+                try:
+                    await mark_analysis_completed(user_telegram_id, "mercury")
+                    logger.info(f"☿️ Marked Mercury analysis as delivered for user {user_telegram_id}")
+                except Exception as e:
+                    logger.error(f"☿️ Failed to mark analysis as delivered: {e}")
+                
                 return True
             else:
                 logger.error(f"☿️ Failed to generate Mercury analysis: {llm_result['error']}")
@@ -261,6 +319,13 @@ async def process_mercury_prediction(
                 # Обновляем статус на ошибку
                 prediction.status = "error"
                 await session.commit()
+                
+                # Отмечаем анализ как неудачный
+                try:
+                    await mark_analysis_failed(user_telegram_id, "mercury", f"LLM error: {llm_result['error']}")
+                    logger.info(f"☿️ Marked Mercury analysis as failed for user {user_telegram_id}")
+                except Exception as e:
+                    logger.error(f"☿️ Failed to mark analysis as failed: {e}")
                 
                 # Отправляем сообщение об ошибке
                 error_message = (
@@ -272,6 +337,14 @@ async def process_mercury_prediction(
                 
     except Exception as e:
         logger.error(f"☿️ Error processing Mercury prediction: {e}")
+        
+        # Отмечаем анализ как неудачный в случае общей ошибки
+        try:
+            await mark_analysis_failed(user_telegram_id, "mercury", f"Processing error: {str(e)}")
+            logger.info(f"☿️ Marked Mercury analysis as failed due to processing error for user {user_telegram_id}")
+        except Exception as mark_error:
+            logger.error(f"☿️ Failed to mark analysis as failed: {mark_error}")
+        
         return False
 
 

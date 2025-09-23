@@ -77,10 +77,13 @@ class PaymentType(str, Enum):
 
 
 class PaymentStatus(str, Enum):
-    pending = "pending"      # Ожидает оплаты
-    completed = "completed"  # Оплачено успешно
-    failed = "failed"        # Ошибка оплаты
-    refunded = "refunded"    # Возврат средств
+    pending = "pending"           # Ожидает оплаты
+    completed = "completed"       # Оплачено успешно
+    failed = "failed"            # Ошибка оплаты
+    refunded = "refunded"        # Возврат средств
+    processing = "processing"     # Обрабатывается LLM
+    analysis_failed = "analysis_failed"  # Оплата прошла, но LLM не сработал
+    delivered = "delivered"       # Разбор доставлен пользователю
 
 
 class User(Base):
@@ -371,6 +374,25 @@ class PlanetPayment(Base):
     completed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True)
     )
+
+    # Отслеживание обработки LLM
+    analysis_started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
+    
+    analysis_completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
+    
+    delivered_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
+    
+    retry_count: Mapped[int] = mapped_column(
+        BigInteger, server_default=text("0"), nullable=False
+    )
+    
+    last_error: Mapped[Optional[str]] = mapped_column(Text)
 
     # Дополнительные данные
     notes: Mapped[Optional[str]] = mapped_column(Text)

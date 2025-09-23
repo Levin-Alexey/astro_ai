@@ -9,6 +9,8 @@ import asyncio
 import json
 import logging
 import os
+import time
+import random
 from datetime import datetime
 from typing import Dict, Any, Optional
 
@@ -119,42 +121,72 @@ class OpenRouterClient:
         }
         
         async with aiohttp.ClientSession() as session:
-            try:
-                async with session.post(
-                    self.url,
-                    headers=headers,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=120)
-                ) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        logger.info(f"OpenRouter response received for {user_name}")
-                        return {
-                            "success": True,
-                            "content": result["choices"][0]["message"]["content"],
-                            "usage": result.get("usage", {}),
-                            "model": result.get("model", "unknown")
-                        }
+            max_retries = 3
+            retry_delays = [2, 4, 8]  # Exponential backoff delays
+            
+            for attempt in range(max_retries):
+                try:
+                    async with session.post(
+                        self.url,
+                        headers=headers,
+                        json=payload,
+                        timeout=aiohttp.ClientTimeout(total=120)
+                    ) as response:
+                        if response.status == 200:
+                            result = await response.json()
+                            logger.info(f"OpenRouter response received for {user_name}")
+                            return {
+                                "success": True,
+                                "content": result["choices"][0]["message"]["content"],
+                                "usage": result.get("usage", {}),
+                                "model": result.get("model", "unknown")
+                            }
+                        elif response.status == 429:
+                            # Rate limiting - try again with delay
+                            if attempt < max_retries - 1:
+                                delay = retry_delays[attempt]
+                                logger.warning(f"Rate limited (429), retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
+                                await asyncio.sleep(delay)
+                                continue
+                            else:
+                                error_text = await response.text()
+                                logger.error(f"Final rate limit error: {error_text}")
+                                return {
+                                    "success": False,
+                                    "error": f"Rate limit exceeded after {max_retries} attempts"
+                                }
+                        else:
+                            error_text = await response.text()
+                            logger.error(f"OpenRouter error {response.status}: {error_text}")
+                            return {
+                                "success": False,
+                                "error": f"API error: {response.status} - {error_text}"
+                            }
+                            
+                except asyncio.TimeoutError:
+                    if attempt < max_retries - 1:
+                        delay = retry_delays[attempt]
+                        logger.warning(f"Request timeout, retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
+                        await asyncio.sleep(delay)
+                        continue
                     else:
-                        error_text = await response.text()
-                        logger.error(f"OpenRouter error {response.status}: {error_text}")
+                        logger.error("Final timeout after all retry attempts")
                         return {
                             "success": False,
-                            "error": f"API error: {response.status} - {error_text}"
+                            "error": "Request timeout after retries"
                         }
-                        
-            except asyncio.TimeoutError:
-                logger.error("OpenRouter request timeout")
-                return {
-                    "success": False,
-                    "error": "Request timeout"
-                }
-            except Exception as e:
-                logger.error(f"OpenRouter request failed: {e}")
-                return {
-                    "success": False,
-                    "error": str(e)
-                }
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        delay = retry_delays[attempt]
+                        logger.warning(f"Request failed: {e}, retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
+                        await asyncio.sleep(delay)
+                        continue
+                    else:
+                        logger.error(f"Final error after all retry attempts: {e}")
+                        return {
+                            "success": False,
+                            "error": str(e)
+                        }
 
 
 class SunWorker:
@@ -365,10 +397,27 @@ class SunWorker:
         
         logger.info(f"Processing sun prediction {prediction_id} for user {user_id}")
         
+        # Импортируем и отмечаем начало анализа
+        try:
+            import sys
+            sys.path.append('.')
+            from payment_access import mark_analysis_started, mark_analysis_completed, mark_analysis_failed
+            
+            # Отмечаем начало анализа
+            await mark_analysis_started(user_id, "sun")
+            logger.info(f"Marked Sun analysis as started for user {user_id}")
+        except Exception as e:
+            logger.error(f"Failed to mark analysis as started: {e}")
+            # Продолжаем выполнение, даже если не удалось обновить статус
+        
         # Получаем информацию о пользователе по telegram_id
         user_info = await self.get_user_info(user_id)
         if not user_info:
             logger.error(f"User with telegram_id {user_id} not found")
+            try:
+                await mark_analysis_failed(user_id, "sun", "User not found")
+            except:
+                pass
             return
         
         # Получаем данные предсказания
@@ -380,6 +429,10 @@ class SunWorker:
             
             if not prediction:
                 logger.error(f"Prediction {prediction_id} not found")
+                try:
+                    await mark_analysis_failed(user_id, "sun", "Prediction not found")
+                except:
+                    pass
                 return
             
             # Извлекаем данные астрологии из content
@@ -400,6 +453,10 @@ class SunWorker:
             
             if not llm_result["success"]:
                 logger.error(f"LLM generation failed: {llm_result['error']}")
+                try:
+                    await mark_analysis_failed(user_id, "sun", f"LLM error: {llm_result['error']}")
+                except:
+                    pass
                 return
             
             # Обновляем предсказание с результатом LLM
@@ -442,8 +499,18 @@ class SunWorker:
                             
                             if success:
                                 logger.info(f"Sun prediction {prediction_id} sent to user {user.telegram_id}")
+                                # Отмечаем анализ как завершенный и доставленный
+                                try:
+                                    await mark_analysis_completed(user_id, "sun")
+                                    logger.info(f"Marked Sun analysis as delivered for user {user_id}")
+                                except Exception as e:
+                                    logger.error(f"Failed to mark analysis as delivered: {e}")
                             else:
                                 logger.error(f"Failed to send sun prediction {prediction_id} to user {user.telegram_id}")
+                                try:
+                                    await mark_analysis_failed(user_id, "sun", "Failed to send message")
+                                except:
+                                    pass
                         else:
                             logger.error(f"User {user_id} not found for sending prediction")
                     else:
