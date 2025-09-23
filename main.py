@@ -1988,88 +1988,32 @@ async def on_explore_sun(callback: CallbackQuery):
     cb_msg = cast(Message, callback.message)
     user_id = callback.from_user.id
     
-    # Проверяем доступ к разбору Солнца
-    from payment_access import check_planet_access
-    access_info = await check_planet_access(user_id, "sun")
+    # Проверяем, есть ли у пользователя оплаченный доступ к Солнцу
+    has_access = await check_user_payment_access(user_id, "sun")
     
-    if access_info["has_access"]:
-        if access_info["status"] == "delivered":
-            # Разбор уже доставлен - показываем его
-            await cb_msg.answer(
-                "☀️ Солнце\n\n"
-                "🔮 Получаю ваш персональный астрологический разбор...\n\n"
-                "⏳ Пожалуйста, подождите несколько секунд.",
-                reply_markup=InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [
-                            InlineKeyboardButton(
-                                text="🔙 Назад",
-                                callback_data="explore_other_areas"
-                            )
-                        ]
+    if has_access:
+        # Если доступ есть, получаем и отправляем разбор
+        await cb_msg.answer(
+            "☀️ Солнце\n\n"
+            "🔮 Получаю ваш персональный астрологический разбор...\n\n"
+            "⏳ Пожалуйста, подождите несколько секунд.",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="explore_other_areas"
+                        )
                     ]
-                )
+                ]
             )
-            await send_existing_analysis(user_id, "sun", cb_msg)
-            
-        elif access_info["status"] == "processing":
-            await cb_msg.answer(
-                "☀️ Солнце\n\n"
-                "⏳ Ваш разбор обрабатывается...\n\n"
-                "Это может занять несколько минут. Как только разбор будет готов, "
-                "мы сразу отправим его вам!",
-                reply_markup=InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [
-                            InlineKeyboardButton(
-                                text="🔙 Назад",
-                                callback_data="explore_other_areas"
-                            )
-                        ]
-                    ]
-                )
-            )
-            
-        elif access_info["status"] == "failed" and access_info["can_retry"]:
-            await cb_msg.answer(
-                "☀️ Солнце\n\n"
-                "😔 При создании вашего разбора произошла техническая ошибка.\n\n"
-                "💝 Но не волнуйтесь - разбор уже оплачен! "
-                "Хотите, чтобы мы попробовали создать его еще раз?",
-                reply_markup=InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [
-                            InlineKeyboardButton(
-                                text="🔄 Попробовать еще раз",
-                                callback_data="retry_sun_analysis"
-                            )
-                        ],
-                        [
-                            InlineKeyboardButton(
-                                text="🔙 Назад",
-                                callback_data="explore_other_areas"
-                            )
-                        ]
-                    ]
-                )
-            )
-            
-        else:
-            # Оплачено, запускаем анализ
-            await cb_msg.answer(
-                "☀️ Солнце\n\n"
-                "🔮 Начинаю создание вашего персонального разбора...\n\n"
-                "⏳ Это займет несколько минут."
-            )
-            # Запускаем анализ через webhook или очередь
-            from astrology_handlers import start_sun_analysis
-            try:
-                await start_sun_analysis(callback, None)
-            except Exception as e:
-                logger.error(f"Error starting Sun analysis for user {user_id}: {e}")
+        )
+        
+        # Получаем разбор из БД
+        await send_existing_analysis(user_id, "sun", cb_msg)
         
         logger.info(
-            f"Пользователь {user_id} запросил разбор Солнца (доступ есть, статус: {access_info['status']})"
+            f"Пользователь {user_id} запросил разбор Солнца (доступ есть)"
         )
     else:
         # Если доступа нет, предлагаем оплату
@@ -2101,7 +2045,7 @@ async def on_explore_sun(callback: CallbackQuery):
             )
         )
         logger.info(
-            f"Пользователь {user_id} запросил разбор Солнца (доступа нет: {access_info['status']})"
+            f"Пользователь {user_id} запросил разбор Солнца (доступа нет)"
         )
 
 
@@ -2112,88 +2056,32 @@ async def on_explore_mercury(callback: CallbackQuery):
     cb_msg = cast(Message, callback.message)
     user_id = callback.from_user.id
     
-    # Проверяем доступ к разбору Меркурия
-    from payment_access import check_planet_access
-    access_info = await check_planet_access(user_id, "mercury")
+    # Проверяем, есть ли у пользователя оплаченный доступ к Меркурию
+    has_access = await check_user_payment_access(user_id, "mercury")
     
-    if access_info["has_access"]:
-        if access_info["status"] == "delivered":
-            # Разбор уже доставлен - показываем его
-            await cb_msg.answer(
-                "☿️ Меркурий\n\n"
-                "🔮 Получаю ваш персональный астрологический разбор...\n\n"
-                "⏳ Пожалуйста, подождите несколько секунд.",
-                reply_markup=InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [
-                            InlineKeyboardButton(
-                                text="🔙 Назад",
-                                callback_data="explore_other_areas"
-                            )
-                        ]
+    if has_access:
+        # Если доступ есть, получаем и отправляем разбор
+        await cb_msg.answer(
+            "☿️ Меркурий\n\n"
+            "🔮 Получаю ваш персональный астрологический разбор...\n\n"
+            "⏳ Пожалуйста, подождите несколько секунд.",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="explore_other_areas"
+                        )
                     ]
-                )
+                ]
             )
-            await send_existing_analysis(user_id, "mercury", cb_msg)
-            
-        elif access_info["status"] == "processing":
-            await cb_msg.answer(
-                "☿️ Меркурий\n\n"
-                "⏳ Ваш разбор обрабатывается...\n\n"
-                "Это может занять несколько минут. Как только разбор будет готов, "
-                "мы сразу отправим его вам!",
-                reply_markup=InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [
-                            InlineKeyboardButton(
-                                text="🔙 Назад",
-                                callback_data="explore_other_areas"
-                            )
-                        ]
-                    ]
-                )
-            )
-            
-        elif access_info["status"] == "failed" and access_info["can_retry"]:
-            await cb_msg.answer(
-                "☿️ Меркурий\n\n"
-                "😔 При создании вашего разбора произошла техническая ошибка.\n\n"
-                "💝 Но не волнуйтесь - разбор уже оплачен! "
-                "Хотите, чтобы мы попробовали создать его еще раз?",
-                reply_markup=InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [
-                            InlineKeyboardButton(
-                                text="🔄 Попробовать еще раз",
-                                callback_data="retry_mercury_analysis"
-                            )
-                        ],
-                        [
-                            InlineKeyboardButton(
-                                text="🔙 Назад",
-                                callback_data="explore_other_areas"
-                            )
-                        ]
-                    ]
-                )
-            )
-            
-        else:
-            # Оплачено, запускаем анализ
-            await cb_msg.answer(
-                "☿️ Меркурий\n\n"
-                "🔮 Начинаю создание вашего персонального разбора...\n\n"
-                "⏳ Это займет несколько минут."
-            )
-            # Запускаем анализ через webhook или очередь
-            from astrology_handlers import start_mercury_analysis
-            try:
-                await start_mercury_analysis(callback, None)
-            except Exception as e:
-                logger.error(f"Error starting Mercury analysis for user {user_id}: {e}")
+        )
+        
+        # Получаем разбор из БД
+        await send_existing_analysis(user_id, "mercury", cb_msg)
         
         logger.info(
-            f"Пользователь {user_id} запросил разбор Меркурия (доступ есть, статус: {access_info['status']})"
+            f"Пользователь {user_id} запросил разбор Меркурия (доступ есть)"
         )
     else:
         # Если доступа нет, предлагаем оплату
@@ -2225,7 +2113,7 @@ async def on_explore_mercury(callback: CallbackQuery):
             )
         )
         logger.info(
-            f"Пользователь {user_id} запросил разбор Меркурия (доступа нет: {access_info['status']})"
+            f"Пользователь {user_id} запросил разбор Меркурия (доступа нет)"
         )
 
 
