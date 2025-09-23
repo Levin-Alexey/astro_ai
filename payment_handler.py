@@ -46,7 +46,9 @@ class PaymentHandler:
             }
         }
     
-    async def create_payment(self, payment_data: Dict[str, Any]) -> str:
+    async def create_payment(
+        self, payment_data: Dict[str, Any]
+    ) -> Dict[str, str]:
         """Создает платеж через ЮKassa API"""
         try:
             # Создаем уникальный ID для платежа
@@ -68,14 +70,21 @@ class PaymentHandler:
             logger.info(f"Платеж создан успешно: {payment.id}")
             logger.info(f"URL для оплаты: {payment.confirmation.confirmation_url}")
             
-            # Возвращаем URL для оплаты
-            return payment.confirmation.confirmation_url
+            # Возвращаем как URL, так и payment_id
+            return {
+                "payment_url": payment.confirmation.confirmation_url,
+                "payment_id": payment.id
+            }
             
         except Exception as e:
             logger.error(f"Ошибка при создании платежа: {e}")
             logger.error(f"Тип ошибки: {type(e).__name__}")
             # Fallback на старый метод
-            return self.create_payment_url(payment_data)
+            fallback_url = self.create_payment_url(payment_data)
+            return {
+                "payment_url": fallback_url,
+                "payment_id": None  # Для тестовых платежей ID не генерируется
+            }
     
     def create_payment_url(self, payment_data: Dict[str, Any]) -> str:
         """Создает URL для оплаты (заглушка для тестирования)"""

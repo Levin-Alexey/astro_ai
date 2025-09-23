@@ -57,7 +57,7 @@ async def update_payment_status(user_id: int, planet: str, external_payment_id: 
     try:
         from db import get_session
         from models import PlanetPayment, PaymentStatus, PaymentType, Planet
-        from sqlalchemy import select, update
+        from sqlalchemy import select
         
         async with get_session() as session:
             # Сначала находим user_id по telegram_id
@@ -71,37 +71,56 @@ async def update_payment_status(user_id: int, planet: str, external_payment_id: 
                 logger.error(f"❌ User with telegram_id {user_id} not found")
                 return
             
-            # Находим платеж по user_id и планете
+            # Находим платеж по external_payment_id (основной способ)
+            # или по user_id и планете (резервный способ)
             if planet == "all_planets":
                 result = await session.execute(
                     select(PlanetPayment).where(
-                        PlanetPayment.user_id == user.user_id,
-                        PlanetPayment.payment_type == PaymentType.all_planets,
-                        PlanetPayment.status == PaymentStatus.pending
-                    )
+                        (PlanetPayment.external_payment_id == external_payment_id) |
+                        (
+                            (PlanetPayment.user_id == user.user_id) &
+                            (PlanetPayment.payment_type == PaymentType.all_planets) &
+                            (PlanetPayment.status == PaymentStatus.pending)
+                        )
+                    ).order_by(PlanetPayment.created_at.desc())
                 )
             else:
                 planet_enum = Planet(planet)
                 result = await session.execute(
                     select(PlanetPayment).where(
-                        PlanetPayment.user_id == user.user_id,
-                        PlanetPayment.payment_type == PaymentType.single_planet,
-                        PlanetPayment.planet == planet_enum,
-                        PlanetPayment.status == PaymentStatus.pending
-                    )
+                        (PlanetPayment.external_payment_id == external_payment_id) |
+                        (
+                            (PlanetPayment.user_id == user.user_id) &
+                            (PlanetPayment.payment_type == PaymentType.single_planet) &
+                            (PlanetPayment.planet == planet_enum) &
+                            (PlanetPayment.status == PaymentStatus.pending)
+                        )
+                    ).order_by(PlanetPayment.created_at.desc())
                 )
             
             payment_record = result.scalar_one_or_none()
             if payment_record:
+                logger.info(f"✅ Payment record found: {payment_record.payment_id}")
                 # Обновляем статус на completed
                 payment_record.status = PaymentStatus.completed
                 payment_record.completed_at = datetime.now(timezone.utc)
-                payment_record.external_payment_id = external_payment_id
+                if not payment_record.external_payment_id:
+                    payment_record.external_payment_id = external_payment_id
                 await session.commit()
                 
                 logger.info(f"✅ Payment status updated for user {user_id}, planet {planet}")
             else:
-                logger.warning(f"⚠️ Payment record not found for user {user_id}, planet {planet}")
+                logger.warning(f"⚠️ Payment record not found for user {user_id}, planet {planet}, external_id {external_payment_id}")
+                # Попробуем найти хотя бы по пользователю для отладки
+                debug_result = await session.execute(
+                    select(PlanetPayment).where(
+                        PlanetPayment.user_id == user.user_id
+                    ).order_by(PlanetPayment.created_at.desc()).limit(5)
+                )
+                debug_payments = debug_result.scalars().all()
+                logger.info(f"🔍 Last 5 payments for user {user_id}:")
+                for dp in debug_payments:
+                    logger.info(f"  - Payment {dp.payment_id}: {dp.planet}, {dp.status}, external_id: {dp.external_payment_id}")
                 
     except Exception as e:
         logger.error(f"❌ Error updating payment status: {e}")

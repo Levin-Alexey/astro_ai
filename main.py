@@ -2447,10 +2447,14 @@ async def on_pay_sun(callback: CallbackQuery):
         )
         
         # Создаем платеж через ЮKassa
-        payment_url = await payment_handler.create_payment(payment_data)
+        payment_result = await payment_handler.create_payment(payment_data)
+        payment_url = payment_result["payment_url"]
+        external_payment_id = payment_result["payment_id"]
         
         # Сохраняем информацию о платеже в БД с новыми полями защиты
-        from models import PlanetPayment, PaymentType, PaymentStatus, Planet, User
+        from models import (
+            PlanetPayment, PaymentType, PaymentStatus, Planet, User
+        )
         from sqlalchemy import select
         from datetime import datetime
         
@@ -2472,6 +2476,7 @@ async def on_pay_sun(callback: CallbackQuery):
                 status=PaymentStatus.pending,
                 amount_kopecks=1000,  # 10 рублей в копейках
                 payment_url=payment_url,
+                external_payment_id=external_payment_id,  # Сохраняем ID
                 notes="Платеж за разбор Солнца",
                 # Новые поля для защиты платежей
                 retry_count=0,
@@ -2562,10 +2567,14 @@ async def on_pay_mercury(callback: CallbackQuery):
         )
         
         # Создаем платеж через ЮKassa
-        payment_url = await payment_handler.create_payment(payment_data)
+        payment_result = await payment_handler.create_payment(payment_data)
+        payment_url = payment_result["payment_url"]
+        external_payment_id = payment_result["payment_id"]
         
         # Сохраняем информацию о платеже в БД с новыми полями защиты
-        from models import PlanetPayment, PaymentType, PaymentStatus, Planet, User
+        from models import (
+            PlanetPayment, PaymentType, PaymentStatus, Planet, User
+        )
         from sqlalchemy import select
         from datetime import datetime
         
@@ -2587,6 +2596,7 @@ async def on_pay_mercury(callback: CallbackQuery):
                 status=PaymentStatus.pending,
                 amount_kopecks=1000,  # 10 рублей в копейках
                 payment_url=payment_url,
+                external_payment_id=external_payment_id,  # Сохраняем ID
                 notes="Платеж за разбор Меркурия",
                 # Новые поля для защиты платежей
                 retry_count=0,
@@ -2678,12 +2688,16 @@ async def on_pay_venus(callback: CallbackQuery):
         logger.info(f"♀️ ДАННЫЕ ПЛАТЕЖА СОЗДАНЫ: {payment_data}")
         
         # Создаем платеж через ЮKassa
-        payment_url = await payment_handler.create_payment(payment_data)
+        payment_result = await payment_handler.create_payment(payment_data)
+        payment_url = payment_result["payment_url"]
+        external_payment_id = payment_result["payment_id"]
         logger.info(f"♀️ ПЛАТЕЖ СОЗДАН В YOOKASSA: {payment_url}")
         
         # Сохраняем информацию о платеже в БД
-        logger.info(f"♀️ НАЧИНАЕМ СОХРАНЕНИЕ В БД...")
-        from models import PlanetPayment, PaymentType, PaymentStatus, Planet, User
+        logger.info("♀️ НАЧИНАЕМ СОХРАНЕНИЕ В БД...")
+        from models import (
+            PlanetPayment, PaymentType, PaymentStatus, Planet, User
+        )
         from sqlalchemy import select
         
         async with get_session() as session:
@@ -2705,6 +2719,7 @@ async def on_pay_venus(callback: CallbackQuery):
                 status=PaymentStatus.pending,
                 amount_kopecks=1000,  # 10 рублей в копейках
                 payment_url=payment_url,
+                external_payment_id=external_payment_id,  # Сохраняем ID
                 notes="Платеж за разбор Венеры"
             )
             
