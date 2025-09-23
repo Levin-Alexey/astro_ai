@@ -2590,6 +2590,7 @@ async def on_pay_venus(callback: CallbackQuery):
         # Сохраняем информацию о платеже в БД
         logger.info(f"♀️ НАЧИНАЕМ СОХРАНЕНИЕ В БД...")
         from models import PlanetPayment, PaymentType, PaymentStatus, Planet, User
+        from sqlalchemy import select
         
         async with get_session() as session:
             # Получаем пользователя
@@ -2606,16 +2607,18 @@ async def on_pay_venus(callback: CallbackQuery):
             planet_payment = PlanetPayment(
                 user_id=user.user_id,
                 planet=Planet.venus,
-                payment_type=PaymentType.paid,
-                payment_status=PaymentStatus.pending,
-                amount=10.0,
-                payment_id=payment_data['payment_id']
+                payment_type=PaymentType.single_planet,
+                status=PaymentStatus.pending,
+                amount_kopecks=1000,  # 10 рублей в копейках
+                external_payment_id=payment_data['payment_id'],
+                payment_url=payment_url,
+                notes="Платеж за разбор Венеры"
             )
             
             session.add(planet_payment)
             await session.commit()
         
-        logger.info(f"♀️ ПЛАТЕЖ СОХРАНЕН В БД")
+        logger.info("♀️ ПЛАТЕЖ СОХРАНЕН В БД")
         
         # Отправляем пользователю ссылку на оплату
         await cb_msg.answer(
