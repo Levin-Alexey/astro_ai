@@ -39,8 +39,7 @@ from astrology_handlers import (
 )
 from handlers.recommendations_handler import handle_get_recommendations
 from handlers.sun_recommendations_handler import handle_get_sun_recommendations
-from handlers.mercury_recommendations_handler import handle_get_mercury_recommendations
-from handlers.venus_recommendations_handler import handle_get_venus_recommendations
+from handlers.mars_recommendations_handler import handle_get_mars_recommendations
 from handlers.ask_question_handler import handle_ask_question
 from payment_handler import init_payment_handler
 
@@ -1460,20 +1459,6 @@ async def on_get_sun_recommendations(callback: CallbackQuery, state: FSMContext)
     await handle_get_sun_recommendations(callback, state)
 
 
-# Обработчики для кнопок после разбора Меркурия
-@dp.callback_query(F.data == "get_mercury_recommendations")
-async def on_get_mercury_recommendations(callback: CallbackQuery, state: FSMContext):
-    """Обработчик кнопки 'Получить рекомендации' для Меркурия"""
-    await handle_get_mercury_recommendations(callback, state)
-
-
-# Обработчики для кнопок после разбора Венеры
-@dp.callback_query(F.data == "get_venus_recommendations")
-async def on_get_venus_recommendations(callback: CallbackQuery, state: FSMContext):
-    """Обработчик кнопки 'Получить рекомендации' для Венеры"""
-    await handle_get_venus_recommendations(callback, state)
-
-
 @dp.callback_query(F.data == "ask_question")
 async def on_ask_question(callback: CallbackQuery, state: FSMContext):
     """Обработчик кнопки 'Задать вопрос'"""
@@ -1486,124 +1471,16 @@ async def on_ask_sun_question(callback: CallbackQuery, state: FSMContext):
     await handle_ask_question(callback, state)
 
 
-@dp.callback_query(F.data == "ask_mercury_question")
-async def on_ask_mercury_question(callback: CallbackQuery, state: FSMContext):
-    """Обработчик кнопки 'Задать вопрос' для Меркурия"""
+@dp.callback_query(F.data == "get_mars_recommendations")
+async def on_get_mars_recommendations(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Получить рекомендации' для Марса"""
+    await handle_get_mars_recommendations(callback, state)
+
+
+@dp.callback_query(F.data == "ask_mars_question")
+async def on_ask_mars_question(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Задать вопрос' для Марса"""
     await handle_ask_question(callback, state)
-
-
-@dp.callback_query(F.data == "ask_venus_question")
-async def on_ask_venus_question(callback: CallbackQuery, state: FSMContext):
-    """Обработчик кнопки 'Задать вопрос' для Венеры"""
-    await handle_ask_question(callback, state)
-
-
-@dp.callback_query(F.data == "retry_venus_analysis")
-async def on_retry_venus_analysis(callback: CallbackQuery):
-    """Обработчик повторной попытки создания разбора Венеры"""
-    await callback.answer()
-    cb_msg = cast(Message, callback.message)
-    user_id = callback.from_user.id
-    
-    # Проверяем доступ
-    from payment_access import check_planet_access
-    access_info = await check_planet_access(user_id, "venus")
-    
-    if access_info["has_access"] and access_info["can_retry"]:
-        await cb_msg.answer(
-            "♀️ Венера\n\n"
-            "🔄 Повторно запускаю создание вашего разбора...\n\n"
-            "⏳ Это займет несколько минут. На этот раз все должно получиться!"
-        )
-        
-        # Запускаем анализ
-        from astrology_handlers import start_venus_analysis
-        try:
-            await start_venus_analysis(callback, None)
-            logger.info(f"Retrying Venus analysis for user {user_id}")
-        except Exception as e:
-            logger.error(f"Error retrying Venus analysis for user {user_id}: {e}")
-            await cb_msg.answer(
-                "😔 Произошла ошибка при повторном запуске. "
-                "Попробуйте еще раз через несколько минут."
-            )
-    else:
-        await cb_msg.answer(
-            "😔 Невозможно повторить создание разбора. "
-            "Обратитесь в поддержку."
-        )
-
-
-@dp.callback_query(F.data == "retry_sun_analysis")
-async def on_retry_sun_analysis(callback: CallbackQuery):
-    """Обработчик повторной попытки создания разбора Солнца"""
-    await callback.answer()
-    cb_msg = cast(Message, callback.message)
-    user_id = callback.from_user.id
-    
-    # Проверяем доступ
-    from payment_access import check_planet_access
-    access_info = await check_planet_access(user_id, "sun")
-    
-    if access_info["has_access"] and access_info["can_retry"]:
-        await cb_msg.answer(
-            "☀️ Солнце\n\n"
-            "🔄 Повторно запускаю создание вашего разбора...\n\n"
-            "⏳ Это займет несколько минут. На этот раз все должно получиться!"
-        )
-        
-        # Запускаем анализ
-        from astrology_handlers import start_sun_analysis
-        try:
-            await start_sun_analysis(callback, None)
-            logger.info(f"Retrying Sun analysis for user {user_id}")
-        except Exception as e:
-            logger.error(f"Error retrying Sun analysis for user {user_id}: {e}")
-            await cb_msg.answer(
-                "😔 Произошла ошибка при повторном запуске. "
-                "Попробуйте еще раз через несколько минут."
-            )
-    else:
-        await cb_msg.answer(
-            "😔 Невозможно повторить создание разбора. "
-            "Обратитесь в поддержку."
-        )
-
-
-@dp.callback_query(F.data == "retry_mercury_analysis")
-async def on_retry_mercury_analysis(callback: CallbackQuery):
-    """Обработчик повторной попытки создания разбора Меркурия"""
-    await callback.answer()
-    cb_msg = cast(Message, callback.message)
-    user_id = callback.from_user.id
-    
-    # Проверяем доступ
-    from payment_access import check_planet_access
-    access_info = await check_planet_access(user_id, "mercury")
-    
-    if access_info["has_access"] and access_info["can_retry"]:
-        await cb_msg.answer(
-            "☿️ Меркурий\n\n"
-            "🔄 Повторно запускаю создание вашего разбора...\n\n"
-            "⏳ Это займет несколько минут. На этот раз все должно получиться!"
-        )
-        
-        # Запускаем анализ
-        from astrology_handlers import start_mercury_analysis
-        try:
-            await start_mercury_analysis(callback, None)
-            logger.info(f"Retrying Mercury analysis for user {user_id}")
-        except Exception as e:
-            logger.error(f"Error retrying Mercury analysis for user {user_id}: {e}")
-            await cb_msg.answer(
-                "😔 Произошла ошибка при повторном запуске. "
-                "Попробуйте еще раз через несколько минут."
-            )
-    else:
-        await cb_msg.answer(
-            "😔 Невозможно повторить создание разбора. "
-            "Обратитесь в поддержку."
-        )
 
 
 @dp.callback_query(F.data == "sun_question_custom")
@@ -2054,145 +1931,9 @@ async def on_explore_mercury(callback: CallbackQuery):
     """Обработчик кнопки 'Меркурий'"""
     await callback.answer()
     cb_msg = cast(Message, callback.message)
-    user_id = callback.from_user.id
-    
-    # Проверяем, есть ли у пользователя оплаченный доступ к Меркурию
-    has_access = await check_user_payment_access(user_id, "mercury")
-    
-    if has_access:
-        # Если доступ есть, получаем и отправляем разбор
-        await cb_msg.answer(
-            "☿️ Меркурий\n\n"
-            "🔮 Получаю ваш персональный астрологический разбор...\n\n"
-            "⏳ Пожалуйста, подождите несколько секунд.",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="🔙 Назад",
-                            callback_data="explore_other_areas"
-                        )
-                    ]
-                ]
-            )
-        )
-        
-        # Получаем разбор из БД
-        await send_existing_analysis(user_id, "mercury", cb_msg)
-        
-        logger.info(
-            f"Пользователь {user_id} запросил разбор Меркурия (доступ есть)"
-        )
-    else:
-        # Если доступа нет, предлагаем оплату
-        await cb_msg.answer(
-            "☿️ Меркурий\n\n"
-            "💰 Для получения персонального астрологического разбора "
-            "по Меркурию необходимо произвести оплату.\n\n"
-            "💸 Стоимость: 10₽ (вместо 999₽)\n\n"
-            "🎯 Что вы получите:\n"
-            "• Развитие речи и мышления\n"
-            "• Умение убеждать и договариваться\n"
-            "• Лёгкое обучение и ясная подача идей\n"
-            "• Понимание стиля общения",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="💳 Оплатить 10₽",
-                            callback_data="pay_mercury"
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text="🔙 Назад",
-                            callback_data="explore_other_areas"
-                        )
-                    ]
-                ]
-            )
-        )
-        logger.info(
-            f"Пользователь {user_id} запросил разбор Меркурия (доступа нет)"
-        )
-
-
-@dp.callback_query(F.data == "explore_venus")
-async def on_explore_venus(callback: CallbackQuery):
-    """Обработчик кнопки 'Венера'"""
-    await callback.answer()
-    cb_msg = cast(Message, callback.message)
-    user_id = callback.from_user.id
-    
-    # Проверяем, есть ли у пользователя оплаченный доступ к Венере
-    has_access = await check_user_payment_access(user_id, "venus")
-    
-    if has_access:
-        # Если доступ есть, получаем и отправляем разбор
-        await cb_msg.answer(
-            "♀️ Венера\n\n"
-            "🔮 Получаю ваш персональный астрологический разбор...\n\n"
-            "⏳ Пожалуйста, подождите несколько секунд.",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="🔙 Назад",
-                            callback_data="explore_other_areas"
-                        )
-                    ]
-                ]
-            )
-        )
-        
-        # Получаем разбор из БД
-        await send_existing_analysis(user_id, "venus", cb_msg)
-        
-        logger.info(
-            f"Пользователь {user_id} запросил разбор Венеры (доступ есть)"
-        )
-    else:
-        # Если доступа нет, предлагаем оплату
-        await cb_msg.answer(
-            "♀️ Венера\n\n"
-            "💰 Для получения персонального астрологического разбора "
-            "по Венере необходимо произвести оплату.\n\n"
-            "💸 Стоимость: 10₽ (вместо 999₽)\n\n"
-            "🎯 Что вы получите:\n"
-            "• Раскрытие женской энергии и привлекательности\n"
-            "• Понимание в отношениях и любви\n"
-            "• Развитие творческих способностей\n"
-            "• Гармонизация эмоциональной сферы",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="� Оплатить 10₽",
-                            callback_data="pay_venus"
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text="�🔙 Назад",
-                            callback_data="explore_other_areas"
-                        )
-                    ]
-                ]
-            )
-        )
-        logger.info(
-            f"Пользователь {user_id} запросил разбор Венеры (доступа нет)"
-        )
-
-
-@dp.callback_query(F.data == "explore_mars")
-async def on_explore_mars(callback: CallbackQuery):
-    """Обработчик кнопки 'Марс'"""
-    await callback.answer()
-    cb_msg = cast(Message, callback.message)
     await cb_msg.answer(
-        "♂️ Марс\n\n"
-        "Здесь будет обработчик для Марса\n\n"
+        "☿️ Меркурий\n\n"
+        "Здесь будет обработчик для Меркурия\n\n"
         "TODO: Реализовать функционал",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
@@ -2205,6 +1946,97 @@ async def on_explore_mars(callback: CallbackQuery):
             ]
         )
     )
+
+
+@dp.callback_query(F.data == "explore_venus")
+async def on_explore_venus(callback: CallbackQuery):
+    """Обработчик кнопки 'Венера'"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer(
+        "♀️ Венера\n\n"
+        "Здесь будет обработчик для Венеры\n\n"
+        "TODO: Реализовать функционал",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🔙 Назад",
+                        callback_data="explore_other_areas"
+                    )
+                ]
+            ]
+        )
+    )
+
+
+@dp.callback_query(F.data == "explore_mars")
+async def on_explore_mars(callback: CallbackQuery):
+    """Обработчик кнопки 'Марс'"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    user_id = callback.from_user.id
+    
+    # Проверяем, есть ли у пользователя оплаченный доступ к Марсу
+    has_access = await check_user_payment_access(user_id, "mars")
+    
+    if has_access:
+        # Если доступ есть, получаем и отправляем разбор
+        await cb_msg.answer(
+            "♂️ Марс\n\n"
+            "🔮 Получаю ваш персональный астрологический разбор...\n\n"
+            "⏳ Пожалуйста, подождите несколько секунд.",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="explore_other_areas"
+                        )
+                    ]
+                ]
+            )
+        )
+        
+        # Получаем разбор из БД
+        await send_existing_analysis(user_id, "mars", cb_msg)
+        
+        logger.info(
+            f"Пользователь {user_id} запросил разбор Марса (доступ есть)"
+        )
+    else:
+        # Если доступа нет, предлагаем оплату
+        await cb_msg.answer(
+            "♂️ Марс\n\n"
+            "💰 Для получения персонального астрологического разбора "
+            "по Марсу необходимо произвести оплату.\n\n"
+            "💸 Стоимость: 10₽ (вместо 999₽)\n\n"
+            "🎯 Что вы получите:\n"
+            "• Рост мотивации и силы воли\n"
+            "• Решительность в действиях\n"
+            "• Спортивный дух и выносливость\n"
+            "• Умение разрешать конфликты\n"
+            "• Уверенность в начинании нового",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="💳 Оплатить 10₽",
+                            callback_data="pay_mars"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="explore_other_areas"
+                        )
+                    ]
+                ]
+            )
+        )
+        logger.info(
+            f"Пользователь {user_id} запросил разбор Марса (доступа нет)"
+        )
 
 
 # Старые обработчики тематических рекомендаций удалены
@@ -2305,8 +2137,7 @@ async def echo_message(message: Message, state: FSMContext):
         ProfileForm.waiting_for_birth_time_local,
         ProfileForm.waiting_for_birth_time_confirm,
         ProfileForm.waiting_for_birth_time_approx_confirm,
-        ProfileForm.waiting_for_birth_time_unknown_confirm,
-        QuestionForm.waiting_for_question,
+        ProfileForm.waiting_for_birth_time_unknown_confirm
     ]:
         # Если пользователь в состоянии анкеты, не обрабатываем сообщение здесь
         # Пусть его обработает соответствующий обработчик состояния
@@ -2437,7 +2268,7 @@ async def on_pay_sun(callback: CallbackQuery):
         return
     
     try:
-        logger.info(f"Creating Sun payment for user {user_id}")
+        logger.info(f"🔥 НАЧИНАЕМ СОЗДАНИЕ ПЛАТЕЖА для пользователя {user_id}")
         
         # Создаем данные для платежа
         payment_data = payment_handler.create_payment_data(
@@ -2445,48 +2276,46 @@ async def on_pay_sun(callback: CallbackQuery):
             planet="sun",
             description="Астрологический разбор Солнца"
         )
+        logger.info(f"🔥 ДАННЫЕ ПЛАТЕЖА СОЗДАНЫ: {payment_data}")
         
         # Создаем платеж через ЮKassa
-        payment_result = await payment_handler.create_payment(payment_data)
-        payment_url = payment_result["payment_url"]
-        external_payment_id = payment_result["payment_id"]
+        payment_url = await payment_handler.create_payment(payment_data)
+        logger.info(f"🔥 ПЛАТЕЖ СОЗДАН В YOOKASSA: {payment_url}")
         
-        # Сохраняем информацию о платеже в БД с новыми полями защиты
-        from models import (
-            PlanetPayment, PaymentType, PaymentStatus, Planet, User
-        )
+        # Сохраняем информацию о платеже в БД
+        logger.info(f"🔥 НАЧИНАЕМ СОХРАНЕНИЕ В БД...")
+        from models import PlanetPayment, PaymentType, PaymentStatus, Planet, User
         from sqlalchemy import select
-        from datetime import datetime
-        
         async with get_session() as session:
             # Находим user_id по telegram_id
+            logger.info(f"🔥 ИЩЕМ ПОЛЬЗОВАТЕЛЯ с telegram_id: {user_id}")
             result = await session.execute(
                 select(User).where(User.telegram_id == user_id)
             )
             user = result.scalar_one_or_none()
             
             if not user:
-                logger.error(f"User with telegram_id {user_id} not found")
+                logger.error(f"❌ User with telegram_id {user_id} not found")
                 return
             
+            logger.info(f"🔥 ПОЛЬЗОВАТЕЛЬ НАЙДЕН: user_id={user.user_id}, telegram_id={user.telegram_id}")
+            
             payment_record = PlanetPayment(
-                user_id=user.user_id,
+                user_id=user.user_id,  # Используем user_id из таблицы users
                 payment_type=PaymentType.single_planet,
                 planet=Planet.sun,
                 status=PaymentStatus.pending,
                 amount_kopecks=1000,  # 10 рублей в копейках
                 payment_url=payment_url,
-                external_payment_id=external_payment_id,  # Сохраняем ID
-                notes="Платеж за разбор Солнца",
-                # Новые поля для защиты платежей
-                retry_count=0,
-                created_at=datetime.utcnow()
+                notes="Платеж за разбор Солнца"
             )
+            logger.info(f"🔥 СОЗДАЕМ ЗАПИСЬ ПЛАТЕЖА: {payment_record}")
             
             session.add(payment_record)
             await session.commit()
             
-            logger.info(f"Sun payment created for user {user_id}, payment_id: {payment_record.payment_id}")
+            logger.info(f"🔥 ПЛАТЕЖ СОХРАНЕН В БД! ID: {payment_record.payment_id}")
+            logger.info(f"Создан платеж для пользователя {user_id} (user_id: {user.user_id}) за Солнце")
         
         # Отправляем сообщение с кнопкой оплаты
         await cb_msg.answer(
@@ -2517,7 +2346,11 @@ async def on_pay_sun(callback: CallbackQuery):
         )
         
     except Exception as e:
-        logger.error(f"Error creating Sun payment for user {user_id}: {e}")
+        logger.error(f"❌ ОШИБКА ПРИ СОЗДАНИИ ПЛАТЕЖА ЗА СОЛНЦЕ: {e}")
+        logger.error(f"❌ ТИП ОШИБКИ: {type(e)}")
+        logger.error(f"❌ ДЕТАЛИ ОШИБКИ: {str(e)}")
+        import traceback
+        logger.error(f"❌ TRACEBACK: {traceback.format_exc()}")
         await cb_msg.answer(
             "❌ Произошла ошибка при создании платежа. Попробуйте позже.",
             reply_markup=InlineKeyboardMarkup(
@@ -2533,9 +2366,9 @@ async def on_pay_sun(callback: CallbackQuery):
         )
 
 
-@dp.callback_query(F.data == "pay_mercury")
-async def on_pay_mercury(callback: CallbackQuery):
-    """Обработчик кнопки оплаты за Меркурий"""
+@dp.callback_query(F.data == "pay_mars")
+async def on_pay_mars(callback: CallbackQuery):
+    """Обработчик кнопки оплаты за Марс"""
     await callback.answer()
     cb_msg = cast(Message, callback.message)
     user_id = callback.from_user.id
@@ -2548,7 +2381,7 @@ async def on_pay_mercury(callback: CallbackQuery):
                     [
                         InlineKeyboardButton(
                             text="🔙 Назад",
-                            callback_data="explore_mercury"
+                            callback_data="explore_mars"
                         )
                     ]
                 ]
@@ -2557,66 +2390,65 @@ async def on_pay_mercury(callback: CallbackQuery):
         return
     
     try:
-        logger.info(f"Creating Mercury payment for user {user_id}")
+        logger.info(f"🔥 НАЧИНАЕМ СОЗДАНИЕ ПЛАТЕЖА ЗА МАРС для пользователя {user_id}")
         
         # Создаем данные для платежа
         payment_data = payment_handler.create_payment_data(
             user_id=user_id,
-            planet="mercury",
-            description="Астрологический разбор Меркурия"
+            planet="mars",
+            description="Астрологический разбор Марса"
         )
+        logger.info(f"🔥 ДАННЫЕ ПЛАТЕЖА СОЗДАНЫ: {payment_data}")
         
         # Создаем платеж через ЮKassa
-        payment_result = await payment_handler.create_payment(payment_data)
-        payment_url = payment_result["payment_url"]
-        external_payment_id = payment_result["payment_id"]
+        payment_url = await payment_handler.create_payment(payment_data)
+        logger.info(f"🔥 ПЛАТЕЖ СОЗДАН В YOOKASSA: {payment_url}")
         
-        # Сохраняем информацию о платеже в БД с новыми полями защиты
-        from models import (
-            PlanetPayment, PaymentType, PaymentStatus, Planet, User
-        )
+        # Сохраняем информацию о платеже в БД
+        logger.info(f"🔥 НАЧИНАЕМ СОХРАНЕНИЕ В БД...")
+        from models import PlanetPayment, PaymentType, PaymentStatus, Planet, User
         from sqlalchemy import select
-        from datetime import datetime
-        
         async with get_session() as session:
             # Находим user_id по telegram_id
+            logger.info(f"🔥 ИЩЕМ ПОЛЬЗОВАТЕЛЯ с telegram_id: {user_id}")
             result = await session.execute(
                 select(User).where(User.telegram_id == user_id)
             )
             user = result.scalar_one_or_none()
             
             if not user:
-                logger.error(f"User with telegram_id {user_id} not found")
+                logger.error(f"❌ User with telegram_id {user_id} not found")
                 return
             
+            logger.info(f"🔥 ПОЛЬЗОВАТЕЛЬ НАЙДЕН: user_id={user.user_id}, telegram_id={user.telegram_id}")
+            
             payment_record = PlanetPayment(
-                user_id=user.user_id,
+                user_id=user.user_id,  # Используем user_id из таблицы users
                 payment_type=PaymentType.single_planet,
-                planet=Planet.mercury,
+                planet=Planet.mars,
                 status=PaymentStatus.pending,
                 amount_kopecks=1000,  # 10 рублей в копейках
                 payment_url=payment_url,
-                external_payment_id=external_payment_id,  # Сохраняем ID
-                notes="Платеж за разбор Меркурия",
-                # Новые поля для защиты платежей
-                retry_count=0,
-                created_at=datetime.utcnow()
+                notes="Платеж за разбор Марса"
             )
+            logger.info(f"🔥 СОЗДАЕМ ЗАПИСЬ ПЛАТЕЖА: {payment_record}")
             
             session.add(payment_record)
             await session.commit()
             
-            logger.info(f"Mercury payment created for user {user_id}, payment_id: {payment_record.payment_id}")
+            logger.info(f"🔥 ПЛАТЕЖ СОХРАНЕН В БД! ID: {payment_record.payment_id}")
+            logger.info(f"Создан платеж для пользователя {user_id} (user_id: {user.user_id}) за Марс")
         
         # Отправляем сообщение с кнопкой оплаты
         await cb_msg.answer(
-            "☿️ Оплата за разбор Меркурия\n\n"
+            "♂️ Оплата за разбор Марса\n\n"
             "💰 Стоимость: 10₽\n\n"
             "🎯 Что вы получите:\n"
-            "• Развитие речи и мышления\n"
-            "• Умение убеждать и договариваться\n"
-            "• Лёгкое обучение и ясная подача идей\n"
-            "• Понимание стиля общения\n\n"
+            "• Рост мотивации и силы воли\n"
+            "• Решительность в действиях\n"
+            "• Спортивный дух и выносливость\n"
+            "• Умение разрешать конфликты\n"
+            "• Уверенность в начинании нового\n\n"
             "💳 Нажмите кнопку ниже для оплаты:",
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -2629,7 +2461,7 @@ async def on_pay_mercury(callback: CallbackQuery):
                     [
                         InlineKeyboardButton(
                             text="🔙 Назад",
-                            callback_data="explore_mercury"
+                            callback_data="explore_mars"
                         )
                     ]
                 ]
@@ -2637,127 +2469,7 @@ async def on_pay_mercury(callback: CallbackQuery):
         )
         
     except Exception as e:
-        logger.error(f"Error creating Mercury payment for user {user_id}: {e}")
-        await cb_msg.answer(
-            "❌ Произошла ошибка при создании платежа. Попробуйте позже.",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="🔙 Назад",
-                            callback_data="explore_mercury"
-                        )
-                    ]
-                ]
-            )
-        )
-
-
-@dp.callback_query(F.data == "pay_venus")
-async def on_pay_venus(callback: CallbackQuery):
-    """Обработчик кнопки оплаты за Венеру"""
-    await callback.answer()
-    cb_msg = cast(Message, callback.message)
-    user_id = callback.from_user.id
-    
-    if payment_handler is None:
-        await cb_msg.answer(
-            "❌ Ошибка: обработчик платежей не инициализирован",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="🔙 Назад",
-                            callback_data="explore_venus"
-                        )
-                    ]
-                ]
-            )
-        )
-        return
-    
-    try:
-        logger.info(f"♀️ НАЧИНАЕМ СОЗДАНИЕ ПЛАТЕЖА для пользователя {user_id}")
-        
-        # Создаем данные для платежа
-        payment_data = payment_handler.create_payment_data(
-            user_id=user_id,
-            planet="venus",
-            description="Астрологический разбор Венеры"
-        )
-        logger.info(f"♀️ ДАННЫЕ ПЛАТЕЖА СОЗДАНЫ: {payment_data}")
-        
-        # Создаем платеж через ЮKassa
-        payment_result = await payment_handler.create_payment(payment_data)
-        payment_url = payment_result["payment_url"]
-        external_payment_id = payment_result["payment_id"]
-        logger.info(f"♀️ ПЛАТЕЖ СОЗДАН В YOOKASSA: {payment_url}")
-        
-        # Сохраняем информацию о платеже в БД
-        logger.info("♀️ НАЧИНАЕМ СОХРАНЕНИЕ В БД...")
-        from models import (
-            PlanetPayment, PaymentType, PaymentStatus, Planet, User
-        )
-        from sqlalchemy import select
-        
-        async with get_session() as session:
-            # Получаем пользователя
-            result = await session.execute(
-                select(User).where(User.telegram_id == user_id)
-            )
-            user = result.scalar_one_or_none()
-            
-            if not user:
-                await cb_msg.answer("❌ Пользователь не найден")
-                return
-            
-            # Создаем запись о платеже
-            planet_payment = PlanetPayment(
-                user_id=user.user_id,
-                planet=Planet.venus,
-                payment_type=PaymentType.single_planet,
-                status=PaymentStatus.pending,
-                amount_kopecks=1000,  # 10 рублей в копейках
-                payment_url=payment_url,
-                external_payment_id=external_payment_id,  # Сохраняем ID
-                notes="Платеж за разбор Венеры"
-            )
-            
-            session.add(planet_payment)
-            await session.commit()
-        
-        logger.info("♀️ ПЛАТЕЖ СОХРАНЕН В БД")
-        
-        # Отправляем пользователю ссылку на оплату
-        await cb_msg.answer(
-            "♀️ Венера\n\n"
-            "💰 Стоимость: 10₽\n\n"
-            "🎯 Что вы получите:\n"
-            "• Раскрытие женской энергии и привлекательности\n"
-            "• Понимание в отношениях и любви\n"
-            "• Развитие творческих способностей\n"
-            "• Гармонизация эмоциональной сферы\n\n"
-            "💳 Нажмите кнопку ниже для оплаты:",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="💳 Оплатить 10₽",
-                            url=payment_url
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text="🔙 Назад",
-                            callback_data="explore_venus"
-                        )
-                    ]
-                ]
-            )
-        )
-        
-    except Exception as e:
-        logger.error(f"❌ ОШИБКА ПРИ СОЗДАНИИ ПЛАТЕЖА ЗА ВЕНЕРУ: {e}")
+        logger.error(f"❌ ОШИБКА ПРИ СОЗДАНИИ ПЛАТЕЖА ЗА МАРС: {e}")
         logger.error(f"❌ ТИП ОШИБКИ: {type(e)}")
         logger.error(f"❌ ДЕТАЛИ ОШИБКИ: {str(e)}")
         import traceback
@@ -2769,7 +2481,7 @@ async def on_pay_venus(callback: CallbackQuery):
                     [
                         InlineKeyboardButton(
                             text="🔙 Назад",
-                            callback_data="explore_venus"
+                            callback_data="explore_mars"
                         )
                     ]
                 ]

@@ -194,6 +194,16 @@ async def generate_planet_analysis(user_id: int, planet: str):
             else:
                 logger.error(f"❌ Failed to generate venus analysis for user {user_id}")
         
+        # Для Марса вызываем start_mars_analysis
+        elif planet == "mars":
+            from astrology_handlers import start_mars_analysis
+            astrology_data = await start_mars_analysis(user_id)
+            
+            if astrology_data:
+                logger.info(f"♂️ Mars analysis data generated for user {user_id}")
+            else:
+                logger.error(f"❌ Failed to generate mars analysis for user {user_id}")
+        
         else:
             logger.warning(f"⚠️ Analysis for {planet} not implemented yet")
                     

@@ -444,6 +444,115 @@ def format_venus_data_for_llm(venus_data: dict) -> str:
     return result
 
 
+def extract_mars_data(astrology_data: dict) -> dict:
+    """
+    Извлекает данные Марса и его аспектов из ответа AstrologyAPI
+
+    Args:
+        astrology_data: Полный ответ от AstrologyAPI
+
+    Returns:
+        Dict с данными Марса и его аспектами
+    """
+    mars_data: dict = {
+        "mars": None,
+        "mars_aspects": []
+    }
+
+    # Извлекаем данные Марса из списка планет
+    if "planets" in astrology_data:
+        for planet in astrology_data["planets"]:
+            if planet.get("name") == "Mars":
+                mars_data["mars"] = {
+                    "name": planet.get("name"),
+                    "sign": planet.get("sign"),
+                    "house": planet.get("house"),
+                    "full_degree": planet.get("full_degree"),
+                    "norm_degree": planet.get("norm_degree"),
+                    "speed": planet.get("speed"),
+                    "is_retro": planet.get("is_retro"),
+                    "sign_id": planet.get("sign_id")
+                }
+                break
+
+    # Извлекаем аспекты Марса
+    if "aspects" in astrology_data:
+        for aspect in astrology_data["aspects"]:
+            if aspect.get("aspecting_planet") == "Mars":
+                mars_data["mars_aspects"].append({
+                    "aspecting_planet": aspect.get("aspecting_planet"),
+                    "aspected_planet": aspect.get("aspected_planet"),
+                    "type": aspect.get("type"),
+                    "orb": aspect.get("orb"),
+                    "diff": aspect.get("diff")
+                })
+
+    return mars_data
+
+
+def format_mars_data_for_llm(mars_data: dict) -> str:
+    """
+    Форматирует данные Марса для отправки в LLM
+
+    Args:
+        mars_data: Данные Марса из extract_mars_data
+
+    Returns:
+        Отформатированная строка для LLM
+    """
+    if not mars_data["mars"]:
+        return "Данные Марса не найдены"
+
+    mars = mars_data["mars"]
+    aspects = mars_data["mars_aspects"]
+
+    # Основная информация о Марсе
+    result = f"""Марс в знаке {mars['sign']}, дом {mars['house']}
+Степень: {mars['norm_degree']:.2f}°
+Скорость: {mars['speed']:.2f}°/день
+Ретроградность: {'Да' if mars['is_retro'] == 'true' else 'Нет'}
+
+Аспекты Марса:
+"""
+
+    # Добавляем аспекты (сумма орбов не более 4 градусов)
+    # Сортируем по орбу по возрастанию
+    sorted_aspects = sorted(aspects, key=lambda x: x['orb'])
+    filtered_aspects = []
+    total_orb = 0.0
+    
+    # Логируем исходные аспекты
+    logger.info(f"Original Mars aspects count: {len(aspects)}")
+    for i, aspect in enumerate(sorted_aspects):
+        logger.info(f"Mars Aspect {i+1}: {aspect['aspecting_planet']} {aspect['type']} {aspect['aspected_planet']} (орб: {aspect['orb']:.2f}°)")
+    
+    # Отбираем аспекты с общим орбом не более 4 градусов
+    for aspect in sorted_aspects:
+        if total_orb + aspect['orb'] <= 4.0:
+            filtered_aspects.append(aspect)
+            total_orb += aspect['orb']
+            logger.info(f"Mars Aspect INCLUDED: {aspect['aspecting_planet']} {aspect['type']} {aspect['aspected_planet']} (орб: {aspect['orb']:.2f}°)")
+        else:
+            logger.info(f"Mars Aspect EXCLUDED (total orb would be {total_orb + aspect['orb']:.2f}°): {aspect['aspecting_planet']} {aspect['type']} {aspect['aspected_planet']} (орб: {aspect['orb']:.2f}°)")
+
+    # Если нет подходящих аспектов, берем самый сильный (с минимальным орбом)
+    if not filtered_aspects and aspects:
+        filtered_aspects = [sorted_aspects[0]]
+        logger.info(f"Mars: No aspects under 4° total, taking strongest: {sorted_aspects[0]['aspecting_planet']} {sorted_aspects[0]['type']} {sorted_aspects[0]['aspected_planet']}")
+
+    # Форматируем отобранные аспекты
+    logger.info(f"Final filtered Mars aspects count: {len(filtered_aspects)}, total_orb: {total_orb:.2f}°")
+    
+    for aspect in filtered_aspects:
+        result += (
+            f"- {aspect['aspecting_planet']} {aspect['type']} "
+            f"{aspect['aspected_planet']} "
+            f"(орб: {aspect['orb']:.2f}°)\n"
+        )
+
+    return result
+
+
 class AstrologyAPIClient:
     """Клиент для работы с AstrologyAPI"""
 
@@ -1314,4 +1423,96 @@ async def send_venus_prediction_to_queue(prediction_id: int, user_id: int) -> bo
         
     except Exception as e:
         logger.error(f"❌ Error sending venus prediction to queue: {e}")
+        return False
+
+
+async def start_mars_analysis(user_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Запускает анализ Марса для пользователя
+
+    Args:
+        user_id: ID пользователя в Telegram
+
+    Returns:
+        Dict с данными астрологического API или None при ошибке
+    """
+    try:
+        # Получаем данные пользователя
+        user_data = await get_user_astrology_data(user_id)
+        if not user_data:
+            logger.warning(f"Cannot get astrology data for user {user_id}")
+            return None
+
+        # Инициализируем клиент AstrologyAPI
+        # TODO: Вынести в конфиг
+        api_client = AstrologyAPIClient(
+            user_id="645005",
+            api_key="f6c596e32bb8e29feebbae1c460aaf0913208c7c"
+        )
+
+        # Получаем данные от AstrologyAPI
+        astrology_data = await api_client.get_western_horoscope(
+            day=user_data["day"],
+            month=user_data["month"],
+            year=user_data["year"],
+            hour=user_data["hour"],
+            minute=user_data["minute"],
+            lat=user_data["lat"],
+            lon=user_data["lon"],
+            tzone=user_data["tzone"],
+            language="en"  # Английский для стандартных названий
+        )
+
+        # Извлекаем данные Марса
+        mars_data = extract_mars_data(astrology_data)
+        formatted_mars_data = format_mars_data_for_llm(mars_data)
+
+        # Сохраняем отформатированные данные Марса
+        raw_content = (
+            f"Mars Analysis Data:\n{formatted_mars_data}\n\n"
+            f"Raw AstrologyAPI data: {astrology_data}"
+        )
+
+        # Сохраняем в базу данных
+        prediction_id = await save_astrology_data(
+            user_id=user_id,
+            planet=Planet.mars,
+            prediction_type=PredictionType.paid,
+            content=raw_content,
+            llm_model="astrology_api",
+            expires_at=datetime.now(timezone.utc) + timedelta(days=30)  # 30 дней доступа
+        )
+
+        # Отправляем в очередь для обработки LLM
+        try:
+            await send_mars_prediction_to_queue(
+                prediction_id, user_data["telegram_id"]
+            )
+            logger.info(
+                f"♂️ Mars prediction {prediction_id} sent to queue for LLM processing"
+            )
+        except Exception as e:
+            logger.error(f"Failed to send Mars prediction to queue: {e}")
+
+        return astrology_data
+
+    except Exception as e:
+        logger.error(f"Error in start_mars_analysis: {e}")
+        return None
+
+
+async def send_mars_prediction_to_queue(prediction_id: int, user_id: int) -> bool:
+    """Отправляет предсказание Марса в очередь mars_predictions"""
+    try:
+        from queue_sender import send_mars_prediction_to_queue as queue_send
+        
+        success = await queue_send(prediction_id, user_id)
+        if success:
+            logger.info(f"♂️ Mars prediction {prediction_id} sent to mars_predictions queue")
+        else:
+            logger.error(f"❌ Failed to send Mars prediction {prediction_id} to queue")
+        return success
+        
+    except Exception as e:
+        logger.error(f"❌ Error sending mars prediction to queue: {e}")
         return False

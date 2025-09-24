@@ -48,7 +48,7 @@ class PaymentHandler:
     
     async def create_payment(
         self, payment_data: Dict[str, Any]
-    ) -> Dict[str, str]:
+    ) -> Dict[str, str | None]:
         """Создает платеж через ЮKassa API"""
         try:
             # Создаем уникальный ID для платежа

@@ -19,10 +19,12 @@ QUEUE_NAME = "moon_predictions"
 SUN_QUEUE_NAME = "sun_predictions"
 MERCURY_QUEUE_NAME = "mercury_predictions"
 VENUS_QUEUE_NAME = "venus_predictions"
+MARS_QUEUE_NAME = "mars_predictions"
 RECOMMENDATIONS_QUEUE_NAME = "recommendations"
 SUN_RECOMMENDATIONS_QUEUE_NAME = "sun_recommendations"
 MERCURY_RECOMMENDATIONS_QUEUE_NAME = "mercury_recommendations"
 VENUS_RECOMMENDATIONS_QUEUE_NAME = "venus_recommendations"
+MARS_RECOMMENDATIONS_QUEUE_NAME = "mars_recommendations"
 QUESTIONS_QUEUE_NAME = "questions"
 
 
@@ -43,6 +45,7 @@ class QueueSender:
         await self.channel.declare_queue(SUN_QUEUE_NAME, durable=True)
         await self.channel.declare_queue(MERCURY_QUEUE_NAME, durable=True)
         await self.channel.declare_queue(VENUS_QUEUE_NAME, durable=True)
+        await self.channel.declare_queue(MARS_QUEUE_NAME, durable=True)
         await self.channel.declare_queue(
             RECOMMENDATIONS_QUEUE_NAME, durable=True
         )
@@ -54,6 +57,9 @@ class QueueSender:
         )
         await self.channel.declare_queue(
             VENUS_RECOMMENDATIONS_QUEUE_NAME, durable=True
+        )
+        await self.channel.declare_queue(
+            MARS_RECOMMENDATIONS_QUEUE_NAME, durable=True
         )
         await self.channel.declare_queue(
             QUESTIONS_QUEUE_NAME, durable=True
@@ -337,6 +343,48 @@ class QueueSender:
             logger.error(f"❌ Failed to send Venus message to queue: {e}")
             return False
 
+    async def send_mars_prediction_for_processing(
+        self,
+        prediction_id: int,
+        user_telegram_id: int
+    ) -> bool:
+        """
+        Отправляет предсказание Марса на обработку в очередь
+
+        Args:
+            prediction_id: ID предсказания
+            user_telegram_id: Telegram ID пользователя
+
+        Returns:
+            True если сообщение отправлено успешно
+        """
+        if not self.channel:
+            await self.initialize()
+
+        message_data = {
+            "prediction_id": prediction_id,
+            "user_telegram_id": user_telegram_id,
+            "timestamp": asyncio.get_event_loop().time()
+        }
+
+        try:
+            message = aio_pika.Message(
+                body=json.dumps(message_data).encode(),
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+            )
+
+            await self.channel.default_exchange.publish(
+                message,
+                routing_key=MARS_QUEUE_NAME
+            )
+
+            logger.info(f"♂️ Sent Mars prediction {prediction_id} to queue")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Failed to send Mars message to queue: {e}")
+            return False
+
     async def send_venus_recommendation_for_processing(
         self,
         prediction_id: int,
@@ -384,6 +432,56 @@ class QueueSender:
         except Exception as e:
             logger.error(
                 f"Failed to send venus recommendation message to queue: {e}"
+            )
+            return False
+
+    async def send_mars_recommendation_for_processing(
+        self,
+        prediction_id: int,
+        user_telegram_id: int,
+        mars_analysis: str
+    ) -> bool:
+        """
+        Отправляет запрос на генерацию рекомендаций по Марсу в очередь
+
+        Args:
+            prediction_id: ID исходного предсказания
+            user_telegram_id: Telegram ID пользователя
+            mars_analysis: Разбор Марса для генерации рекомендаций
+
+        Returns:
+            True если сообщение отправлено успешно
+        """
+        if not self.channel:
+            await self.initialize()
+
+        message_data = {
+            "prediction_id": prediction_id,
+            "user_telegram_id": user_telegram_id,
+            "mars_analysis": mars_analysis,
+            "timestamp": asyncio.get_event_loop().time()
+        }
+
+        try:
+            message = aio_pika.Message(
+                body=json.dumps(message_data).encode(),
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+            )
+
+            await self.channel.default_exchange.publish(
+                message,
+                routing_key=MARS_RECOMMENDATIONS_QUEUE_NAME
+            )
+
+            logger.info(
+                f"Sent mars recommendation request for prediction "
+                f"{prediction_id} to queue"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(
+                f"Failed to send mars recommendation message to queue: {e}"
             )
             return False
 
@@ -595,6 +693,26 @@ async def send_venus_prediction_to_queue(
     )
 
 
+async def send_mars_prediction_to_queue(
+    prediction_id: int,
+    user_telegram_id: int
+) -> bool:
+    """
+    Удобная функция для отправки Mars prediction в очередь
+
+    Args:
+        prediction_id: ID предсказания
+        user_telegram_id: Telegram ID пользователя
+
+    Returns:
+        True если сообщение отправлено успешно
+    """
+    sender = await get_queue_sender()
+    return await sender.send_mars_prediction_for_processing(
+        prediction_id, user_telegram_id
+    )
+
+
 async def send_venus_recommendation_to_queue(
     prediction_id: int,
     user_telegram_id: int,
@@ -614,6 +732,28 @@ async def send_venus_recommendation_to_queue(
     sender = await get_queue_sender()
     return await sender.send_venus_recommendation_for_processing(
         prediction_id, user_telegram_id, venus_analysis
+    )
+
+
+async def send_mars_recommendation_to_queue(
+    prediction_id: int,
+    user_telegram_id: int,
+    mars_analysis: str
+) -> bool:
+    """
+    Удобная функция для отправки запроса на рекомендации по Марсу в очередь
+
+    Args:
+        prediction_id: ID исходного предсказания
+        user_telegram_id: Telegram ID пользователя
+        mars_analysis: Разбор Марса для генерации рекомендаций
+
+    Returns:
+        True если сообщение отправлено успешно
+    """
+    sender = await get_queue_sender()
+    return await sender.send_mars_recommendation_for_processing(
+        prediction_id, user_telegram_id, mars_analysis
     )
 
 
