@@ -39,6 +39,8 @@ from astrology_handlers import (
 )
 from handlers.recommendations_handler import handle_get_recommendations
 from handlers.sun_recommendations_handler import handle_get_sun_recommendations
+from handlers.mercury_recommendations_handler import handle_get_mercury_recommendations
+from handlers.venus_recommendations_handler import handle_get_venus_recommendations
 from handlers.mars_recommendations_handler import handle_get_mars_recommendations
 from handlers.ask_question_handler import handle_ask_question
 from payment_handler import init_payment_handler
@@ -1477,6 +1479,30 @@ async def on_get_mars_recommendations(callback: CallbackQuery, state: FSMContext
     await handle_get_mars_recommendations(callback, state)
 
 
+@dp.callback_query(F.data == "get_mercury_recommendations")
+async def on_get_mercury_recommendations(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Получить рекомендации' для Меркурия"""
+    await handle_get_mercury_recommendations(callback, state)
+
+
+@dp.callback_query(F.data == "get_venus_recommendations")
+async def on_get_venus_recommendations(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Получить рекомендации' для Венеры"""
+    await handle_get_venus_recommendations(callback, state)
+
+
+@dp.callback_query(F.data == "ask_mercury_question")
+async def on_ask_mercury_question(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Задать вопрос' для Меркурия"""
+    await handle_ask_question(callback, state)
+
+
+@dp.callback_query(F.data == "ask_venus_question")
+async def on_ask_venus_question(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Задать вопрос' для Венеры"""
+    await handle_ask_question(callback, state)
+
+
 @dp.callback_query(F.data == "ask_mars_question")
 async def on_ask_mars_question(callback: CallbackQuery, state: FSMContext):
     """Обработчик кнопки 'Задать вопрос' для Марса"""
@@ -2232,6 +2258,12 @@ async def echo_message(message: Message, state: FSMContext):
         ProfileForm.waiting_for_birth_time_unknown_confirm
     ]:
         # Если пользователь в состоянии анкеты, не обрабатываем сообщение здесь
+        # Пусть его обработает соответствующий обработчик состояния
+        return
+    
+    # Проверяем, находится ли пользователь в состоянии ожидания вопроса
+    if current_state == QuestionForm.waiting_for_question:
+        # Если пользователь в состоянии ожидания вопроса, не обрабатываем сообщение здесь
         # Пусть его обработает соответствующий обработчик состояния
         return
     
