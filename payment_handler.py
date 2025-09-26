@@ -72,6 +72,7 @@ class PaymentHandler:
             
             # Возвращаем как URL, так и payment_id
             return {
+                "success": True,
                 "payment_url": payment.confirmation.confirmation_url,
                 "payment_id": payment.id
             }
@@ -82,6 +83,8 @@ class PaymentHandler:
             # Fallback на старый метод
             fallback_url = self.create_payment_url(payment_data)
             return {
+                "success": False,
+                "error": str(e),
                 "payment_url": fallback_url,
                 "payment_id": None  # Для тестовых платежей ID не генерируется
             }

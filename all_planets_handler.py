@@ -97,10 +97,14 @@ class AllPlanetsHandler:
             payment_result = await self.payment_handler.create_payment(
                 payment_data
             )
+            
+            logger.info(f"🔍 Payment result type: {type(payment_result)}")
+            logger.info(f"🔍 Payment result: {payment_result}")
 
-            if payment_result["success"]:
-                payment_url = payment_result["payment_url"]
-                payment_id = payment_result["payment_id"]
+            # Проверяем, что результат - это словарь
+            if isinstance(payment_result, dict) and payment_result.get("success"):
+                payment_url = payment_result.get("payment_url")
+                payment_id = payment_result.get("payment_id")
 
                 # Сохраняем информацию о платеже в БД
                 if payment_id:
@@ -140,10 +144,17 @@ class AllPlanetsHandler:
                     f"✅ Платеж создан для пользователя {user_id}: {payment_id}"
                 )
             else:
+                error_msg = "Неизвестная ошибка"
+                if isinstance(payment_result, dict):
+                    error_msg = payment_result.get("error", "Неизвестная ошибка")
+                else:
+                    error_msg = f"Неожиданный тип результата: {type(payment_result)}"
+                
+                logger.error(f"❌ Ошибка создания платежа: {error_msg}")
+                
                 if cb_msg:
                     await cb_msg.answer(
-                        f"❌ Ошибка создания платежа: "
-                        f"{payment_result['error']}",
+                        f"❌ Ошибка создания платежа: {error_msg}",
                         reply_markup=InlineKeyboardMarkup(
                             inline_keyboard=[
                                 [
