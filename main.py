@@ -1633,7 +1633,7 @@ async def on_explore_other_areas(callback: CallbackQuery):
         "🔓 Пока бот на тесте, ты получаешь консультацию астролога почти "
         "даром:\n\n"
         "💸 Одна планета — 10₽ (вместо 999₽)\n"
-        "🌌 Все планеты сразу — 222₽ (вместо 5555₽) + 🎁: неограниченное "
+        "🌌 Все планеты сразу — 5₽ (тестовая цена) + 🎁: неограниченное "
         "количество вопросов по своим разборам\n\n"
         "Выбери разбор по кнопке ниже 😼👇🏼",
         reply_markup=InlineKeyboardMarkup(
@@ -2806,17 +2806,24 @@ async def check_user_payment_access(user_id: int, planet: str) -> bool:
         if all_planets_payment.scalar_one_or_none():
             return True
         
-        # Проверяем, есть ли оплата за конкретную планету
-        planet_enum = Planet(planet)
-        single_planet_payment = await session.execute(
-            select(PlanetPayment).where(
-                PlanetPayment.user_id == user_id,
-                PlanetPayment.payment_type == PaymentType.single_planet,
-                PlanetPayment.planet == planet_enum,
-                PlanetPayment.status == PaymentStatus.completed
-            )
-        )
-        return single_planet_payment.scalar_one_or_none() is not None
+        # Проверяем, есть ли оплата за конкретную планету (только если planet не "all_planets")
+        if planet != "all_planets":
+            try:
+                planet_enum = Planet(planet)
+                single_planet_payment = await session.execute(
+                    select(PlanetPayment).where(
+                        PlanetPayment.user_id == user_id,
+                        PlanetPayment.payment_type == PaymentType.single_planet,
+                        PlanetPayment.planet == planet_enum,
+                        PlanetPayment.status == PaymentStatus.completed
+                    )
+                )
+                return single_planet_payment.scalar_one_or_none() is not None
+            except ValueError:
+                # Если planet не является валидным значением для enum Planet
+                return False
+        else:
+            return False
 
 
 async def main():
