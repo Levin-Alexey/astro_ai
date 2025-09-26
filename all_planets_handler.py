@@ -362,11 +362,28 @@ class AllPlanetsHandler:
                 
                 logger.info(f"🔍 Found user with internal id: {user.user_id}")
                 
-                # Получаем все завершенные разборы пользователя
-                # Проверяем наличие анализа в соответствующих столбцах
+                # Получаем время оплаты за все планеты
+                payment_result = await session.execute(
+                    select(PlanetPayment).where(
+                        PlanetPayment.user_id == telegram_id,
+                        PlanetPayment.payment_type == PaymentType.all_planets,
+                        PlanetPayment.status == PaymentStatus.completed
+                    ).order_by(PlanetPayment.completed_at.desc())
+                )
+                all_planets_payment = payment_result.scalar_one_or_none()
+                
+                if not all_planets_payment:
+                    logger.warning(f"🔍 No all planets payment found for user {telegram_id}")
+                    return None
+                
+                payment_time = all_planets_payment.completed_at
+                logger.info(f"🔍 All planets payment completed at: {payment_time}")
+                
+                # Получаем все разборы, созданные после оплаты за все планеты
                 result = await session.execute(
                     select(Prediction).where(
                         Prediction.user_id == user.user_id,
+                        Prediction.created_at >= payment_time,
                         (Prediction.sun_analysis.isnot(None)) |
                         (Prediction.mercury_analysis.isnot(None)) |
                         (Prediction.venus_analysis.isnot(None)) |
@@ -374,10 +391,12 @@ class AllPlanetsHandler:
                     )
                 )
                 completed_predictions = result.scalars().all()
+                logger.info(f"🔍 Found {len(completed_predictions)} predictions after payment")
 
                 # Определяем, какие планеты уже обработаны
                 completed_planets = set()
                 for prediction in completed_predictions:
+                    logger.info(f"🔍 Prediction {prediction.prediction_id}: sun={bool(prediction.sun_analysis)}, mercury={bool(prediction.mercury_analysis)}, venus={bool(prediction.venus_analysis)}, mars={bool(prediction.mars_analysis)}")
                     if prediction.sun_analysis:
                         completed_planets.add("sun")
                     if prediction.mercury_analysis:
