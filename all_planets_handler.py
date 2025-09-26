@@ -211,11 +211,15 @@ class AllPlanetsHandler:
         user_id = callback.from_user.id
 
         try:
+            logger.info(f"🔍 Next planet button pressed by user {user_id}")
+            
             # Определяем следующую планету
             next_planet = await self._get_next_planet(user_id)
+            logger.info(f"🔍 Next planet determined: {next_planet}")
 
             if next_planet:
                 # Запускаем разбор следующей планеты
+                logger.info(f"🔍 Starting analysis for planet: {next_planet}")
                 await self._start_planet_analysis(user_id, next_planet)
             else:
                 # Все планеты обработаны
@@ -343,6 +347,8 @@ class AllPlanetsHandler:
     async def _get_next_planet(self, telegram_id: int) -> Optional[str]:
         """Определяет следующую планету для анализа"""
         try:
+            logger.info(f"🔍 Getting next planet for user {telegram_id}")
+            
             async with get_session() as session:
                 # Сначала получаем внутренний user_id по telegram_id
                 from models import User
@@ -351,7 +357,10 @@ class AllPlanetsHandler:
                 )
                 user = user_result.scalar_one_or_none()
                 if not user:
+                    logger.warning(f"🔍 User not found for telegram_id {telegram_id}")
                     return None
+                
+                logger.info(f"🔍 Found user with internal id: {user.user_id}")
                 
                 # Получаем все завершенные разборы пользователя
                 # Проверяем наличие анализа в соответствующих столбцах
@@ -378,11 +387,16 @@ class AllPlanetsHandler:
                     if prediction.mars_analysis:
                         completed_planets.add("mars")
 
+                logger.info(f"🔍 Completed planets: {completed_planets}")
+                logger.info(f"🔍 Planet order: {PLANET_ORDER}")
+
                 # Находим следующую планету
                 for planet in PLANET_ORDER:
                     if planet not in completed_planets:
+                        logger.info(f"🔍 Next planet found: {planet}")
                         return planet
 
+                logger.info(f"🔍 All planets completed")
                 return None  # Все планеты обработаны
 
         except Exception as e:

@@ -408,6 +408,12 @@ class SunWorker:
                     )
                 )
                 payment = result.scalar_one_or_none()
+                
+                logger.info(f"🔍 Checking all planets analysis for user {telegram_id}")
+                logger.info(f"🔍 Found payment: {payment is not None}")
+                if payment:
+                    logger.info(f"🔍 Payment details: id={payment.payment_id}, status={payment.status}, type={payment.payment_type}")
+                
                 return payment is not None
         except Exception as e:
             logger.error(f"Error checking all planets analysis: {e}")
@@ -517,9 +523,11 @@ class SunWorker:
                             
                             # Проверяем, является ли это частью разбора всех планет
                             is_all_planets = await self._check_if_all_planets_analysis(user.telegram_id)
+                            logger.info(f"🔍 Sun worker: is_all_planets = {is_all_planets} for user {user.telegram_id}")
                             
                             # Добавляем кнопки для разбора Солнца
                             reply_markup = self.create_sun_analysis_buttons(is_all_planets)
+                            logger.info(f"🔍 Sun worker: created buttons with is_all_planets = {is_all_planets}")
                             
                             success = await self.send_telegram_message(
                                 chat_id=user.telegram_id,
