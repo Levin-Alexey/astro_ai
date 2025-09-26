@@ -456,12 +456,6 @@ class PlanetWorker:
                 ],
                 [
                     {
-                        "text": "❓ Задать вопрос",
-                        "callback_data": "ask_question"
-                    }
-                ],
-                [
-                    {
                         "text": "🔍 Исследовать другие сферы",
                         "callback_data": "explore_other_areas"
                     }

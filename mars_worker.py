@@ -352,6 +352,9 @@ async def send_mars_analysis_to_user(user_telegram_id: int, analysis_text: str):
         analysis_text: Текст анализа
     """
     try:
+        # Проверяем, является ли это частью разбора всех планет
+        is_all_planets = await _check_if_all_planets_analysis(user_telegram_id)
+        
         # Подготавливаем кнопки после разбора Марса
         keyboard = {
             "inline_keyboard": [
@@ -360,27 +363,24 @@ async def send_mars_analysis_to_user(user_telegram_id: int, analysis_text: str):
                         "text": "💡 Получить рекомендации",
                         "callback_data": "get_mars_recommendations"
                     }
-                ],
-                [
-                    {
-                        "text": "❓ Задать вопрос",
-                        "callback_data": "ask_mars_question"
-                    }
-                ],
-                [
-                    {
-                        "text": "🔍 Исследовать другие сферы",
-                        "callback_data": "explore_other_areas"
-                    }
-                ],
-                [
-                    {
-                        "text": "🏠 Главное меню",
-                        "callback_data": "back_to_menu"
-                    }
                 ]
             ]
         }
+        
+        # Для Марса всегда показываем "Исследовать другие сферы" (не "Следующая планета")
+        keyboard["inline_keyboard"].append([
+            {
+                "text": "🔍 Исследовать другие сферы",
+                "callback_data": "explore_other_areas"
+            }
+        ])
+        
+        keyboard["inline_keyboard"].append([
+            {
+                "text": "🏠 Главное меню",
+                "callback_data": "back_to_menu"
+            }
+        ])
         
         # Разбиваем длинный текст на части если нужно
         max_length = 4000  # Лимит Telegram для одного сообщения
@@ -448,6 +448,26 @@ async def send_mars_analysis_to_user(user_telegram_id: int, analysis_text: str):
                         
     except Exception as e:
         logger.error(f"♂️ Error sending Mars analysis to user {user_telegram_id}: {e}")
+
+
+async def _check_if_all_planets_analysis(telegram_id: int) -> bool:
+    """Проверяет, является ли это частью разбора всех планет"""
+    try:
+        from models import PlanetPayment, PaymentStatus, PaymentType
+        
+        async with get_session() as session:
+            result = await session.execute(
+                select(PlanetPayment).where(
+                    PlanetPayment.user_id == telegram_id,
+                    PlanetPayment.payment_type == PaymentType.all_planets,
+                    PlanetPayment.status == PaymentStatus.completed
+                )
+            )
+            payment = result.scalar_one_or_none()
+            return payment is not None
+    except Exception as e:
+        logger.error(f"Error checking all planets analysis: {e}")
+        return False
 
 
 async def main():

@@ -263,11 +263,30 @@ class SunRecommendationsWorker:
         """Отправляет сообщение через Telegram Bot API"""
         url = f"{BOT_API_URL}/sendMessage"
         
+        # Подготавливаем кнопки после рекомендаций
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {
+                        "text": "🔍 Исследовать другие сферы",
+                        "callback_data": "explore_other_areas"
+                    }
+                ],
+                [
+                    {
+                        "text": "🏠 Главное меню",
+                        "callback_data": "back_to_menu"
+                    }
+                ]
+            ]
+        }
+        
         payload = {
             "chat_id": chat_id,
             "text": text,
             "parse_mode": "HTML",
-            "disable_web_page_preview": True
+            "disable_web_page_preview": True,
+            "reply_markup": keyboard
         }
         
         async with aiohttp.ClientSession() as session:

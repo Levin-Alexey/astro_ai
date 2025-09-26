@@ -38,8 +38,17 @@ async def yookassa_webhook(request: Request):
             # Обновляем статус платежа в БД
             await update_payment_status(telegram_id, planet, payment_id)
             
-            # Отправляем уведомление пользователю
-            await notify_user_payment_success(telegram_id, planet)
+            # Если это оплата за все планеты, запускаем последовательный разбор
+            if planet == "all_planets":
+                from all_planets_handler import get_all_planets_handler
+                handler = get_all_planets_handler()
+                if handler:
+                    await handler.handle_payment_success(telegram_id)
+                else:
+                    logger.error("❌ All planets handler not initialized")
+            else:
+                # Отправляем уведомление пользователю для отдельных планет
+                await notify_user_payment_success(telegram_id, planet)
             
             logger.info(f"✅ Payment processed for Telegram ID {telegram_id}, planet: {planet}")
             
@@ -78,7 +87,7 @@ async def update_payment_status(user_id: int, planet: str, external_payment_id: 
                     select(PlanetPayment).where(
                         (PlanetPayment.external_payment_id == external_payment_id) |
                         (
-                            (PlanetPayment.user_id == user.user_id) &
+                            (PlanetPayment.user_id == user.telegram_id) &
                             (PlanetPayment.payment_type == PaymentType.all_planets) &
                             (PlanetPayment.status == PaymentStatus.pending)
                         )
@@ -90,7 +99,7 @@ async def update_payment_status(user_id: int, planet: str, external_payment_id: 
                     select(PlanetPayment).where(
                         (PlanetPayment.external_payment_id == external_payment_id) |
                         (
-                            (PlanetPayment.user_id == user.user_id) &
+                            (PlanetPayment.user_id == user.telegram_id) &
                             (PlanetPayment.payment_type == PaymentType.single_planet) &
                             (PlanetPayment.planet == planet_enum) &
                             (PlanetPayment.status == PaymentStatus.pending)
@@ -114,7 +123,7 @@ async def update_payment_status(user_id: int, planet: str, external_payment_id: 
                 # Попробуем найти хотя бы по пользователю для отладки
                 debug_result = await session.execute(
                     select(PlanetPayment).where(
-                        PlanetPayment.user_id == user.user_id
+                        PlanetPayment.user_id == user.telegram_id
                     ).order_by(PlanetPayment.created_at.desc()).limit(5)
                 )
                 debug_payments = debug_result.scalars().all()

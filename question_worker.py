@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Конфигурация
 RABBITMQ_URL = os.getenv(
-    "RABBITMQ_URL", 
+    "RABBITMQ_URL",
     "amqp://astro_user:astro_password_123@31.128.40.111:5672/"
 )
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
@@ -59,16 +59,16 @@ QUESTION_PROMPT = (
 
 class OpenRouterClient:
     """Клиент для работы с OpenRouter API"""
-    
+
     def __init__(self, api_key: str):
         self.api_key = api_key
         self.url = OPENROUTER_URL
-    
+
     async def generate_answer(
-        self, 
-        analysis: str, 
+        self,
+        analysis: str,
         user_question: str,
-        user_name: str, 
+        user_name: str,
         user_gender: str
     ) -> Dict[str, Any]:
         """

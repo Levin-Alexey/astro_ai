@@ -356,35 +356,62 @@ class SunWorker:
         
         return message
     
-    def create_sun_analysis_buttons(self) -> Dict[str, Any]:
+    def create_sun_analysis_buttons(self, is_all_planets: bool = False) -> Dict[str, Any]:
         """
         Создает кнопки для сообщения с разбором Солнца
+        
+        Args:
+            is_all_planets: Если True, показывает кнопку "Следующая планета" вместо "Исследовать другие сферы"
         
         Returns:
             Словарь с клавиатурой для Telegram API
         """
-        return {
-            "inline_keyboard": [
-                [
-                    {
-                        "text": "💡 Получить рекомендации",
-                        "callback_data": "get_sun_recommendations"
-                    }
-                ],
-                [
-                    {
-                        "text": "❓ Задать вопрос",
-                        "callback_data": "ask_sun_question"
-                    }
-                ],
-                [
-                    {
-                        "text": "🔍 Исследовать другие сферы",
-                        "callback_data": "explore_other_areas"
-                    }
-                ]
+        buttons = [
+            [
+                {
+                    "text": "💡 Получить рекомендации",
+                    "callback_data": "get_sun_recommendations"
+                }
             ]
+        ]
+        
+        if is_all_planets:
+            buttons.append([
+                {
+                    "text": "➡️ Следующая планета",
+                    "callback_data": "next_planet"
+                }
+            ])
+        else:
+            buttons.append([
+                {
+                    "text": "🔍 Исследовать другие сферы",
+                    "callback_data": "explore_other_areas"
+                }
+            ])
+        
+        return {
+            "inline_keyboard": buttons
         }
+    
+    async def _check_if_all_planets_analysis(self, telegram_id: int) -> bool:
+        """Проверяет, является ли это частью разбора всех планет"""
+        try:
+            from models import PlanetPayment, PaymentStatus, PaymentType
+            
+            async with get_session() as session:
+                result = await session.execute(
+                    select(PlanetPayment).where(
+                        PlanetPayment.user_id == telegram_id,
+                        PlanetPayment.payment_type == PaymentType.all_planets,
+                        PlanetPayment.status == PaymentStatus.completed
+                    )
+                )
+                payment = result.scalar_one_or_none()
+                return payment is not None
+        except Exception as e:
+            logger.error(f"Error checking all planets analysis: {e}")
+            return False
     
     async def process_prediction(self, message_data: Dict[str, Any]):
         """Обрабатывает одно предсказание"""
@@ -488,8 +515,11 @@ class SunWorker:
                             # Формируем и отправляем сообщение
                             message = self.format_prediction_message(updated_prediction, user)
                             
+                            # Проверяем, является ли это частью разбора всех планет
+                            is_all_planets = await self._check_if_all_planets_analysis(user.telegram_id)
+                            
                             # Добавляем кнопки для разбора Солнца
-                            reply_markup = self.create_sun_analysis_buttons()
+                            reply_markup = self.create_sun_analysis_buttons(is_all_planets)
                             
                             success = await self.send_telegram_message(
                                 chat_id=user.telegram_id,

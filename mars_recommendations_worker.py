@@ -307,12 +307,6 @@ async def send_mars_recommendations_to_user(user_telegram_id: int, recommendatio
             "inline_keyboard": [
                 [
                     {
-                        "text": "❓ Задать вопрос",
-                        "callback_data": "ask_mars_question"
-                    }
-                ],
-                [
-                    {
                         "text": "🔍 Исследовать другие сферы",
                         "callback_data": "explore_other_areas"
                     }

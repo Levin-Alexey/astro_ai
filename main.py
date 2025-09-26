@@ -39,11 +39,18 @@ from astrology_handlers import (
 )
 from handlers.recommendations_handler import handle_get_recommendations
 from handlers.sun_recommendations_handler import handle_get_sun_recommendations
-from handlers.mercury_recommendations_handler import handle_get_mercury_recommendations
-from handlers.venus_recommendations_handler import handle_get_venus_recommendations
-from handlers.mars_recommendations_handler import handle_get_mars_recommendations
+from handlers.mercury_recommendations_handler import (
+    handle_get_mercury_recommendations
+)
+from handlers.venus_recommendations_handler import (
+    handle_get_venus_recommendations
+)
+from handlers.mars_recommendations_handler import (
+    handle_get_mars_recommendations
+)
 from handlers.ask_question_handler import handle_ask_question
 from payment_handler import init_payment_handler
+from all_planets_handler import init_all_planets_handler
 
 # Настройка логирования
 logging.basicConfig(level=getattr(logging, LOG_LEVEL), format=LOG_FORMAT)
@@ -231,6 +238,12 @@ async def show_main_menu(message_or_callback):
                 InlineKeyboardButton(
                     text="👤 Личный кабинет",
                     callback_data="personal_cabinet"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="❓ Задать вопрос",
+                    callback_data="ask_question"
                 )
             ],
             [
@@ -1467,10 +1480,6 @@ async def on_ask_question(callback: CallbackQuery, state: FSMContext):
     await handle_ask_question(callback, state)
 
 
-@dp.callback_query(F.data == "ask_sun_question")
-async def on_ask_sun_question(callback: CallbackQuery, state: FSMContext):
-    """Обработчик кнопки 'Задать вопрос' для Солнца"""
-    await handle_ask_question(callback, state)
 
 
 @dp.callback_query(F.data == "get_mars_recommendations")
@@ -1491,159 +1500,14 @@ async def on_get_venus_recommendations(callback: CallbackQuery, state: FSMContex
     await handle_get_venus_recommendations(callback, state)
 
 
-@dp.callback_query(F.data == "ask_mercury_question")
-async def on_ask_mercury_question(callback: CallbackQuery, state: FSMContext):
-    """Обработчик кнопки 'Задать вопрос' для Меркурия"""
-    await handle_ask_question(callback, state)
 
 
-@dp.callback_query(F.data == "ask_venus_question")
-async def on_ask_venus_question(callback: CallbackQuery, state: FSMContext):
-    """Обработчик кнопки 'Задать вопрос' для Венеры"""
-    await handle_ask_question(callback, state)
 
 
-@dp.callback_query(F.data == "ask_mars_question")
-async def on_ask_mars_question(callback: CallbackQuery, state: FSMContext):
-    """Обработчик кнопки 'Задать вопрос' для Марса"""
-    await handle_ask_question(callback, state)
 
 
-@dp.callback_query(F.data == "sun_question_custom")
-async def on_sun_question_custom(callback: CallbackQuery, state: FSMContext):
-    """Обработчик кнопки 'Другой вопрос' для Солнца"""
-    await callback.answer()
-    cb_msg = cast(Message, callback.message)
-
-    # Импортируем функцию проверки лимита
-    from handlers.ask_question_handler import (
-        get_user_question_count,
-        MAX_QUESTIONS_PER_USER
-    )
-
-    user_id = callback.from_user.id if callback.from_user else 0
-    question_count = await get_user_question_count(user_id)
-
-    if question_count >= MAX_QUESTIONS_PER_USER:
-        await cb_msg.answer(
-            f"❌ Лимит вопросов исчерпан\n\n"
-            f"Ты уже задал {question_count} вопросов. "
-            f"Максимальное количество: {MAX_QUESTIONS_PER_USER}\n\n"
-            "Но ты можешь получить рекомендации или исследовать другие сферы:",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="💡 Получить рекомендации по Солнцу",
-                            callback_data="get_sun_recommendations"
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text="🔍 Исследовать другие сферы",
-                            callback_data="explore_other_areas"
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text="🏠 Главное меню",
-                            callback_data="back_to_menu"
-                        )
-                    ]
-                ]
-            )
-        )
-        return
-
-    remaining_questions = MAX_QUESTIONS_PER_USER - question_count
-    await cb_msg.answer(
-        f"❓ Задай свой вопрос\n\n"
-        f"Осталось вопросов: {remaining_questions} из "
-        f"{MAX_QUESTIONS_PER_USER}\n\n"
-        "Напиши любой вопрос, и я отвечу на основе твоей астрологической карты! 🔮",
-        reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="🏠 Главное меню",
-                        callback_data="back_to_menu"
-                    )
-                ]
-            ]
-        )
-    )
-
-    # Устанавливаем состояние ожидания вопроса
-    await state.set_state(QuestionForm.waiting_for_question)
 
 
-@dp.callback_query(F.data == "question_custom")
-async def on_question_custom(callback: CallbackQuery, state: FSMContext):
-    """Обработчик кнопки 'Другой вопрос'"""
-    await callback.answer()
-    cb_msg = cast(Message, callback.message)
-    
-    # Импортируем функцию проверки лимита
-    from handlers.ask_question_handler import (
-        get_user_question_count, 
-        MAX_QUESTIONS_PER_USER
-    )
-    
-    user_id = callback.from_user.id if callback.from_user else 0
-    question_count = await get_user_question_count(user_id)
-    
-    if question_count >= MAX_QUESTIONS_PER_USER:
-        await cb_msg.answer(
-            f"❌ Лимит вопросов исчерпан\n\n"
-            f"Ты уже задал {question_count} вопросов. "
-            f"Максимальное количество: {MAX_QUESTIONS_PER_USER}\n\n"
-            "Но ты можешь получить рекомендации или исследовать другие сферы:",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="💡 Получить рекомендации",
-                            callback_data="get_recommendations"
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text="🔍 Исследовать другие сферы",
-                            callback_data="explore_other_areas"
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text="🏠 Главное меню",
-                            callback_data="back_to_menu"
-                        )
-                    ]
-                ]
-            )
-        )
-        return
-    
-    remaining_questions = MAX_QUESTIONS_PER_USER - question_count
-    await cb_msg.answer(
-        f"❓ Задай свой вопрос\n\n"
-        f"Осталось вопросов: {remaining_questions} из "
-        f"{MAX_QUESTIONS_PER_USER}\n\n"
-        "Напиши свой вопрос, связанный с твоим разбором, "
-        "и я отвечу на основе твоей астрологической карты! 💫",
-        reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="🏠 Главное меню",
-                        callback_data="back_to_menu"
-                    )
-                ]
-            ]
-        )
-    )
-    
-    # Устанавливаем состояние ожидания вопроса
-    await state.set_state(QuestionForm.waiting_for_question)
 
 
 @dp.message(QuestionForm.waiting_for_question)
@@ -1823,29 +1687,26 @@ async def on_explore_all_planets(callback: CallbackQuery):
     has_access = await check_user_payment_access(user_id, "all_planets")
     
     if has_access:
-        # Если доступ есть, отправляем разборы всех планет
-        await cb_msg.answer(
-            "🌌 Все планеты\n\n"
-            "🔮 Генерирую ваши персональные астрологические разборы "
-            "по всем планетам...\n\n"
-            "⏳ Пожалуйста, подождите, это может занять несколько минут.\n\n"
-            "📋 Будут проанализированы:\n"
-            "☀️ Солнце\n"
-            "☿️ Меркурий\n"
-            "♀️ Венера\n"
-            "♂️ Марс",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="🔙 Назад",
-                            callback_data="explore_other_areas"
-                        )
+        # Если доступ есть, запускаем последовательный разбор планет
+        from all_planets_handler import get_all_planets_handler
+        
+        handler = get_all_planets_handler()
+        if handler:
+            await handler.handle_payment_success(user_id)
+        else:
+            await cb_msg.answer(
+                "❌ Ошибка: обработчик всех планет не инициализирован",
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text="🔙 Назад",
+                                callback_data="explore_other_areas"
+                            )
+                        ]
                     ]
-                ]
+                )
             )
-        )
-        # TODO: Здесь будет вызов LLM для генерации разборов всех планет
         logger.info(
             f"Пользователь {user_id} запросил разборы всех планет (доступ есть)"
         )
@@ -1855,7 +1716,7 @@ async def on_explore_all_planets(callback: CallbackQuery):
             "🌌 Все планеты\n\n"
             "💰 Для получения персональных астрологических разборов "
             "по всем планетам необходимо произвести оплату.\n\n"
-            "💸 Стоимость: 222₽ (вместо 5555₽)\n\n"
+            "💸 Стоимость: 5₽ (тестовая цена)\n\n"
             "🎁 Бонус: неограниченное количество вопросов по своим разборам\n\n"
             "📋 Что вы получите:\n"
             "☀️ Солнце - энергия, уверенность, самооценка\n"
@@ -1866,7 +1727,7 @@ async def on_explore_all_planets(callback: CallbackQuery):
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="💳 Оплатить 222₽",
+                            text="💳 Оплатить 5₽",
                             callback_data="pay_all_planets"
                         )
                     ],
@@ -2880,30 +2741,53 @@ async def on_pay_venus(callback: CallbackQuery):
 @dp.callback_query(F.data == "pay_all_planets")
 async def on_pay_all_planets(callback: CallbackQuery):
     """Обработчик кнопки оплаты за все планеты"""
-    await callback.answer()
-    cb_msg = cast(Message, callback.message)
-    user_id = callback.from_user.id
+    from all_planets_handler import get_all_planets_handler
     
-    # TODO: Здесь будет интеграция с платежной системой
-    # Пока что просто показываем сообщение
-    await cb_msg.answer(
-        "💳 Оплата за все планеты\n\n"
-        "🔧 Интеграция с платежной системой в разработке...\n\n"
-        "💰 Стоимость: 222₽\n"
-        "🎁 Бонус: неограниченные вопросы\n"
-        "⏳ После оплаты вы получите разборы всех планет",
-        reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="🔙 Назад",
-                        callback_data="explore_all_planets"
-                    )
+    handler = get_all_planets_handler()
+    if handler:
+        await handler.handle_payment_request(callback)
+    else:
+        await callback.answer()
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.answer(
+            "❌ Ошибка: обработчик всех планет не инициализирован",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔙 Назад",
+                            callback_data="explore_all_planets"
+                        )
+                    ]
                 ]
-            ]
+            )
         )
-    )
-    logger.info(f"Пользователь {user_id} нажал оплату за все планеты")
+
+
+@dp.callback_query(F.data == "next_planet")
+async def on_next_planet(callback: CallbackQuery):
+    """Обработчик кнопки 'Следующая планета'"""
+    from all_planets_handler import get_all_planets_handler
+    
+    handler = get_all_planets_handler()
+    if handler:
+        await handler.handle_next_planet(callback)
+    else:
+        await callback.answer()
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.answer(
+            "❌ Ошибка: обработчик всех планет не инициализирован",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🏠 Главное меню",
+                            callback_data="back_to_menu"
+                        )
+                    ]
+                ]
+            )
+        )
 
 
 async def check_user_payment_access(user_id: int, planet: str) -> bool:
@@ -2948,6 +2832,13 @@ async def main():
     payment_handler = init_payment_handler(bot)
     logger.info(
         f"Payment handler инициализирован: {payment_handler is not None}"
+    )
+
+    # Инициализируем обработчик всех планет
+    all_planets_handler = init_all_planets_handler(bot, payment_handler)
+    await all_planets_handler.initialize()
+    logger.info(
+        f"All planets handler инициализирован: {all_planets_handler is not None}"
     )
 
     # Автоинициализация схемы (однократно/идемпотентно):

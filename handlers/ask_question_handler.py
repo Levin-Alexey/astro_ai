@@ -27,7 +27,6 @@ async def get_user_question_count(user_id: int) -> int:
         result = await session.execute(
             select(func.count(Prediction.prediction_id)).where(
                 Prediction.user_id == user_id,
-                Prediction.planet == Planet.moon,
                 Prediction.prediction_type == PredictionType.free,
                 Prediction.is_active.is_(True),
                 Prediction.is_deleted.is_(False),
@@ -137,6 +136,7 @@ async def handle_ask_question(callback: CallbackQuery, state: FSMContext):
     
     # Отправляем сообщение с предложением задать вопрос
     remaining_questions = MAX_QUESTIONS_PER_USER - question_count
+    
     if callback.message:
         await callback.message.answer(
             f"❓ Задай свой вопрос\n\n"
