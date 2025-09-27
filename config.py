@@ -32,3 +32,7 @@ PAYMENT_SECRET_KEY = os.getenv(
 )
 PAYMENT_TEST_AMOUNT = 1000  # 10 рублей в копейках
 PAYMENT_CURRENCY = "RUB"
+
+# Настройки AstrologyAPI
+ASTROLOGY_API_USER_ID = os.getenv("ASTROLOGY_API_USER_ID", "645593")
+ASTROLOGY_API_KEY = os.getenv("ASTROLOGY_API_KEY", "ded745efefef2a72f117e0c32d1f1c853dc485ac")

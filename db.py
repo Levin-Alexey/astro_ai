@@ -82,8 +82,8 @@ async def ensure_birth_date_nullable(engine: AsyncEngine) -> None:
         FROM pg_attribute a
         JOIN pg_class c ON a.attrelid = c.oid
         JOIN pg_namespace n ON c.relnamespace = n.oid
-        WHERE c.relname = 'users' AND a.attname = 'birth_date' "
-        "AND n.nspname = 'public'"
+        WHERE c.relname = 'users' AND a.attname = 'birth_date'
+        AND n.nspname = 'public'
         """
     )
     async with engine.begin() as conn:
