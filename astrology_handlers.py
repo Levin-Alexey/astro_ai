@@ -1003,11 +1003,11 @@ async def start_moon_analysis(callback: CallbackQuery, state: FSMContext):
         )
 
     try:
-        # Инициализируем клиент AstrologyAPI
+        # Инициализируем клиент AstrologyAPIПравить
         # TODO: Вынести в конфиг
         api_client = AstrologyAPIClient(
-            user_id="645005",
-            api_key="f6c596e32bb8e29feebbae1c460aaf0913208c7c"
+            user_id="645593",
+            api_key="ded745efefef2a72f117e0c32d1f1c853dc485ac"
         )
 
         # Получаем данные от AstrologyAPI
@@ -1150,8 +1150,8 @@ async def start_sun_analysis(user_id: int) -> Optional[Dict[str, Any]]:
         # Инициализируем клиент AstrologyAPI
         # TODO: Вынести в конфиг
         api_client = AstrologyAPIClient(
-            user_id="645005",
-            api_key="f6c596e32bb8e29feebbae1c460aaf0913208c7c"
+            user_id="645593",
+            api_key="ded745efefef2a72f117e0c32d1f1c853dc485ac"
         )
 
         # Получаем данные от AstrologyAPI
@@ -1225,8 +1225,8 @@ async def start_mercury_analysis(user_id: int) -> Optional[Dict[str, Any]]:
         # Инициализируем клиент AstrologyAPI
         # TODO: Вынести в конфиг
         api_client = AstrologyAPIClient(
-            user_id="645005",
-            api_key="f6c596e32bb8e29feebbae1c460aaf0913208c7c"
+            user_id="645593",
+            api_key="ded745efefef2a72f117e0c32d1f1c853dc485ac"
         )
 
         # Получаем данные от AstrologyAPI
@@ -1354,8 +1354,8 @@ async def start_venus_analysis(user_id: int) -> Optional[Dict[str, Any]]:
         # Инициализируем клиент AstrologyAPI
         # TODO: Вынести в конфиг
         api_client = AstrologyAPIClient(
-            user_id="645005",
-            api_key="f6c596e32bb8e29feebbae1c460aaf0913208c7c"
+            user_id="645593",
+            api_key="ded745efefef2a72f117e0c32d1f1c853dc485ac"
         )
 
         # Получаем данные от AstrologyAPI
@@ -1446,8 +1446,8 @@ async def start_mars_analysis(user_id: int) -> Optional[Dict[str, Any]]:
         # Инициализируем клиент AstrologyAPI
         # TODO: Вынести в конфиг
         api_client = AstrologyAPIClient(
-            user_id="645005",
-            api_key="f6c596e32bb8e29feebbae1c460aaf0913208c7c"
+            user_id="645593",
+            api_key="ded745efefef2a72f117e0c32d1f1c853dc485ac"
         )
 
         # Получаем данные от AstrologyAPI
