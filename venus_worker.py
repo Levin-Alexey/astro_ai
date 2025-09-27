@@ -92,7 +92,7 @@ class OpenRouterClient:
         logger.info(f"♀️ LLM Input - Full prompt length: {len(prompt)} characters")
         
         payload = {
-            "model": "deepseek/deepseek-chat-v3.1:free",
+            "model": "tngtech/deepseek-r1t-chimera",
             "messages": [
                 {
                     "role": "user",
@@ -105,7 +105,7 @@ class OpenRouterClient:
         
         # Резервные модели при ошибке 429
         fallback_models = [
-            "deepseek/deepseek-chat-v3.1:free",
+            "tngtech/deepseek-r1t-chimera",
             "anthropic/claude-3-haiku:beta",
             "meta-llama/llama-3.1-8b-instruct:free",
             "microsoft/wizardlm-2-8x22b:free"

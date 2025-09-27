@@ -18,6 +18,7 @@ from aiogram.fsm.context import FSMContext
 
 from db import get_session
 from models import User, Prediction, Planet, PredictionType
+from config import ASTROLOGY_API_USER_ID, ASTROLOGY_API_KEY
 from sqlalchemy import select
 from queue_sender import send_prediction_to_queue
 import aio_pika
@@ -1003,11 +1004,10 @@ async def start_moon_analysis(callback: CallbackQuery, state: FSMContext):
         )
 
     try:
-        # Инициализируем клиент AstrologyAPIПравить
-        # TODO: Вынести в конфиг
+        # Инициализируем клиент AstrologyAPI
         api_client = AstrologyAPIClient(
-            user_id="645593",
-            api_key="ded745efefef2a72f117e0c32d1f1c853dc485ac"
+            user_id=ASTROLOGY_API_USER_ID,
+            api_key=ASTROLOGY_API_KEY
         )
 
         # Получаем данные от AstrologyAPI
@@ -1148,10 +1148,9 @@ async def start_sun_analysis(user_id: int) -> Optional[Dict[str, Any]]:
             return None
 
         # Инициализируем клиент AstrologyAPI
-        # TODO: Вынести в конфиг
         api_client = AstrologyAPIClient(
-            user_id="645593",
-            api_key="ded745efefef2a72f117e0c32d1f1c853dc485ac"
+            user_id=ASTROLOGY_API_USER_ID,
+            api_key=ASTROLOGY_API_KEY
         )
 
         # Получаем данные от AstrologyAPI
@@ -1223,10 +1222,9 @@ async def start_mercury_analysis(user_id: int) -> Optional[Dict[str, Any]]:
             return None
 
         # Инициализируем клиент AstrologyAPI
-        # TODO: Вынести в конфиг
         api_client = AstrologyAPIClient(
-            user_id="645593",
-            api_key="ded745efefef2a72f117e0c32d1f1c853dc485ac"
+            user_id=ASTROLOGY_API_USER_ID,
+            api_key=ASTROLOGY_API_KEY
         )
 
         # Получаем данные от AstrologyAPI
@@ -1352,10 +1350,9 @@ async def start_venus_analysis(user_id: int) -> Optional[Dict[str, Any]]:
             return None
 
         # Инициализируем клиент AstrologyAPI
-        # TODO: Вынести в конфиг
         api_client = AstrologyAPIClient(
-            user_id="645593",
-            api_key="ded745efefef2a72f117e0c32d1f1c853dc485ac"
+            user_id=ASTROLOGY_API_USER_ID,
+            api_key=ASTROLOGY_API_KEY
         )
 
         # Получаем данные от AstrologyAPI
@@ -1444,10 +1441,9 @@ async def start_mars_analysis(user_id: int) -> Optional[Dict[str, Any]]:
             return None
 
         # Инициализируем клиент AstrologyAPI
-        # TODO: Вынести в конфиг
         api_client = AstrologyAPIClient(
-            user_id="645593",
-            api_key="ded745efefef2a72f117e0c32d1f1c853dc485ac"
+            user_id=ASTROLOGY_API_USER_ID,
+            api_key=ASTROLOGY_API_KEY
         )
 
         # Получаем данные от AstrologyAPI
