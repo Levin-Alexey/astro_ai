@@ -115,7 +115,7 @@ class OpenRouterClient:
         logger.info(f"Sun Recommendations LLM Input - Full prompt length: {len(prompt)} characters")
         
         payload = {
-            "model": "tngtech/deepseek-r1t-chimera",
+            "model": "deepseek/deepseek-chat-v3.1:free",
             "messages": [
                 {
                     "role": "user",

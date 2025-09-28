@@ -132,7 +132,7 @@ class OpenRouterClient:
         )
         
         payload = {
-            "model": "tngtech/deepseek-r1t-chimera",
+            "model": "deepseek/deepseek-chat-v3.1:free",
             "messages": [
                 {
                     "role": "user",
