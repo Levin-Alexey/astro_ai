@@ -343,17 +343,21 @@ async def handle_additional_birth_time_accuracy_callback(callback: CallbackQuery
 async def handle_additional_birth_time_local(message: Message, state: FSMContext):
     """Обработчик ввода времени рождения для дополнительного профиля"""
     text = (message.text or "").strip()
+    logger.info(f"handle_additional_birth_time_local called with text='{text}'")
 
     # Получаем данные из состояния
     state_data = await state.get_data()
     accuracy = state_data.get("additional_birth_time_accuracy", "exact")
+    logger.info(f"Current accuracy: {accuracy}")
 
     try:
         # Парсим время
         time_obj = datetime.strptime(text, "%H:%M").time()
+        logger.info(f"Parsed time: {time_obj}")
 
         # Сохраняем время во временных данных
         await state.update_data(additional_pending_birth_time=time_obj.isoformat())
+        logger.info(f"Saved time to state: {time_obj.isoformat()}")
 
         # Показываем для подтверждения
         time_str = time_obj.strftime("%H:%M")
@@ -444,6 +448,18 @@ async def complete_additional_profile_creation(
         if birth_time_str:
             birth_time_local = time.fromisoformat(birth_time_str)
             logger.info(f"Birth time: {birth_time_local}")
+        
+        # Валидация: если выбрано точное/примерное время, оно должно быть введено
+        if birth_time_accuracy in ["exact", "approx"] and not birth_time_local:
+            logger.error(
+                f"Missing birth time for accuracy={birth_time_accuracy}"
+            )
+            await message.answer(
+                "❌ Ошибка: не указано время рождения!\n\n"
+                "Пожалуйста, начните создание профиля заново с /start"
+            )
+            await state.clear()
+            return
 
         # Вычисляем timezone и знак зодиака ДО создания профиля
         birth_datetime_utc = None
@@ -896,6 +912,12 @@ async def handle_additional_birth_time_callback(callback: CallbackQuery, state: 
     if action == "confirm":
         # Завершаем создание профиля
         user_id = callback.from_user.id if callback.from_user else 0
+        
+        # Логируем состояние перед созданием профиля
+        state_data = await state.get_data()
+        logger.info(f"Confirming birth time, state keys: {list(state_data.keys())}")
+        logger.info(f"additional_pending_birth_time in state: {state_data.get('additional_pending_birth_time')}")
+        
         if callback.message:
             await complete_additional_profile_creation(
                 callback.message, state, user_id
