@@ -513,7 +513,7 @@ async def complete_additional_profile_creation(
                 birth_datetime_utc=birth_datetime_utc,
                 tzid=tzid,
                 tz_offset_minutes=tz_offset_minutes,
-                zodiac_sign=zodiac_sign_enum.value,  # Используем .value для русского названия
+                zodiac_sign=zodiac_sign_enum,  # Передаем сам enum, как в основном профиле
                 is_active=True
             )
             
