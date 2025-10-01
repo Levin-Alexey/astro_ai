@@ -9,7 +9,7 @@ from aiogram.types import (
     CallbackQuery,
     User as TgUser,
 )
-from typing import cast
+from typing import cast, Optional
 from db import (
     init_engine,
     dispose_engine,
@@ -24,7 +24,14 @@ from db import (
 from models import create_all
 from sqlalchemy.ext.asyncio import AsyncEngine
 from db import get_session
-from models import User as DbUser, Gender, ZodiacSignRu
+from models import (
+    User as DbUser,
+    Gender,
+    ZodiacSignRu,
+    Prediction,
+    Planet,
+    PredictionType,
+)
 from sqlalchemy import select
 from datetime import datetime, timezone, date
 from aiogram.fsm.context import FSMContext
@@ -1970,7 +1977,7 @@ async def get_last_moon_prediction_profile_id(user_id: int) -> Optional[int]:
     async with get_session() as session:
         # Находим пользователя
         user_result = await session.execute(
-            select(User).where(User.telegram_id == user_id)
+            select(DbUser).where(DbUser.telegram_id == user_id)
         )
         user = user_result.scalar_one_or_none()
         
