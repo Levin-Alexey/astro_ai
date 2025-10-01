@@ -1461,8 +1461,7 @@ async def on_buy_analysis_self(callback: CallbackQuery, state: FSMContext):
     
     from handlers.buy_analysis_handler import handle_buy_analysis_self
     
-    cb_msg = cast(Message, callback.message)
-    await handle_buy_analysis_self(cb_msg, state)
+    await handle_buy_analysis_self(callback, state)
 
 
 @dp.callback_query(F.data == "add_new_date")
@@ -1470,8 +1469,7 @@ async def on_add_new_date(callback: CallbackQuery, state: FSMContext):
     """Обработчик кнопки 'Добавить новую дату'"""
     await callback.answer()
     
-    cb_msg = cast(Message, callback.message)
-    await start_additional_profile_creation(cb_msg, state)
+    await start_additional_profile_creation(callback, state)
 
 
 @dp.callback_query(F.data == "new_analysis")

@@ -113,12 +113,19 @@ def build_additional_gender_kb(selected: str | None) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-async def start_additional_profile_creation(message: Message, state: FSMContext):
+async def start_additional_profile_creation(callback: CallbackQuery, state: FSMContext):
     """
     Начинает процесс создания дополнительного профиля.
     Аналогично основному опросу, но для дополнительного профиля.
     """
-    user_id = message.from_user.id if message.from_user else 0
+    # Получаем user_id из callback (пользователь, нажавший кнопку)
+    user_id = callback.from_user.id if callback.from_user else 0
+    
+    # Получаем message для отправки ответа
+    message = callback.message
+    if not message:
+        logger.error("callback.message is None in start_additional_profile_creation")
+        return
 
     # Проверяем, что пользователь существует в БД
     async with get_session() as session:
@@ -367,12 +374,21 @@ async def handle_additional_birth_time_local(message: Message, state: FSMContext
         )
 
 
-async def complete_additional_profile_creation(message: Message, state: FSMContext):
+async def complete_additional_profile_creation(
+    message: Message, state: FSMContext, user_id: int | None = None
+):
     """
     Завершает создание дополнительного профиля и запускает анализ Луны.
     Аналогично завершению основного профиля.
+    
+    Args:
+        message: Message объект для отправки ответов
+        state: FSM контекст
+        user_id: ID пользователя (опционально, если не указан - берется из message.from_user)
     """
-    user_id = message.from_user.id if message.from_user else 0
+    if user_id is None:
+        user_id = message.from_user.id if message.from_user else 0
+    
     if user_id == 0:
         await message.answer("Ошибка: не удалось определить пользователя")
         await state.clear()
@@ -768,7 +784,11 @@ async def handle_additional_birth_time_callback(callback: CallbackQuery, state: 
 
     if action == "confirm":
         # Завершаем создание профиля
-        await complete_additional_profile_creation(callback.message, state)
+        user_id = callback.from_user.id if callback.from_user else 0
+        if callback.message:
+            await complete_additional_profile_creation(
+                callback.message, state, user_id
+            )
     elif action == "retry":
         # Возвращаемся к вводу времени
         state_data = await state.get_data()
@@ -796,7 +816,11 @@ async def handle_additional_time_unknown_callback(callback: CallbackQuery, state
 
     if action == "confirm":
         # Завершаем создание профиля без времени
-        await complete_additional_profile_creation(callback.message, state)
+        user_id = callback.from_user.id if callback.from_user else 0
+        if callback.message:
+            await complete_additional_profile_creation(
+                callback.message, state, user_id
+            )
     elif action == "retry":
         # Возвращаемся к выбору точности времени
         await state.set_state(

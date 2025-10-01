@@ -4,7 +4,7 @@
 
 import logging
 
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
 logger = logging.getLogger(__name__)
@@ -59,14 +59,21 @@ async def show_buy_analysis_menu(message: Message):
     )
 
 
-async def handle_buy_analysis_self(message: Message, state: FSMContext):
+async def handle_buy_analysis_self(callback: CallbackQuery, state: FSMContext):
     """
     Обработчик кнопки "Купить разбор для себя".
     Показывает выбор планет для покупки на основе текущих данных пользователя.
     """
     try:
-        # Получаем ID пользователя из сообщения
-        user_id = message.from_user.id if message.from_user else 0
+        # Получаем ID пользователя из callback (пользователь, нажавший кнопку)
+        user_id = callback.from_user.id if callback.from_user else 0
+        logger.info(f"handle_buy_analysis_self вызвана для user_id={user_id}")
+        
+        # Получаем message для отправки ответа
+        message = callback.message
+        if not message:
+            logger.error("callback.message is None")
+            return
         
         # Получаем информацию о пользователе и его разборах
         from db import get_session
@@ -75,12 +82,15 @@ async def handle_buy_analysis_self(message: Message, state: FSMContext):
         
         async with get_session() as session:
             # Находим пользователя
+            logger.info(f"Ищем пользователя с telegram_id={user_id}")
             user_result = await session.execute(
                 select(User).where(User.telegram_id == user_id)
             )
             user = user_result.scalar_one_or_none()
+            logger.info(f"Результат поиска пользователя: {user}")
             
             if not user:
+                logger.error(f"Пользователь с telegram_id={user_id} не найден в БД")
                 await message.answer(
                     "❌ Пользователь не найден в базе данных.\n"
                     "Попробуйте перезапустить бота командой /start"
@@ -215,27 +225,32 @@ async def handle_buy_analysis_self(message: Message, state: FSMContext):
         logger.error(
             f"Ошибка в покупке разборов для пользователя {user_id}: {e}"
         )
-        await message.answer(
-            "❌ Произошла ошибка при загрузке каталога разборов.\n"
-            "Попробуйте позже или обратитесь в службу заботы.",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="🔙 Назад",
-                            callback_data="buy_analysis"
-                        )
+        if message:
+            await message.answer(
+                "❌ Произошла ошибка при загрузке каталога разборов.\n"
+                "Попробуйте позже или обратитесь в службу заботы.",
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text="🔙 Назад",
+                                callback_data="buy_analysis"
+                            )
+                        ]
                     ]
-                ]
+                )
             )
-        )
 
 
-async def handle_add_new_date(message: Message, state: FSMContext):
+async def handle_add_new_date(callback: CallbackQuery, state: FSMContext):
     """
     Обработчик кнопки "Добавить новую дату".
     Здесь будет логика создания разбора для другого человека.
     """
+    message = callback.message
+    if not message:
+        return
+    
     await message.answer(
         "📅 **Добавить новую дату**\n\n"
         "Эта функция будет реализована в следующих шагах.\n\n"
