@@ -654,17 +654,27 @@ async def get_user_astrology_data(user_id: int, profile_id: Optional[int] = None
     Returns:
         Dict с данными пользователя или None если данные неполные
     """
+    logger.info(f"get_user_astrology_data called for user_id={user_id}, profile_id={profile_id}")
+    
     async with get_session() as session:
         if profile_id:
             # Получаем данные дополнительного профиля
+            logger.info(f"Fetching additional profile {profile_id}")
             result = await session.execute(
                 select(AdditionalProfile).where(AdditionalProfile.profile_id == profile_id)
             )
             profile = result.scalar_one_or_none()
             
             if not profile:
-                logger.warning(f"Additional profile {profile_id} not found")
+                logger.error(f"Additional profile {profile_id} not found")
                 return None
+            
+            logger.info(
+                f"Profile found: birth_date={profile.birth_date}, "
+                f"birth_time={profile.birth_time_local}, "
+                f"lat={profile.birth_lat}, lon={profile.birth_lon}, "
+                f"tz_offset={profile.tz_offset_minutes}"
+            )
             
             # Проверяем, что у нас есть все необходимые данные
             if not all([
@@ -674,7 +684,12 @@ async def get_user_astrology_data(user_id: int, profile_id: Optional[int] = None
                 profile.birth_lon is not None,
                 profile.tz_offset_minutes is not None
             ]):
-                logger.warning(f"Additional profile {profile_id} has incomplete birth data")
+                logger.error(
+                    f"Additional profile {profile_id} has incomplete birth data: "
+                    f"date={bool(profile.birth_date)}, time={bool(profile.birth_time_local)}, "
+                    f"lat={profile.birth_lat is not None}, lon={profile.birth_lon is not None}, "
+                    f"tz_offset={profile.tz_offset_minutes is not None}"
+                )
                 return None
 
             # Подготавливаем данные для API
@@ -1202,11 +1217,15 @@ async def start_sun_analysis(user_id: int, profile_id: Optional[int] = None) -> 
         Dict с данными астрологического API или None при ошибке
     """
     try:
+        logger.info(f"start_sun_analysis called for user_id={user_id}, profile_id={profile_id}")
+        
         # Получаем данные пользователя
         user_data = await get_user_astrology_data(user_id, profile_id)
         if not user_data:
-            logger.warning(f"Cannot get astrology data for user {user_id}, profile_id: {profile_id}")
+            logger.error(f"Cannot get astrology data for user {user_id}, profile_id: {profile_id}")
             return None
+        
+        logger.info(f"User data retrieved successfully for profile_id={profile_id}")
 
         # Инициализируем клиент AstrologyAPI
         api_client = AstrologyAPIClient(

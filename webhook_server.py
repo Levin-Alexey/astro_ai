@@ -37,10 +37,12 @@ async def yookassa_webhook(request: Request):
                 return {"status": "error", "detail": "Invalid Telegram ID"}
 
             # Обновляем статус платежа в БД
+            logger.info(f"🔥 Updating payment status: telegram_id={telegram_id}, planet={planet}, profile_id={profile_id}")
             await update_payment_status(telegram_id, planet, payment_id)
             
             # Если это оплата за все планеты, запускаем последовательный разбор
             if planet == "all_planets":
+                logger.info(f"🔥 Processing ALL PLANETS payment")
                 from all_planets_handler import get_all_planets_handler
                 handler = get_all_planets_handler()
                 if handler:
@@ -50,6 +52,7 @@ async def yookassa_webhook(request: Request):
             else:
                 # Отправляем уведомление пользователю для отдельных планет
                 profile_id_int = int(profile_id) if profile_id else None
+                logger.info(f"🔥 Processing SINGLE PLANET payment: planet={planet}, profile_id={profile_id_int}")
                 await notify_user_payment_success(telegram_id, planet, profile_id_int)
             
             logger.info(f"✅ Payment processed for Telegram ID {telegram_id}, planet: {planet}")
