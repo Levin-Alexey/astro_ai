@@ -631,9 +631,10 @@ async def start_moon_analysis_for_profile(message: Message, profile_id: int):
         # Получаем данные дополнительного профиля
         profile_data = await get_additional_profile_astrology_data(profile_id)
         if not profile_data:
+            logger.error(f"No profile data for profile_id={profile_id} - cannot start moon analysis")
             await message.answer(
-                "❌ Не хватает данных для анализа!\n\n"
-                "Попробуй создать профиль заново."
+                "❌ Для анализа Луны необходимо точное время рождения!\n\n"
+                "Этот профиль создан без времени рождения, поэтому анализ Луны недоступен."
             )
             return
 
