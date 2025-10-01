@@ -1989,7 +1989,7 @@ async def get_last_moon_prediction_profile_id(user_id: int) -> Optional[int]:
         if not user:
             return None
         
-        # Находим последний разбор Луны
+        # Находим последний разбор Луны (может быть несколько для разных профилей)
         prediction_result = await session.execute(
             select(Prediction).where(
                 Prediction.user_id == user.user_id,
@@ -1999,7 +1999,7 @@ async def get_last_moon_prediction_profile_id(user_id: int) -> Optional[int]:
                 Prediction.is_deleted.is_(False)
             ).order_by(Prediction.created_at.desc())
         )
-        prediction = prediction_result.scalar_one_or_none()
+        prediction = prediction_result.scalars().first()  # Берем первый (последний созданный)
         
         if not prediction:
             return None
