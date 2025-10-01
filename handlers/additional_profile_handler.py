@@ -448,26 +448,40 @@ async def complete_additional_profile_creation(
             )
 
             session.add(additional_profile)
-            await session.flush()  # Получаем ID профиля
-
-            # Рассчитываем UTC время рождения
+            
+            # Рассчитываем UTC время рождения ДО flush
             if birth_time_local and geocode_result:
-                tz_result = resolve_timezone(
-                    lat=geocode_result["lat"],
-                    lon=geocode_result["lon"],
-                    local_date=birth_date,
-                    local_time=birth_time_local
-                )
-                if tz_result:
-                    additional_profile.birth_datetime_utc = tz_result.birth_datetime_utc
-                    additional_profile.tzid = tz_result.tzid
-                    additional_profile.tz_offset_minutes = tz_result.offset_minutes
+                try:
+                    tz_result = resolve_timezone(
+                        lat=geocode_result["lat"],
+                        lon=geocode_result["lon"],
+                        local_date=birth_date,
+                        local_time=birth_time_local
+                    )
+                    if tz_result:
+                        additional_profile.birth_datetime_utc = tz_result.birth_datetime_utc
+                        additional_profile.tzid = tz_result.tzid
+                        additional_profile.tz_offset_minutes = tz_result.offset_minutes
+                        logger.info(
+                            f"Timezone resolved: {tz_result.tzid}, "
+                            f"offset={tz_result.offset_minutes}, "
+                            f"utc={tz_result.birth_datetime_utc}"
+                        )
+                except Exception as tz_error:
+                    logger.error(f"Timezone resolve error: {tz_error}")
 
             # Рассчитываем знак зодиака
             zodiac_sign = zodiac_sign_ru_for_date(birth_date)
             additional_profile.zodiac_sign = zodiac_sign
-
-            await session.commit()
+            
+            # Теперь сохраняем всё вместе
+            try:
+                await session.commit()
+                logger.info(f"Additional profile committed successfully")
+            except Exception as commit_error:
+                logger.error(f"Commit error: {commit_error}", exc_info=True)
+                await session.rollback()
+                raise
 
             profile_id = additional_profile.profile_id
 
