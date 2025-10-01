@@ -27,8 +27,17 @@ class PaymentHandler:
         self.test_amount = PAYMENT_TEST_AMOUNT
         self.currency = PAYMENT_CURRENCY
     
-    def create_payment_data(self, user_id: int, planet: str, description: str) -> Dict[str, Any]:
+    def create_payment_data(self, user_id: int, planet: str, description: str, profile_id: int = None) -> Dict[str, Any]:
         """Создает данные для платежа"""
+        metadata = {
+            "user_id": str(user_id),
+            "planet": planet
+        }
+        
+        # Добавляем profile_id если указан
+        if profile_id:
+            metadata["profile_id"] = str(profile_id)
+        
         return {
             "amount": {
                 "value": f"{self.test_amount / 100:.2f}",
@@ -40,10 +49,7 @@ class PaymentHandler:
             },
             "capture": True,
             "description": description,
-            "metadata": {
-                "user_id": str(user_id),
-                "planet": planet
-            }
+            "metadata": metadata
         }
     
     async def create_payment(

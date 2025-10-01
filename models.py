@@ -11,7 +11,7 @@ SQLAlchemy модели для базы данных проекта.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, date, time
 
 from sqlalchemy import (
@@ -20,6 +20,7 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     DateTime,
+    ForeignKey,
     Index,
     SmallInteger,
     Text,
@@ -28,7 +29,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM, DOUBLE_PRECISION
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 
@@ -84,6 +85,84 @@ class PaymentStatus(str, Enum):
     processing = "processing"     # Обрабатывается LLM
     analysis_failed = "analysis_failed"  # Оплата прошла, но LLM не сработал
     delivered = "delivered"       # Разбор доставлен пользователю
+
+
+class AdditionalProfile(Base):
+    __tablename__ = "additional_profiles"
+
+    # PK
+    profile_id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True, autoincrement=True
+    )
+
+    # Связь с владельцем (Telegram пользователем)
+    owner_user_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("users.user_id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    # Данные профиля (копируем из User)
+    full_name: Mapped[Optional[str]] = mapped_column(Text)
+    gender: Mapped[Gender] = mapped_column(
+        PG_ENUM(Gender, name="gender", create_type=False, native_enum=True),
+        server_default=text("'unknown'"),
+        nullable=False,
+    )
+    birth_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    birth_time_local: Mapped[Optional[time]] = mapped_column(Time)
+    birth_time_accuracy: Mapped[str] = mapped_column(
+        Text,
+        server_default=text("'exact'"),
+        nullable=False,
+    )
+    unknown_time_strategy: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Геоданные
+    birth_city_input: Mapped[Optional[str]] = mapped_column(Text)
+    birth_place_name: Mapped[Optional[str]] = mapped_column(Text)
+    birth_country_code: Mapped[Optional[str]] = mapped_column(Text)
+    birth_lat: Mapped[Optional[float]] = mapped_column(DOUBLE_PRECISION)
+    birth_lon: Mapped[Optional[float]] = mapped_column(DOUBLE_PRECISION)
+    tzid: Mapped[Optional[str]] = mapped_column(Text)
+    tz_offset_minutes: Mapped[Optional[int]] = mapped_column(SmallInteger)
+    birth_datetime_utc: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
+
+    # Метаданные гео-провайдера
+    geo_provider: Mapped[Optional[str]] = mapped_column(Text)
+    geo_provider_place_id: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Знак зодиака
+    zodiac_sign: Mapped[Optional[ZodiacSignRu]] = mapped_column(
+        PG_ENUM(
+            ZodiacSignRu,
+            name="zodiac_sign_ru",
+            create_type=False,
+            native_enum=True,
+        ),
+        nullable=True,
+    )
+
+    # Служебные поля
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    # Связи
+    owner: Mapped["User"] = relationship(
+        "User", back_populates="additional_profiles"
+    )
+    predictions: Mapped[List["Prediction"]] = relationship(
+        "Prediction", back_populates="profile"
+    )
 
 
 class User(Base):
@@ -190,6 +269,13 @@ class User(Base):
         ),
     )
 
+    # Связи
+    additional_profiles: Mapped[List["AdditionalProfile"]] = relationship(
+        "AdditionalProfile",
+        back_populates="owner",
+        cascade="all, delete-orphan"
+    )
+
     def __repr__(self) -> str:  # pragma: no cover - вспомогательное
         return (
             f"<User id={self.user_id} tg={self.telegram_id} "
@@ -207,6 +293,13 @@ class Prediction(Base):
 
     # Связь с пользователем
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+    # Связь с дополнительным профилем (nullable)
+    profile_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("additional_profiles.profile_id", ondelete="CASCADE"),
+        nullable=True
+    )
 
     # Планета для которой делается предсказание
     planet: Mapped[Planet] = mapped_column(
@@ -304,6 +397,12 @@ class Prediction(Base):
         ),
     )
 
+    # Связи
+    profile: Mapped[Optional["AdditionalProfile"]] = relationship(
+        "AdditionalProfile",
+        back_populates="predictions"
+    )
+
     def __repr__(self) -> str:  # pragma: no cover - вспомогательное
         return (
             f"<Prediction id={self.prediction_id} user={self.user_id} "
@@ -321,6 +420,13 @@ class PlanetPayment(Base):
 
     # Связь с пользователем
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+    # Связь с дополнительным профилем (nullable)
+    profile_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("additional_profiles.profile_id", ondelete="CASCADE"),
+        nullable=True
+    )
 
     # Тип платежа
     payment_type: Mapped[PaymentType] = mapped_column(
@@ -379,19 +485,19 @@ class PlanetPayment(Base):
     analysis_started_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True)
     )
-    
+
     analysis_completed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True)
     )
-    
+
     delivered_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True)
     )
-    
+
     retry_count: Mapped[int] = mapped_column(
         BigInteger, server_default=text("0"), nullable=False
     )
-    
+
     last_error: Mapped[Optional[str]] = mapped_column(Text)
 
     # Дополнительные данные

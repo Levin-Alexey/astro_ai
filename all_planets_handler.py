@@ -187,19 +187,19 @@ class AllPlanetsHandler:
                     )
                 )
 
-    async def handle_payment_success(self, user_id: int) -> None:
+    async def handle_payment_success(self, user_id: int, profile_id: Optional[int] = None) -> None:
         """Обрабатывает успешную оплату и запускает разбор планет"""
         try:
             logger.info(
                 f"🌌 Начинаем последовательный разбор планет для "
-                f"пользователя {user_id}"
+                f"пользователя {user_id}, profile_id: {profile_id}"
             )
 
             # Обновляем статус платежа в БД
-            await self._update_payment_status(user_id)
+            await self._update_payment_status(user_id, profile_id)
 
             # Запускаем разбор первой планеты (Солнце)
-            await self._start_planet_analysis(user_id, "sun")
+            await self._start_planet_analysis(user_id, "sun", profile_id)
 
         except Exception as e:
             logger.error(f"❌ Ошибка при обработке успешной оплаты: {e}")
@@ -283,15 +283,23 @@ class AllPlanetsHandler:
             await session.commit()
             logger.info(f"💾 Платеж сохранен в БД: {payment_id}")
 
-    async def _update_payment_status(self, user_id: int) -> None:
+    async def _update_payment_status(self, user_id: int, profile_id: Optional[int] = None) -> None:
         """Обновляет статус платежа на 'completed'"""
         async with get_session() as session:
+            query_conditions = [
+                PlanetPayment.user_id == user_id,
+                PlanetPayment.payment_type == PaymentType.all_planets,
+                PlanetPayment.status == PaymentStatus.pending
+            ]
+            
+            # Добавляем условие для profile_id если указан
+            if profile_id:
+                query_conditions.append(PlanetPayment.profile_id == profile_id)
+            else:
+                query_conditions.append(PlanetPayment.profile_id.is_(None))
+            
             result = await session.execute(
-                select(PlanetPayment).where(
-                    PlanetPayment.user_id == user_id,
-                    PlanetPayment.payment_type == PaymentType.all_planets,
-                    PlanetPayment.status == PaymentStatus.pending
-                )
+                select(PlanetPayment).where(*query_conditions)
             )
             payment = result.scalar_one_or_none()
 
@@ -300,14 +308,14 @@ class AllPlanetsHandler:
                 payment.completed_at = datetime.now(timezone.utc)
                 await session.commit()
                 logger.info(
-                    f"✅ Статус платежа обновлен для пользователя {user_id}"
+                    f"✅ Статус платежа обновлен для пользователя {user_id}, profile_id: {profile_id}"
                 )
 
-    async def _start_planet_analysis(self, user_id: int, planet: str) -> None:
+    async def _start_planet_analysis(self, user_id: int, planet: str, profile_id: Optional[int] = None) -> None:
         """Запускает анализ конкретной планеты"""
         try:
             logger.info(
-                f"🚀 Запуск анализа {planet} для пользователя {user_id}"
+                f"🚀 Запуск анализа {planet} для пользователя {user_id}, profile_id: {profile_id}"
             )
 
             # Отправляем уведомление о начале анализа
@@ -320,13 +328,13 @@ class AllPlanetsHandler:
 
             # Запускаем соответствующий анализ
             if planet == "sun":
-                astrology_data = await start_sun_analysis(user_id)
+                astrology_data = await start_sun_analysis(user_id, profile_id)
             elif planet == "mercury":
-                astrology_data = await start_mercury_analysis(user_id)
+                astrology_data = await start_mercury_analysis(user_id, profile_id)
             elif planet == "venus":
-                astrology_data = await start_venus_analysis(user_id)
+                astrology_data = await start_venus_analysis(user_id, profile_id)
             elif planet == "mars":
-                astrology_data = await start_mars_analysis(user_id)
+                astrology_data = await start_mars_analysis(user_id, profile_id)
             else:
                 logger.error(f"❌ Неизвестная планета: {planet}")
                 return

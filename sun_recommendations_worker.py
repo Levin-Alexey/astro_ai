@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from db import get_session, init_engine, dispose_engine
-from models import Prediction, User, Planet, PredictionType
+from models import Prediction, User, Planet, PredictionType, AdditionalProfile
 from config import BOT_TOKEN
 
 # Настройка логирования
@@ -217,13 +217,33 @@ class SunRecommendationsWorker:
                 "gender": user.gender.value if user.gender else "unknown"
             }
     
+    async def get_additional_profile_info(self, profile_id: int) -> Optional[Dict[str, Any]]:
+        """Получает информацию о дополнительном профиле из БД"""
+        async with get_session() as session:
+            result = await session.execute(
+                select(AdditionalProfile).where(AdditionalProfile.profile_id == profile_id)
+            )
+            profile = result.scalar_one_or_none()
+            
+            if not profile:
+                logger.warning(f"Additional profile with ID {profile_id} not found")
+                return None
+            
+            return {
+                "profile_id": profile.profile_id,
+                "owner_user_id": profile.owner_user_id,
+                "full_name": profile.full_name,
+                "gender": profile.gender.value if profile.gender else "unknown"
+            }
+    
     async def save_sun_recommendations(
         self, 
         prediction_id: int, 
         recommendations: str,
         llm_model: str,
         tokens_used: int,
-        temperature: float = 0.7
+        temperature: float = 0.7,
+        profile_id: Optional[int] = None
     ) -> bool:
         """Сохраняет рекомендации по Солнцу в базу данных"""
         async with get_session() as session:
@@ -246,7 +266,8 @@ class SunRecommendationsWorker:
                 llm_model=llm_model,
                 llm_tokens_used=tokens_used,
                 llm_temperature=temperature,
-                expires_at=prediction.expires_at  # Наследуем срок действия от основного предсказания
+                expires_at=prediction.expires_at,  # Наследуем срок действия от основного предсказания
+                profile_id=profile_id  # Добавляем поддержку дополнительных профилей
             )
             
             session.add(recommendations_prediction)
@@ -315,11 +336,15 @@ class SunRecommendationsWorker:
                 logger.error(f"Telegram API request failed: {e}")
                 return False
     
-    def format_sun_recommendations_message(self, recommendations: str, user_name: str) -> str:
+    def format_sun_recommendations_message(self, recommendations: str, user_name: str, profile_name: Optional[str] = None) -> str:
         """Форматирует сообщение с рекомендациями по Солнцу"""
         from datetime import datetime
         
-        message = f"☀️ Персональные рекомендации по Солнцу для {user_name}\n\n"
+        if profile_name:
+            message = f"☀️ Персональные рекомендации по Солнцу для {profile_name}\n\n"
+        else:
+            message = f"☀️ Персональные рекомендации по Солнцу для {user_name}\n\n"
+        
         message += recommendations
         
         # Добавляем время создания
@@ -333,25 +358,38 @@ class SunRecommendationsWorker:
         prediction_id = message_data.get("prediction_id")
         user_id = message_data.get("user_telegram_id")
         sun_analysis = message_data.get("sun_analysis")
+        profile_id = message_data.get("profile_id")
         
         if not prediction_id or not user_id or not sun_analysis:
             logger.error(f"Invalid message data: {message_data}")
             return
         
-        logger.info(f"Processing sun recommendations for prediction {prediction_id}, user {user_id}")
+        logger.info(f"Processing sun recommendations for prediction {prediction_id}, user {user_id}, profile_id: {profile_id}")
         
-        # Получаем информацию о пользователе
-        user_info = await self.get_user_info(user_id)
-        if not user_info:
-            logger.error(f"User with telegram_id {user_id} not found")
-            return
+        # Определяем данные для LLM в зависимости от типа профиля
+        if profile_id:
+            profile_info = await self.get_additional_profile_info(profile_id)
+            if not profile_info:
+                logger.error(f"Additional profile {profile_id} not found")
+                return
+            llm_user_name = profile_info["full_name"] or "Друг"
+            llm_user_gender = profile_info["gender"]
+            logger.info(f"Using additional profile data for recommendations: {llm_user_name}, gender: {llm_user_gender}")
+        else:
+            user_info = await self.get_user_info(user_id)
+            if not user_info:
+                logger.error(f"User with telegram_id {user_id} not found")
+                return
+            llm_user_name = user_info["first_name"] or "Друг"
+            llm_user_gender = user_info["gender"]
+            logger.info(f"Using main user data for recommendations: {llm_user_name}, gender: {llm_user_gender}")
         
         # Генерируем рекомендации через OpenRouter (если доступен)
         if self.openrouter_client:
             llm_result = await self.openrouter_client.generate_sun_recommendations(
                 sun_analysis=sun_analysis,
-                user_name=user_info["first_name"] or "Друг",
-                user_gender=user_info["gender"]
+                user_name=llm_user_name,
+                user_gender=llm_user_gender
             )
             
             if not llm_result["success"]:
@@ -364,14 +402,22 @@ class SunRecommendationsWorker:
                 recommendations=llm_result["content"],
                 llm_model=llm_result.get("model", "deepseek-chat-v3.1"),
                 tokens_used=llm_result.get("usage", {}).get("total_tokens", 0),
-                temperature=0.7
+                temperature=0.7,
+                profile_id=profile_id
             )
             
             # Отправляем рекомендации пользователю
             try:
+                # Определяем имя для сообщения
+                profile_name = None
+                if profile_id:
+                    # Для дополнительного профиля используем имя профиля
+                    profile_name = llm_user_name
+                
                 message = self.format_sun_recommendations_message(
                     recommendations=llm_result["content"],
-                    user_name=user_info["first_name"] or "Друг"
+                    user_name=llm_user_name,
+                    profile_name=profile_name
                 )
                 
                 success = await self.send_telegram_message(

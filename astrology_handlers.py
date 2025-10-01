@@ -17,7 +17,7 @@ from aiogram.types import CallbackQuery
 from aiogram.fsm.context import FSMContext
 
 from db import get_session
-from models import User, Prediction, Planet, PredictionType
+from models import User, Prediction, Planet, PredictionType, AdditionalProfile
 from config import ASTROLOGY_API_USER_ID, ASTROLOGY_API_KEY
 from sqlalchemy import select
 from queue_sender import send_prediction_to_queue
@@ -643,60 +643,118 @@ class AstrologyAPIClient:
                 raise
 
 
-async def get_user_astrology_data(user_id: int) -> Optional[Dict[str, Any]]:
+async def get_user_astrology_data(user_id: int, profile_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
     """
     Получить данные пользователя для астрологических расчетов
 
     Args:
         user_id: ID пользователя в Telegram
+        profile_id: ID дополнительного профиля (если None, используется основной профиль)
 
     Returns:
         Dict с данными пользователя или None если данные неполные
     """
     async with get_session() as session:
-        result = await session.execute(
-            select(User).where(User.telegram_id == user_id)
-        )
-        user = result.scalar_one_or_none()
+        if profile_id:
+            # Получаем данные дополнительного профиля
+            result = await session.execute(
+                select(AdditionalProfile).where(AdditionalProfile.profile_id == profile_id)
+            )
+            profile = result.scalar_one_or_none()
+            
+            if not profile:
+                logger.warning(f"Additional profile {profile_id} not found")
+                return None
+            
+            # Проверяем, что у нас есть все необходимые данные
+            if not all([
+                profile.birth_date,
+                profile.birth_time_local,
+                profile.birth_lat is not None,
+                profile.birth_lon is not None,
+                profile.tz_offset_minutes is not None
+            ]):
+                logger.warning(f"Additional profile {profile_id} has incomplete birth data")
+                return None
 
-        if not user:
-            logger.warning(f"User {user_id} not found")
-            return None
+            # Подготавливаем данные для API
+            birth_date = profile.birth_date
+            birth_time = profile.birth_time_local
 
-        # Проверяем, что у нас есть все необходимые данные
-        if not all([
-            user.birth_date,
-            user.birth_time_local,
-            user.birth_lat is not None,
-            user.birth_lon is not None,
-            user.tz_offset_minutes is not None
-        ]):
-            logger.warning(f"User {user_id} has incomplete birth data")
-            return None
+            # Проверяем типы (уже проверено выше, но для mypy)
+            assert birth_date is not None
+            assert birth_time is not None
+            assert profile.birth_lat is not None
+            assert profile.birth_lon is not None
+            assert profile.tz_offset_minutes is not None
 
-        # Подготавливаем данные для API
-        birth_date = user.birth_date
-        birth_time = user.birth_time_local
+            # Получаем telegram_id владельца профиля
+            owner_result = await session.execute(
+                select(User).where(User.user_id == profile.owner_user_id)
+            )
+            owner = owner_result.scalar_one_or_none()
+            
+            if not owner:
+                logger.warning(f"Owner of additional profile {profile_id} not found")
+                return None
 
-        # Проверяем типы (уже проверено выше, но для mypy)
-        assert birth_date is not None
-        assert birth_time is not None
-        assert user.birth_lat is not None
-        assert user.birth_lon is not None
-        assert user.tz_offset_minutes is not None
+            return {
+                "day": birth_date.day,
+                "month": birth_date.month,
+                "year": birth_date.year,
+                "hour": birth_time.hour,
+                "minute": birth_time.minute,
+                "lat": float(profile.birth_lat),
+                "lon": float(profile.birth_lon),
+                "tzone": profile.tz_offset_minutes,
+                "telegram_id": owner.telegram_id,
+                "profile_id": profile_id
+            }
+        else:
+            # Получаем данные основного пользователя
+            result = await session.execute(
+                select(User).where(User.telegram_id == user_id)
+            )
+            user = result.scalar_one_or_none()
 
-        return {
-            "day": birth_date.day,
-            "month": birth_date.month,
-            "year": birth_date.year,
-            "hour": birth_time.hour,
-            "minute": birth_time.minute,
-            "lat": float(user.birth_lat),
-            "lon": float(user.birth_lon),
-            "tzone": float(user.tz_offset_minutes) / 60.0,  # Минуты->часы
-            "user_id": user.user_id,
-            "telegram_id": user.telegram_id
-        }
+            if not user:
+                logger.warning(f"User {user_id} not found")
+                return None
+
+            # Проверяем, что у нас есть все необходимые данные
+            if not all([
+                user.birth_date,
+                user.birth_time_local,
+                user.birth_lat is not None,
+                user.birth_lon is not None,
+                user.tz_offset_minutes is not None
+            ]):
+                logger.warning(f"User {user_id} has incomplete birth data")
+                return None
+
+            # Подготавливаем данные для API
+            birth_date = user.birth_date
+            birth_time = user.birth_time_local
+
+            # Проверяем типы (уже проверено выше, но для mypy)
+            assert birth_date is not None
+            assert birth_time is not None
+            assert user.birth_lat is not None
+            assert user.birth_lon is not None
+            assert user.tz_offset_minutes is not None
+
+            return {
+                "day": birth_date.day,
+                "month": birth_date.month,
+                "year": birth_date.year,
+                "hour": birth_time.hour,
+                "minute": birth_time.minute,
+                "lat": float(user.birth_lat),
+                "lon": float(user.birth_lon),
+                "tzone": float(user.tz_offset_minutes) / 60.0,  # Минуты->часы
+                "user_id": user.user_id,
+                "telegram_id": user.telegram_id
+            }
 
 
 async def save_astrology_data(
@@ -707,7 +765,8 @@ async def save_astrology_data(
     llm_model: Optional[str] = None,
     llm_tokens_used: Optional[int] = None,
     llm_temperature: Optional[float] = None,
-    expires_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None,
+    profile_id: Optional[int] = None
 ) -> int:
     """
     Сохранить астрологические данные в базу
@@ -745,7 +804,8 @@ async def save_astrology_data(
             llm_model=llm_model,
             llm_tokens_used=llm_tokens_used,
             llm_temperature=llm_temperature,
-            expires_at=expires_at
+            expires_at=expires_at,
+            profile_id=profile_id  # Добавляем поддержку дополнительных профилей
         )
 
         session.add(prediction)
@@ -1130,21 +1190,22 @@ ID предсказания: {prediction_id}"""
             )
 
 
-async def start_sun_analysis(user_id: int) -> Optional[Dict[str, Any]]:
+async def start_sun_analysis(user_id: int, profile_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
     """
     Запускает анализ Солнца для пользователя
 
     Args:
         user_id: ID пользователя в Telegram
+        profile_id: ID дополнительного профиля (если None, используется основной профиль)
 
     Returns:
         Dict с данными астрологического API или None при ошибке
     """
     try:
         # Получаем данные пользователя
-        user_data = await get_user_astrology_data(user_id)
+        user_data = await get_user_astrology_data(user_id, profile_id)
         if not user_data:
-            logger.warning(f"Cannot get astrology data for user {user_id}")
+            logger.warning(f"Cannot get astrology data for user {user_id}, profile_id: {profile_id}")
             return None
 
         # Инициализируем клиент AstrologyAPI
@@ -1183,13 +1244,14 @@ async def start_sun_analysis(user_id: int) -> Optional[Dict[str, Any]]:
             prediction_type=PredictionType.paid,
             content=raw_content,
             llm_model="astrology_api",
-            expires_at=datetime.now(timezone.utc) + timedelta(days=30)  # 30 дней доступа
+            expires_at=datetime.now(timezone.utc) + timedelta(days=30),  # 30 дней доступа
+            profile_id=profile_id
         )
 
         # Отправляем в очередь для обработки LLM
         try:
             await send_sun_prediction_to_queue(
-                prediction_id, user_data["telegram_id"]
+                prediction_id, user_data["telegram_id"], profile_id
             )
             logger.info(
                 f"Sun prediction {prediction_id} sent to queue for LLM processing"
@@ -1278,7 +1340,7 @@ async def start_mercury_analysis(user_id: int) -> Optional[Dict[str, Any]]:
         return None
 
 
-async def send_sun_prediction_to_queue(prediction_id: int, user_id: int) -> bool:
+async def send_sun_prediction_to_queue(prediction_id: int, user_id: int, profile_id: Optional[int] = None) -> bool:
     """Отправляет предсказание Солнца в очередь sun_predictions"""
     try:
         # Подключение к RabbitMQ
@@ -1296,6 +1358,10 @@ async def send_sun_prediction_to_queue(prediction_id: int, user_id: int) -> bool
             "prediction_id": prediction_id,
             "user_id": user_id
         }
+        
+        # Добавляем profile_id если указан
+        if profile_id:
+            message_data["profile_id"] = profile_id
         
         # Отправляем сообщение
         await channel.default_exchange.publish(

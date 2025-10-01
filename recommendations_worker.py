@@ -16,7 +16,7 @@ import aiohttp
 from sqlalchemy import select
 
 from db import get_session, init_engine, dispose_engine
-from models import Prediction, User, Planet, PredictionType
+from models import Prediction, User, Planet, PredictionType, AdditionalProfile
 from config import BOT_TOKEN
 
 # Настройка логирования
@@ -219,13 +219,33 @@ class RecommendationsWorker:
                 "gender": user.gender.value if user.gender else "unknown"
             }
     
+    async def get_additional_profile_info(self, profile_id: int) -> Optional[Dict[str, Any]]:
+        """Получает информацию о дополнительном профиле из БД"""
+        async with get_session() as session:
+            result = await session.execute(
+                select(AdditionalProfile).where(AdditionalProfile.profile_id == profile_id)
+            )
+            profile = result.scalar_one_or_none()
+            
+            if not profile:
+                logger.warning(f"Additional profile with ID {profile_id} not found")
+                return None
+            
+            return {
+                "profile_id": profile.profile_id,
+                "owner_user_id": profile.owner_user_id,
+                "full_name": profile.full_name,
+                "gender": profile.gender.value if profile.gender else "unknown"
+            }
+    
     async def save_recommendations(
         self, 
         prediction_id: int, 
         recommendations: str,
         llm_model: str,
         tokens_used: int,
-        temperature: float = 0.7
+        temperature: float = 0.7,
+        profile_id: Optional[int] = None
     ) -> bool:
         """Сохраняет рекомендации в базу данных"""
         async with get_session() as session:
@@ -242,6 +262,7 @@ class RecommendationsWorker:
             # Создаем новую запись для рекомендаций
             recommendations_prediction = Prediction(
                 user_id=prediction.user_id,
+                profile_id=profile_id,  # Добавляем поддержку profile_id
                 planet=Planet.moon,  # Рекомендации привязаны к Луне
                 prediction_type=PredictionType.free,
                 recommendations=recommendations,
@@ -254,7 +275,7 @@ class RecommendationsWorker:
             session.add(recommendations_prediction)
             await session.commit()
             
-            logger.info(f"Recommendations saved for prediction {prediction_id}")
+            logger.info(f"Recommendations saved for prediction {prediction_id}, profile_id: {profile_id}")
             return True
     
     async def send_telegram_message(
@@ -317,11 +338,16 @@ class RecommendationsWorker:
                 logger.error(f"Telegram API request failed: {e}")
                 return False
     
-    def format_recommendations_message(self, recommendations: str, user_name: str) -> str:
+    def format_recommendations_message(self, recommendations: str, user_name: str, profile_name: Optional[str] = None) -> str:
         """Форматирует сообщение с рекомендациями"""
         from datetime import datetime
         
-        message = f"💡 Персональные рекомендации для {user_name}\n\n"
+        # Адаптируем заголовок для дополнительного профиля или основного
+        if profile_name:
+            message = f"💡 Персональные рекомендации для {profile_name}\n\n"
+        else:
+            message = f"💡 Персональные рекомендации для {user_name}\n\n"
+        
         message += recommendations
         
         # Добавляем время создания
@@ -335,12 +361,13 @@ class RecommendationsWorker:
         prediction_id = message_data.get("prediction_id")
         user_id = message_data.get("user_telegram_id")
         moon_analysis = message_data.get("moon_analysis")
+        profile_id = message_data.get("profile_id")  # Новый параметр для дополнительных профилей
         
         if not prediction_id or not user_id or not moon_analysis:
             logger.error(f"Invalid message data: {message_data}")
             return
         
-        logger.info(f"Processing recommendations for prediction {prediction_id}, user {user_id}")
+        logger.info(f"Processing recommendations for prediction {prediction_id}, user {user_id}, profile_id: {profile_id}")
         
         # Получаем информацию о пользователе
         user_info = await self.get_user_info(user_id)
@@ -350,10 +377,26 @@ class RecommendationsWorker:
         
         # Генерируем рекомендации через OpenRouter (если доступен)
         if self.openrouter_client:
+            # Определяем имя и пол для LLM в зависимости от типа профиля
+            if profile_id:
+                # Для дополнительного профиля получаем данные профиля
+                profile_info = await self.get_additional_profile_info(profile_id)
+                if not profile_info:
+                    logger.error(f"Additional profile {profile_id} not found")
+                    return
+                llm_user_name = profile_info["full_name"] or "Друг"
+                llm_user_gender = profile_info["gender"]
+                logger.info(f"Using additional profile data for recommendations: {llm_user_name}, gender: {llm_user_gender}")
+            else:
+                # Для основного профиля используем данные пользователя
+                llm_user_name = user_info["first_name"] or "Друг"
+                llm_user_gender = user_info["gender"]
+                logger.info(f"Using main user data for recommendations: {llm_user_name}, gender: {llm_user_gender}")
+            
             llm_result = await self.openrouter_client.generate_recommendations(
                 moon_analysis=moon_analysis,
-                user_name=user_info["first_name"] or "Друг",
-                user_gender=user_info["gender"]
+                user_name=llm_user_name,
+                user_gender=llm_user_gender
             )
             
             if not llm_result["success"]:
@@ -366,14 +409,21 @@ class RecommendationsWorker:
                 recommendations=llm_result["content"],
                 llm_model=llm_result.get("model", "deepseek-chat-v3.1"),
                 tokens_used=llm_result.get("usage", {}).get("total_tokens", 0),
-                temperature=0.7
+                temperature=0.7,
+                profile_id=profile_id
             )
             
             # Отправляем рекомендации пользователю
             try:
+                # Определяем имя профиля для форматирования сообщения
+                profile_name = None
+                if profile_id and profile_info:
+                    profile_name = profile_info["full_name"]
+                
                 message = self.format_recommendations_message(
                     recommendations=llm_result["content"],
-                    user_name=user_info["first_name"] or "Друг"
+                    user_name=user_info["first_name"] or "Друг",
+                    profile_name=profile_name
                 )
                 
                 success = await self.send_telegram_message(

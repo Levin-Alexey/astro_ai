@@ -23,6 +23,7 @@ async def yookassa_webhook(request: Request):
             metadata = data["object"].get("metadata", {})
             user_id = metadata.get("user_id")
             planet = metadata.get("planet")
+            profile_id = metadata.get("profile_id")  # Может быть None для основного профиля
             payment_id = data["object"].get("id")
             
             if not user_id or not planet:
@@ -48,7 +49,8 @@ async def yookassa_webhook(request: Request):
                     logger.error("❌ All planets handler not initialized")
             else:
                 # Отправляем уведомление пользователю для отдельных планет
-                await notify_user_payment_success(telegram_id, planet)
+                profile_id_int = int(profile_id) if profile_id else None
+                await notify_user_payment_success(telegram_id, planet, profile_id_int)
             
             logger.info(f"✅ Payment processed for Telegram ID {telegram_id}, planet: {planet}")
             
@@ -135,7 +137,7 @@ async def update_payment_status(user_id: int, planet: str, external_payment_id: 
         logger.error(f"❌ Error updating payment status: {e}")
 
 
-async def notify_user_payment_success(user_id: int, planet: str):
+async def notify_user_payment_success(user_id: int, planet: str, profile_id: int = None):
     """Отправляет уведомление пользователю об успешной оплате"""
     try:
         from main import bot
@@ -160,7 +162,7 @@ async def notify_user_payment_success(user_id: int, planet: str):
         await bot.send_message(user_id, message)
         
         # Запускаем генерацию разбора в фоне
-        asyncio.create_task(generate_planet_analysis(user_id, planet))
+        asyncio.create_task(generate_planet_analysis(user_id, planet, profile_id))
         
         logger.info(f"✅ Notification sent to user {user_id} for planet {planet}")
         
@@ -168,20 +170,20 @@ async def notify_user_payment_success(user_id: int, planet: str):
         logger.error(f"❌ Error sending notification to user {user_id}: {e}")
 
 
-async def generate_planet_analysis(user_id: int, planet: str):
+async def generate_planet_analysis(user_id: int, planet: str, profile_id: int = None):
     """Генерирует астрологический разбор планеты через воркер"""
     try:
-        logger.info(f"🚀 Starting planet analysis for user {user_id}, planet {planet}")
+        logger.info(f"🚀 Starting planet analysis for user {user_id}, planet {planet}, profile_id: {profile_id}")
         
         # Для Солнца вызываем start_sun_analysis
         if planet == "sun":
             from astrology_handlers import start_sun_analysis
-            astrology_data = await start_sun_analysis(user_id)
+            astrology_data = await start_sun_analysis(user_id, profile_id)
             
             if astrology_data:
-                logger.info(f"✅ Sun analysis data generated for user {user_id}")
+                logger.info(f"✅ Sun analysis data generated for user {user_id}, profile_id: {profile_id}")
             else:
-                logger.error(f"❌ Failed to generate sun analysis for user {user_id}")
+                logger.error(f"❌ Failed to generate sun analysis for user {user_id}, profile_id: {profile_id}")
         
         # Для Меркурия вызываем start_mercury_analysis
         elif planet == "mercury":

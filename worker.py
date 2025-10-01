@@ -9,16 +9,14 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime
 from typing import Dict, Any, Optional
 
 import aio_pika
 import aiohttp
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from db import get_session, init_engine, dispose_engine
-from models import Prediction, User, Planet, PredictionType
+from models import Prediction, User, Planet, AdditionalProfile
 from config import BOT_TOKEN
 
 # Настройка логирования
@@ -203,6 +201,25 @@ class PredictionWorker:
                 "gender": user.gender.value if user.gender else "unknown"
             }
     
+    async def get_additional_profile_info(self, profile_id: int) -> Optional[Dict[str, Any]]:
+        """Получает информацию о дополнительном профиле из БД"""
+        async with get_session() as session:
+            result = await session.execute(
+                select(AdditionalProfile).where(AdditionalProfile.profile_id == profile_id)
+            )
+            profile = result.scalar_one_or_none()
+            
+            if not profile:
+                logger.warning(f"Additional profile with ID {profile_id} not found")
+                return None
+            
+            return {
+                "profile_id": profile.profile_id,
+                "owner_user_id": profile.owner_user_id,
+                "full_name": profile.full_name,
+                "gender": profile.gender.value if profile.gender else "unknown"
+            }
+    
     async def update_prediction(
         self, 
         prediction_id: int, 
@@ -301,13 +318,14 @@ class PredictionWorker:
                 logger.error(f"Telegram API request failed: {e}")
                 return False
     
-    def format_prediction_message(self, prediction: Prediction, user: User) -> str:
+    def format_prediction_message(self, prediction: Prediction, user: User, profile_name: Optional[str] = None) -> str:
         """
         Форматирует сообщение с предсказанием
         
         Args:
             prediction: Объект предсказания
             user: Объект пользователя
+            profile_name: Имя дополнительного профиля (если есть)
             
         Returns:
             Отформатированное сообщение
@@ -332,11 +350,14 @@ class PredictionWorker:
         emoji = planet_emoji.get(prediction.planet, "🔮")
         name = planet_name.get(prediction.planet, prediction.planet.value)
         
-        # Основное сообщение
-        message = f"{emoji} Твой персональный разбор {name}\n\n"
+        # Основное сообщение - адаптируем под дополнительный профиль или основной
+        if profile_name:
+            message = f"{emoji} Разбор {name} для {profile_name}\n\n"
+        else:
+            message = f"{emoji} Твой персональный разбор {name}\n\n"
         
-        # Добавляем имя пользователя если есть
-        if user.first_name:
+        # Добавляем приветствие только для основного профиля
+        if not profile_name and user.first_name:
             message = f"Привет, {user.first_name}! {message}"
         
         # Добавляем содержимое предсказания из соответствующего столбца
@@ -398,12 +419,13 @@ class PredictionWorker:
         """Обрабатывает одно предсказание"""
         prediction_id = message_data.get("prediction_id")
         user_id = message_data.get("user_id")
+        profile_id = message_data.get("profile_id")  # Новый параметр для дополнительных профилей
         
         if not prediction_id or not user_id:
             logger.error(f"Invalid message data: {message_data}")
             return
         
-        logger.info(f"Processing prediction {prediction_id} for user {user_id}")
+        logger.info(f"Processing prediction {prediction_id} for user {user_id}, profile_id: {profile_id}")
         
         # Получаем информацию о пользователе по telegram_id
         user_info = await self.get_user_info(user_id)
@@ -424,18 +446,34 @@ class PredictionWorker:
             
             # Извлекаем данные астрологии из content
             content = prediction.content
-            if "Moon Analysis Data:" in content:
+            if content and "Moon Analysis Data:" in content:
                 # Извлекаем только данные для LLM
                 astrology_data = content.split("Moon Analysis Data:")[1].split("Raw AstrologyAPI data:")[0].strip()
             else:
-                astrology_data = content
+                astrology_data = content or ""
         
         # Генерируем анализ через OpenRouter (если доступен)
         if self.openrouter_client:
+            # Определяем имя и пол для LLM в зависимости от типа профиля
+            if profile_id:
+                # Для дополнительного профиля получаем данные профиля
+                profile_info = await self.get_additional_profile_info(profile_id)
+                if not profile_info:
+                    logger.error(f"Additional profile {profile_id} not found")
+                    return
+                llm_user_name = profile_info["full_name"] or "Друг"
+                llm_user_gender = profile_info["gender"]
+                logger.info(f"Using additional profile data: {llm_user_name}, gender: {llm_user_gender}")
+            else:
+                # Для основного профиля используем данные пользователя
+                llm_user_name = user_info["first_name"] or "Друг"
+                llm_user_gender = user_info["gender"]
+                logger.info(f"Using main user data: {llm_user_name}, gender: {llm_user_gender}")
+            
             llm_result = await self.openrouter_client.generate_moon_analysis(
                 astrology_data=astrology_data,
-                user_name=user_info["first_name"] or "Друг",
-                user_gender=user_info["gender"]
+                user_name=llm_user_name,
+                user_gender=llm_user_gender
             )
             
             if not llm_result["success"]:
@@ -468,8 +506,17 @@ class PredictionWorker:
                         user = user_result.scalar_one_or_none()
                         
                         if user:
+                            # Определяем имя профиля для форматирования сообщения
+                            profile_name = None
+                            if profile_id:
+                                # Получаем данные профиля если еще не получены
+                                if not profile_info:
+                                    profile_info = await self.get_additional_profile_info(profile_id)
+                                if profile_info:
+                                    profile_name = profile_info["full_name"]
+                            
                             # Формируем и отправляем сообщение
-                            message = self.format_prediction_message(updated_prediction, user)
+                            message = self.format_prediction_message(updated_prediction, user, profile_name)
                             
                             # Добавляем кнопки только для разбора Луны
                             reply_markup = None

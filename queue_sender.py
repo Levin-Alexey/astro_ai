@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+from typing import Optional
 
 import aio_pika
 
@@ -155,7 +156,8 @@ class QueueSender:
         self,
         prediction_id: int,
         user_telegram_id: int,
-        moon_analysis: str
+        moon_analysis: str,
+        profile_id: Optional[int] = None
     ) -> bool:
         """
         Отправляет запрос на генерацию рекомендаций в очередь
@@ -164,6 +166,7 @@ class QueueSender:
             prediction_id: ID исходного предсказания
             user_telegram_id: Telegram ID пользователя
             moon_analysis: Разбор Луны для генерации рекомендаций
+            profile_id: ID дополнительного профиля (опционально)
 
         Returns:
             True если сообщение отправлено успешно
@@ -177,6 +180,10 @@ class QueueSender:
             "moon_analysis": moon_analysis,
             "timestamp": asyncio.get_event_loop().time()
         }
+        
+        # Добавляем profile_id если указан
+        if profile_id:
+            message_data["profile_id"] = profile_id
 
         try:
             message = aio_pika.Message(
@@ -205,7 +212,8 @@ class QueueSender:
         self,
         prediction_id: int,
         user_telegram_id: int,
-        sun_analysis: str
+        sun_analysis: str,
+        profile_id: Optional[int] = None
     ) -> bool:
         """
         Отправляет запрос на генерацию рекомендаций по Солнцу в очередь
@@ -214,6 +222,7 @@ class QueueSender:
             prediction_id: ID исходного предсказания
             user_telegram_id: Telegram ID пользователя
             sun_analysis: Разбор Солнца для генерации рекомендаций
+            profile_id: ID дополнительного профиля (если None, используется основной профиль)
 
         Returns:
             True если сообщение отправлено успешно
@@ -227,6 +236,10 @@ class QueueSender:
             "sun_analysis": sun_analysis,
             "timestamp": asyncio.get_event_loop().time()
         }
+        
+        # Добавляем profile_id если указан
+        if profile_id:
+            message_data["profile_id"] = profile_id
 
         try:
             message = aio_pika.Message(
@@ -570,7 +583,8 @@ async def send_prediction_to_queue(prediction_id: int, user_id: int) -> bool:
 async def send_recommendation_to_queue(
     prediction_id: int, 
     user_telegram_id: int, 
-    moon_analysis: str
+    moon_analysis: str,
+    profile_id: Optional[int] = None
 ) -> bool:
     """
     Удобная функция для отправки запроса на рекомендации в очередь
@@ -579,20 +593,22 @@ async def send_recommendation_to_queue(
         prediction_id: ID исходного предсказания
         user_telegram_id: Telegram ID пользователя
         moon_analysis: Разбор Луны для генерации рекомендаций
+        profile_id: ID дополнительного профиля (опционально)
 
     Returns:
         True если сообщение отправлено успешно
     """
     sender = await get_queue_sender()
     return await sender.send_recommendation_for_processing(
-        prediction_id, user_telegram_id, moon_analysis
+        prediction_id, user_telegram_id, moon_analysis, profile_id
     )
 
 
 async def send_sun_recommendation_to_queue(
     prediction_id: int, 
     user_telegram_id: int, 
-    sun_analysis: str
+    sun_analysis: str,
+    profile_id: Optional[int] = None
 ) -> bool:
     """
     Удобная функция для отправки запроса на рекомендации по Солнцу в очередь
@@ -601,13 +617,14 @@ async def send_sun_recommendation_to_queue(
         prediction_id: ID исходного предсказания
         user_telegram_id: Telegram ID пользователя
         sun_analysis: Разбор Солнца для генерации рекомендаций
+        profile_id: ID дополнительного профиля (если None, используется основной профиль)
 
     Returns:
         True если сообщение отправлено успешно
     """
     sender = await get_queue_sender()
     return await sender.send_sun_recommendation_for_processing(
-        prediction_id, user_telegram_id, sun_analysis
+        prediction_id, user_telegram_id, sun_analysis, profile_id
     )
 
 
