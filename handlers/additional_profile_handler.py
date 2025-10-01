@@ -398,6 +398,9 @@ async def complete_additional_profile_creation(
 
     try:
         # Получаем все данные из состояния
+        logger.info(f"Starting profile creation for user_id={user_id}")
+        logger.info(f"State data: {state_data.keys()}")
+        
         name = state_data.get("additional_name")
         gender = state_data.get("additional_gender")
         birth_date_str = state_data.get("additional_pending_birth_date")
@@ -407,7 +410,16 @@ async def complete_additional_profile_creation(
         )
         birth_time_local = None
 
+        logger.info(
+            f"Profile data: name={name}, gender={gender}, "
+            f"birth_date_str={birth_date_str}, accuracy={birth_time_accuracy}"
+        )
+
         if not name or not gender or not birth_date_str or not geocode_result:
+            logger.error(
+                f"Missing data: name={bool(name)}, gender={bool(gender)}, "
+                f"birth_date={bool(birth_date_str)}, geocode={bool(geocode_result)}"
+            )
             await message.answer("Ошибка: не все данные заполнены")
             await state.clear()
             return
@@ -417,21 +429,32 @@ async def complete_additional_profile_creation(
         birth_time_str = state_data.get("additional_pending_birth_time")
         if birth_time_str:
             birth_time_local = time.fromisoformat(birth_time_str)
+            logger.info(f"Birth time: {birth_time_local}")
 
         # Создаем дополнительный профиль в БД
         async with get_session() as session:
             # Находим основного пользователя
+            logger.info(f"Looking for user with telegram_id={user_id}")
             result = await session.execute(
                 select(User).where(User.telegram_id == user_id)
             )
             main_user = result.scalar_one_or_none()
 
             if not main_user:
+                logger.error(f"User not found for telegram_id={user_id}")
                 await message.answer("Ошибка: пользователь не найден")
                 await state.clear()
                 return
 
+            logger.info(f"Found user: user_id={main_user.user_id}")
+
             # Создаем дополнительный профиль
+            logger.info(
+                f"Creating AdditionalProfile: owner_user_id={main_user.user_id}, "
+                f"name={name}, gender={gender}, birth_date={birth_date}, "
+                f"birth_time={birth_time_local}, accuracy={birth_time_accuracy}"
+            )
+            
             additional_profile = AdditionalProfile(
                 owner_user_id=main_user.user_id,
                 full_name=name,
@@ -446,6 +469,8 @@ async def complete_additional_profile_creation(
                 birth_lon=geocode_result["lon"],
                 is_active=True
             )
+            
+            logger.info("AdditionalProfile object created")
 
             session.add(additional_profile)
             
@@ -505,10 +530,11 @@ async def complete_additional_profile_creation(
         )
 
     except Exception as e:
-        logger.error(f"Ошибка создания дополнительного профиля: {e}")
+        logger.error(f"Ошибка создания дополнительного профиля: {e}", exc_info=True)
         await message.answer(
             "❌ Произошла ошибка при создании профиля. "
-            "Попробуй ещё раз или обратись в поддержку."
+            "Попробуй ещё раз или обратись в поддержку.\n\n"
+            f"Детали для поддержки: {type(e).__name__}"
         )
         await state.clear()
 
