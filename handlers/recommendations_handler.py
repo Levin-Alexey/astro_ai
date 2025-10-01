@@ -25,7 +25,7 @@ async def handle_get_recommendations(callback: CallbackQuery, state: FSMContext)
     await callback.answer()
     
     user_id = callback.from_user.id
-    logger.info(f"User {user_id} requested recommendations")
+    logger.info(f"handle_get_recommendations called for user {user_id}")
     
     # Получаем данные пользователя
     async with get_session() as session:
@@ -36,13 +36,17 @@ async def handle_get_recommendations(callback: CallbackQuery, state: FSMContext)
         user = user_result.scalar_one_or_none()
         
         if not user:
+            logger.error(f"User with telegram_id={user_id} not found in DB")
             if callback.message:
                 await callback.message.answer(
                     "❌ Пользователь не найден. Попробуйте /start"
                 )
             return
         
+        logger.info(f"User found: user_id={user.user_id}")
+        
         # Находим готовый разбор Луны (основной профиль или дополнительный)
+        # Берем последний созданный разбор (может быть несколько профилей)
         prediction_result = await session.execute(
             select(Prediction).where(
                 Prediction.user_id == user.user_id,
@@ -53,9 +57,12 @@ async def handle_get_recommendations(callback: CallbackQuery, state: FSMContext)
                 Prediction.moon_analysis.is_not(None)  # Готовый анализ
             ).order_by(Prediction.created_at.desc())  # Берем последний созданный
         )
-        prediction = prediction_result.scalar_one_or_none()
+        prediction = prediction_result.scalars().first()  # Используем first() для множества результатов
+        
+        logger.info(f"Prediction found: {prediction is not None}, has analysis: {prediction.moon_analysis is not None if prediction else False}")
         
         if not prediction or not prediction.moon_analysis:
+            logger.warning(f"No ready moon analysis found for user {user_id}")
             if callback.message:
                 await callback.message.answer(
                     "❌ Разбор Луны не найден или еще не готов.\n\n"
@@ -92,6 +99,11 @@ async def handle_get_recommendations(callback: CallbackQuery, state: FSMContext)
             )
         await callback.message.answer(message_text)
     
+    logger.info(
+        f"Sending recommendation to queue: prediction_id={prediction.prediction_id}, "
+        f"profile_id={profile_id}, profile_name={profile_name}"
+    )
+    
     try:
         # Отправляем в очередь для генерации рекомендаций
         await send_recommendation_to_queue(
@@ -101,10 +113,10 @@ async def handle_get_recommendations(callback: CallbackQuery, state: FSMContext)
             profile_id=profile_id
         )
         
-        logger.info(f"Recommendation request sent to queue for user {user_id}")
+        logger.info(f"Recommendation request sent to queue for user {user_id}, profile_id={profile_id}")
         
     except Exception as e:
-        logger.error(f"Failed to send recommendation request: {e}")
+        logger.error(f"Failed to send recommendation request: {e}", exc_info=True)
         if callback.message:
             await callback.message.answer(
                 "❌ Произошла ошибка при создании рекомендаций.\n\n"
