@@ -701,15 +701,17 @@ async def start_moon_analysis_for_profile(message: Message, profile_id: int):
 
             # Отправляем в очередь через queue_sender
             from queue_sender import get_queue_sender
+            import aio_pika
+            
             sender = await get_queue_sender()
             
             # Используем прямой метод для отправки с profile_id
             if not sender.channel:
                 await sender.initialize()
 
-            message_queue = sender.channel.Message(
+            message_queue = aio_pika.Message(
                 body=json.dumps(message_data).encode(),
-                delivery_mode=sender.channel.DeliveryMode.PERSISTENT
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
             )
 
             await sender.channel.default_exchange.publish(
@@ -720,7 +722,7 @@ async def start_moon_analysis_for_profile(message: Message, profile_id: int):
             logger.info(f"Moon prediction {prediction_id} for profile {profile_id} sent to queue")
             
         except Exception as e:
-            logger.error(f"Failed to send moon prediction to queue: {e}")
+            logger.error(f"Failed to send moon prediction to queue: {e}", exc_info=True)
             # Продолжаем работу, даже если не удалось отправить в очередь
 
         # Показываем сообщение о том, что анализ запущен
