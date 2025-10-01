@@ -431,6 +431,35 @@ async def complete_additional_profile_creation(
             birth_time_local = time.fromisoformat(birth_time_str)
             logger.info(f"Birth time: {birth_time_local}")
 
+        # Вычисляем timezone и знак зодиака ДО создания профиля
+        birth_datetime_utc = None
+        tzid = None
+        tz_offset_minutes = None
+        
+        if birth_time_local and geocode_result:
+            try:
+                tz_result = resolve_timezone(
+                    lat=geocode_result["lat"],
+                    lon=geocode_result["lon"],
+                    local_date=birth_date,
+                    local_time=birth_time_local
+                )
+                if tz_result:
+                    birth_datetime_utc = tz_result.birth_datetime_utc
+                    tzid = tz_result.tzid
+                    tz_offset_minutes = tz_result.offset_minutes
+                    logger.info(
+                        f"Timezone resolved: {tzid}, "
+                        f"offset={tz_offset_minutes}, "
+                        f"utc={birth_datetime_utc}"
+                    )
+            except Exception as tz_error:
+                logger.error(f"Timezone resolve error: {tz_error}")
+
+        # Рассчитываем знак зодиака
+        zodiac_sign_enum = zodiac_sign_ru_for_date(birth_date)
+        logger.info(f"Zodiac sign enum: {zodiac_sign_enum}, value: {zodiac_sign_enum.value}")
+
         # Создаем дополнительный профиль в БД
         async with get_session() as session:
             # Находим основного пользователя
@@ -448,11 +477,11 @@ async def complete_additional_profile_creation(
 
             logger.info(f"Found user: user_id={main_user.user_id}")
 
-            # Создаем дополнительный профиль
+            # Создаем дополнительный профиль со ВСЕМИ полями сразу
             logger.info(
-                f"Creating AdditionalProfile: owner_user_id={main_user.user_id}, "
-                f"name={name}, gender={gender}, birth_date={birth_date}, "
-                f"birth_time={birth_time_local}, accuracy={birth_time_accuracy}"
+                f"Creating AdditionalProfile with all fields: "
+                f"owner_user_id={main_user.user_id}, name={name}, "
+                f"gender={gender}, zodiac={zodiac_sign_enum}"
             )
             
             additional_profile = AdditionalProfile(
@@ -467,39 +496,18 @@ async def complete_additional_profile_creation(
                 birth_country_code=geocode_result["country_code"],
                 birth_lat=geocode_result["lat"],
                 birth_lon=geocode_result["lon"],
+                birth_datetime_utc=birth_datetime_utc,
+                tzid=tzid,
+                tz_offset_minutes=tz_offset_minutes,
+                zodiac_sign=zodiac_sign_enum.value,  # Используем .value для русского названия
                 is_active=True
             )
             
-            logger.info("AdditionalProfile object created")
+            logger.info("AdditionalProfile object created with all fields")
 
             session.add(additional_profile)
             
-            # Рассчитываем UTC время рождения ДО flush
-            if birth_time_local and geocode_result:
-                try:
-                    tz_result = resolve_timezone(
-                        lat=geocode_result["lat"],
-                        lon=geocode_result["lon"],
-                        local_date=birth_date,
-                        local_time=birth_time_local
-                    )
-                    if tz_result:
-                        additional_profile.birth_datetime_utc = tz_result.birth_datetime_utc
-                        additional_profile.tzid = tz_result.tzid
-                        additional_profile.tz_offset_minutes = tz_result.offset_minutes
-                        logger.info(
-                            f"Timezone resolved: {tz_result.tzid}, "
-                            f"offset={tz_result.offset_minutes}, "
-                            f"utc={tz_result.birth_datetime_utc}"
-                        )
-                except Exception as tz_error:
-                    logger.error(f"Timezone resolve error: {tz_error}")
-
-            # Рассчитываем знак зодиака
-            zodiac_sign = zodiac_sign_ru_for_date(birth_date)
-            additional_profile.zodiac_sign = zodiac_sign
-            
-            # Теперь сохраняем всё вместе
+            # Сохраняем
             try:
                 await session.commit()
                 logger.info(f"Additional profile committed successfully")
