@@ -141,6 +141,11 @@ class AdditionalProfile(Base):
             name="zodiac_sign_ru",
             create_type=False,
             native_enum=True,
+            # Важно: используем русские значения Enum как значения
+            # PostgreSQL ENUM, иначе SQLAlchemy по умолчанию отправляет
+            # имена (oven, bliznecy, ...)
+            values_callable=lambda enum: [e.value for e in enum],
+            validate_strings=True,
         ),
         nullable=True,
     )
