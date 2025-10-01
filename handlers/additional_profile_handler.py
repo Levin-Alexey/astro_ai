@@ -690,6 +690,20 @@ async def start_moon_analysis_for_profile(message: Message, profile_id: int):
 
         # Сохраняем в базу данных с profile_id
         async with get_session() as session:
+            # Получаем telegram_id владельца профиля
+            user_result = await session.execute(
+                select(User).where(User.user_id == profile_data["owner_user_id"])
+            )
+            owner = user_result.scalar_one_or_none()
+            
+            if not owner:
+                logger.error(f"Owner user {profile_data['owner_user_id']} not found")
+                await message.answer("❌ Ошибка: владелец профиля не найден")
+                return
+            
+            telegram_id = owner.telegram_id
+            logger.info(f"Owner telegram_id: {telegram_id}")
+            
             prediction = Prediction(
                 user_id=profile_data["owner_user_id"],
                 profile_id=profile_id,  # Указываем дополнительный профиль
@@ -707,10 +721,10 @@ async def start_moon_analysis_for_profile(message: Message, profile_id: int):
 
         # Отправляем в очередь для обработки LLM с profile_id
         try:
-            # Создаем расширенное сообщение с profile_id
+            # Создаем расширенное сообщение с profile_id и telegram_id
             message_data = {
                 "prediction_id": prediction_id,
-                "user_id": profile_data["owner_user_id"],
+                "user_id": telegram_id,  # ВАЖНО: используем telegram_id!
                 "profile_id": profile_id,  # Добавляем profile_id для воркера
                 "timestamp": 0  # Временная метка
             }
