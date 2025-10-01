@@ -267,63 +267,77 @@ async def handle_additional_birth_city(message: Message, state: FSMContext):
         )
 
 
-async def handle_additional_birth_time_accuracy(message: Message, state: FSMContext):
+async def handle_additional_birth_time_accuracy_callback(callback: CallbackQuery, state: FSMContext):
     """Обработчик выбора точности времени рождения для дополнительного профиля"""
-    text = (message.text or "").strip().lower()
-
-    if text in ["точно", "точно знаю", "да", "да, точно"]:
+    if not callback.data or not callback.message:
+        return
+    
+    data = callback.data.split(":")
+    action = data[1]
+    
+    if action == "exact":
+        # Точное время
         await state.update_data(additional_birth_time_accuracy="exact")
         await state.set_state(
             AdditionalProfileForm.waiting_for_additional_birth_time_local
         )
-        await message.answer(
-            "⏰ Отлично! В какое время родился человек?\n\n"
-            "Напиши время в формате ЧЧ:ММ\n"
-            "Например: 14:30 или 09:15"
-        )
-    elif text in ["примерно", "приблизительно", "не очень точно"]:
+        try:
+            await callback.message.edit_text(
+                "⏰ Отлично! В какое время родился человек?\n\n"
+                "Напиши время в формате ЧЧ:ММ\n"
+                "Например: 14:30 или 09:15"
+            )
+        except Exception:
+            pass
+    elif action == "approx":
+        # Примерное время
         await state.update_data(additional_birth_time_accuracy="approx")
         await state.set_state(
             AdditionalProfileForm.waiting_for_additional_birth_time_local
         )
-        await message.answer(
-            "⏰ Примерное время тоже хорошо!\n\n"
-            "Напиши примерное время в формате ЧЧ:ММ\n"
-            "Например: 14:30 или 09:15"
-        )
-    elif text in ["не знаю", "не помню", "неизвестно", "нет"]:
+        try:
+            await callback.message.edit_text(
+                "⏰ Примерное время тоже хорошо!\n\n"
+                "Напиши примерное время в формате ЧЧ:ММ\n"
+                "Например: 14:30 или 09:15"
+            )
+        except Exception:
+            pass
+    elif action == "unknown":
+        # Время неизвестно
         await state.update_data(additional_birth_time_accuracy="unknown")
         await state.set_state(
             AdditionalProfileForm.waiting_for_additional_birth_time_unknown_confirm
         )
-        await message.answer(
-            "⏰ Ничего страшного! Время рождения влияет на положение планет в домах, "
-            "но без него тоже можно сделать хороший разбор.\n\n"
-            "Подтверди, что время действительно неизвестно:",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="✅ Да, время неизвестно",
-                            callback_data="additional_time_unknown:confirm"
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text="❌ Всё-таки попробую вспомнить",
-                            callback_data="additional_time_unknown:retry"
-                        )
-                    ]
+        
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="✅ Да, время неизвестно",
+                        callback_data="additional_time_unknown:confirm"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="❌ Всё-таки попробую вспомнить",
+                        callback_data="additional_time_unknown:retry"
+                    )
                 ]
+            ]
+        )
+        
+        try:
+            await callback.message.edit_text(
+                "⏰ Ничего страшного! Время рождения влияет на положение планет в домах, "
+                "но без него тоже можно сделать хороший разбор.\n\n"
+                "Подтверди, что время действительно неизвестно:",
+                reply_markup=kb
             )
-        )
-    else:
-        await message.answer(
-            "Пожалуйста, выбери один из вариантов:\n"
-            "• 'Точно знаю' - если знаешь точное время\n"
-            "• 'Примерно' - если знаешь приблизительное время\n"
-            "• 'Не знаю' - если время неизвестно"
-        )
+        except Exception:
+            pass
+    
+    await callback.answer()
 
 
 async def handle_additional_birth_time_local(message: Message, state: FSMContext):
@@ -740,10 +754,14 @@ async def handle_additional_gender_callback(callback: CallbackQuery, state: FSMC
         await state.update_data(additional_gender_temp=action)
         
         # Показываем клавиатуру с выбранным полом
-        await callback.message.edit_text(
-            "👤 Выбери пол:",
-            reply_markup=build_additional_gender_kb(action)
-        )
+        try:
+            await callback.message.edit_text(
+                "👤 Выбери пол:",
+                reply_markup=build_additional_gender_kb(action)
+            )
+        except Exception:
+            # Игнорируем ошибку если сообщение не изменилось
+            pass
         await callback.answer()
         
     elif action == "confirm":
@@ -760,10 +778,14 @@ async def handle_additional_gender_callback(callback: CallbackQuery, state: FSMC
 
         # Переходим к вводу даты рождения
         await state.set_state(AdditionalProfileForm.waiting_for_additional_birth_date)
-        await callback.message.edit_text(
-            "📆 Теперь напиши дату рождения в формате ДД.ММ.ГГГГ\n\n"
-            "например: 23.04.1987"
-        )
+        try:
+            await callback.message.edit_text(
+                "📆 Теперь напиши дату рождения в формате ДД.ММ.ГГГГ\n\n"
+                "например: 23.04.1987"
+            )
+        except Exception:
+            # Игнорируем ошибку если сообщение не изменилось
+            pass
         await callback.answer()
 
 
@@ -778,16 +800,24 @@ async def handle_additional_birth_date_callback(callback: CallbackQuery, state: 
     if action == "confirm":
         # Подтверждаем дату и переходим к месту рождения
         await state.set_state(AdditionalProfileForm.waiting_for_additional_birth_city)
-        await callback.message.edit_text(
-            "🏙️ Отлично! Теперь напиши место рождения (город):\n\n"
-            "Например: Москва, Санкт-Петербург, Екатеринбург"
-        )
+        try:
+            await callback.message.edit_text(
+                "🏙️ Отлично! Теперь напиши место рождения (город):\n\n"
+                "Например: Москва, Санкт-Петербург, Екатеринбург"
+            )
+        except Exception:
+            # Игнорируем ошибку если сообщение не изменилось
+            pass
     elif action == "retry":
         # Возвращаемся к вводу даты
-        await callback.message.edit_text(
-            "📆 Напиши дату рождения в формате ДД.ММ.ГГГГ\n\n"
-            "например: 23.04.1987"
-        )
+        try:
+            await callback.message.edit_text(
+                "📆 Напиши дату рождения в формате ДД.ММ.ГГГГ\n\n"
+                "например: 23.04.1987"
+            )
+        except Exception:
+            # Игнорируем ошибку если сообщение не изменилось
+            pass
 
     await callback.answer()
 
@@ -805,20 +835,49 @@ async def handle_additional_birth_city_callback(callback: CallbackQuery, state: 
         await state.set_state(
             AdditionalProfileForm.waiting_for_additional_birth_time_accuracy
         )
-        await callback.message.edit_text(
-            "⏰ Отлично! Последний вопрос:\n\n"
-            "Знаешь ли ты время рождения?\n\n"
-            "• Напиши 'Точно знаю' - если знаешь точное время\n"
-            "• Напиши 'Примерно' - если знаешь приблизительное время\n"
-            "• Напиши 'Не знаю' - если время неизвестно"
+        
+        # Создаем клавиатуру с кнопками выбора точности времени
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="👍🏼 Знаю точное время",
+                        callback_data="additional_timeacc:exact"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🤏🏼 Знаю примерное время",
+                        callback_data="additional_timeacc:approx"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="👎🏼 Не знаю время вообще",
+                        callback_data="additional_timeacc:unknown"
+                    )
+                ],
+            ]
         )
+        
+        try:
+            await callback.message.edit_text(
+                "Для полной информации мне не хватает только времени рождения 🪄\n\n"
+                "🕰 Подскажи, знаешь ли ты время рождения?",
+                reply_markup=kb
+            )
+        except Exception:
+            pass
     elif action == "retry":
         # Возвращаемся к вводу города
         await state.set_state(AdditionalProfileForm.waiting_for_additional_birth_city)
-        await callback.message.edit_text(
-            "🏙️ Напиши место рождения (город):\n\n"
-            "Например: Москва, Санкт-Петербург, Екатеринбург"
-        )
+        try:
+            await callback.message.edit_text(
+                "🏙️ Напиши место рождения (город):\n\n"
+                "Например: Москва, Санкт-Петербург, Екатеринбург"
+            )
+        except Exception:
+            pass
 
     await callback.answer()
 
@@ -847,10 +906,13 @@ async def handle_additional_birth_time_callback(callback: CallbackQuery, state: 
         await state.set_state(
             AdditionalProfileForm.waiting_for_additional_birth_time_local
         )
-        await callback.message.edit_text(
-            f"⏰ Напиши {accuracy_text} время рождения в формате ЧЧ:ММ\n\n"
-            "Например: 14:30 или 09:15"
-        )
+        try:
+            await callback.message.edit_text(
+                f"⏰ Напиши {accuracy_text} время рождения в формате ЧЧ:ММ\n\n"
+                "Например: 14:30 или 09:15"
+            )
+        except Exception:
+            pass
 
     await callback.answer()
 
@@ -875,12 +937,15 @@ async def handle_additional_time_unknown_callback(callback: CallbackQuery, state
         await state.set_state(
             AdditionalProfileForm.waiting_for_additional_birth_time_accuracy
         )
-        await callback.message.edit_text(
-            "⏰ Хорошо! Тогда ответь на вопрос:\n\n"
-            "Знаешь ли ты время рождения?\n\n"
-            "• Напиши 'Точно знаю' - если знаешь точное время\n"
-            "• Напиши 'Примерно' - если знаешь приблизительное время\n"
-            "• Напиши 'Не знаю' - если время неизвестно"
-        )
+        try:
+            await callback.message.edit_text(
+                "⏰ Хорошо! Тогда ответь на вопрос:\n\n"
+                "Знаешь ли ты время рождения?\n\n"
+                "• Напиши 'Точно знаю' - если знаешь точное время\n"
+                "• Напиши 'Примерно' - если знаешь приблизительное время\n"
+                "• Напиши 'Не знаю' - если время неизвестно"
+            )
+        except Exception:
+            pass
 
     await callback.answer()

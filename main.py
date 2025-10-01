@@ -63,7 +63,7 @@ from handlers.additional_profile_handler import (
     handle_additional_name,
     handle_additional_birth_date,
     handle_additional_birth_city,
-    handle_additional_birth_time_accuracy,
+    handle_additional_birth_time_accuracy_callback,
     handle_additional_birth_time_local,
     handle_additional_gender_callback,
     handle_additional_birth_date_callback,
@@ -621,6 +621,12 @@ async def handle_additional_birth_time_callback_wrapper(callback: CallbackQuery,
 async def handle_additional_time_unknown_callback_wrapper(callback: CallbackQuery, state: FSMContext):
     """Обертка для обработчика неизвестного времени дополнительного профиля"""
     await handle_additional_time_unknown_callback(callback, state)
+
+
+@dp.callback_query(F.data.startswith("additional_timeacc:"))
+async def handle_additional_birth_time_accuracy_callback_wrapper(callback: CallbackQuery, state: FSMContext):
+    """Обертка для обработчика выбора точности времени рождения дополнительного профиля"""
+    await handle_additional_birth_time_accuracy_callback(callback, state)
 
 
 @dp.callback_query(F.data == "gender_confirm")
@@ -1852,10 +1858,11 @@ async def process_additional_birth_city(message: Message, state: FSMContext):
     await handle_additional_birth_city(message, state)
 
 
-@dp.message(AdditionalProfileForm.waiting_for_additional_birth_time_accuracy)
-async def process_additional_birth_time_accuracy(message: Message, state: FSMContext):
-    """Обработчик выбора точности времени для дополнительного профиля"""
-    await handle_additional_birth_time_accuracy(message, state)
+# Удалено: теперь используется callback обработчик для выбора времени с кнопками
+# @dp.message(AdditionalProfileForm.waiting_for_additional_birth_time_accuracy)
+# async def process_additional_birth_time_accuracy(message: Message, state: FSMContext):
+#     """Обработчик выбора точности времени для дополнительного профиля"""
+#     await handle_additional_birth_time_accuracy(message, state)
 
 
 @dp.message(AdditionalProfileForm.waiting_for_additional_birth_time_local)
