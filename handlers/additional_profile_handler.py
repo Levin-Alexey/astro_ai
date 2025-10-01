@@ -688,23 +688,26 @@ async def handle_additional_gender_callback(callback: CallbackQuery, state: FSMC
     action = data[1]
 
     if action in ["female", "male"]:
+        # Сохраняем выбранный пол во временных данных
+        await state.update_data(additional_gender_temp=action)
+        
         # Показываем клавиатуру с выбранным полом
         await callback.message.edit_text(
             "👤 Выбери пол:",
             reply_markup=build_additional_gender_kb(action)
         )
+        await callback.answer()
+        
     elif action == "confirm":
-        # Подтверждаем выбор пола
-        current_text = callback.message.text or ""
-        if "👩🏻" in current_text:
-            gender = "female"
-        elif "👨🏼" in current_text:
-            gender = "male"
-        else:
+        # Получаем выбранный пол из временных данных
+        state_data = await state.get_data()
+        gender = state_data.get("additional_gender_temp")
+        
+        if not gender:
             await callback.answer("Выбери пол сначала")
             return
 
-        # Сохраняем пол во временных данных
+        # Сохраняем пол в основных данных профиля
         await state.update_data(additional_gender=gender)
 
         # Переходим к вводу даты рождения
@@ -714,8 +717,6 @@ async def handle_additional_gender_callback(callback: CallbackQuery, state: FSMC
             "например: 23.04.1987"
         )
         await callback.answer()
-
-    await callback.answer()
 
 
 async def handle_additional_birth_date_callback(callback: CallbackQuery, state: FSMContext):
