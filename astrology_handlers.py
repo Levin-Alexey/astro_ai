@@ -721,7 +721,7 @@ async def get_user_astrology_data(user_id: int, profile_id: Optional[int] = None
                 "minute": birth_time.minute,
                 "lat": float(profile.birth_lat),
                 "lon": float(profile.birth_lon),
-                "tzone": profile.tz_offset_minutes,
+                "tzone": float(profile.tz_offset_minutes) / 60.0,  # Минуты -> часы
                 "telegram_id": owner.telegram_id,
                 "profile_id": profile_id
             }
