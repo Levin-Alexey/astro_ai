@@ -191,6 +191,7 @@ async def generate_planet_analysis(user_id: int, planet: str, profile_id: int = 
         # Для Меркурия вызываем start_mercury_analysis
         elif planet == "mercury":
             from astrology_handlers import start_mercury_analysis
+            logger.info(f"🚀 Calling start_mercury_analysis for user {user_id}, profile_id: {profile_id}")
             astrology_data = await start_mercury_analysis(user_id, profile_id)
             
             if astrology_data:

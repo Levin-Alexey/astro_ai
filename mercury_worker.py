@@ -226,6 +226,7 @@ async def process_mercury_prediction(
             return False
         
         logger.info(f"☿️ Processing Mercury prediction {prediction_id} for user {user_telegram_id}, profile_id: {profile_id}")
+        logger.info(f"☿️ Full message data: {data}")
         
         # Интеграция с системой защиты платежей
         try:
