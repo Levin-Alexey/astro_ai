@@ -70,6 +70,7 @@ from handlers.additional_profile_handler import (
     handle_additional_birth_date_callback,
     handle_additional_birth_city_callback,
     handle_additional_birth_time_callback,
+    handle_additional_profile_cancel,
     handle_additional_time_unknown_callback,
 )
 from payment_handler import init_payment_handler
@@ -627,6 +628,12 @@ async def handle_additional_birth_time_callback_wrapper(callback: CallbackQuery,
 async def handle_additional_time_unknown_callback_wrapper(callback: CallbackQuery, state: FSMContext):
     """Обертка для обработчика неизвестного времени дополнительного профиля"""
     await handle_additional_time_unknown_callback(callback, state)
+
+
+@dp.callback_query(F.data == "additional_profile:cancel")
+async def handle_additional_profile_cancel_wrapper(callback: CallbackQuery, state: FSMContext):
+    """Обертка для обработчика отмены создания дополнительного профиля"""
+    await handle_additional_profile_cancel(callback, state)
 
 
 @dp.callback_query(F.data.startswith("additional_timeacc:"))

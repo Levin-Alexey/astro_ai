@@ -170,17 +170,23 @@ async def handle_additional_name(message: Message, state: FSMContext):
 async def handle_additional_birth_date(message: Message, state: FSMContext):
     """Обработчик ввода даты рождения для дополнительного профиля"""
     text = (message.text or "").strip()
+    logger.info(f"🔍 Received birth date input: '{text}' from user {message.from_user.id if message.from_user else 'unknown'}")
+    
     try:
         dt = datetime.strptime(text, "%d.%m.%Y").date()
-    except ValueError:
+        logger.info(f"✅ Successfully parsed date: {dt}")
+    except ValueError as e:
+        logger.warning(f"❌ Failed to parse date '{text}': {e}")
         await message.answer(
             "Не получилось распознать дату. Пожалуйста, пришли в формате "
             "ДД.ММ.ГГГГ\nнапример: 23.04.1987"
         )
+        # НЕ сбрасываем состояние - пользователь может исправить дату
         return
 
     # Сохраняем дату временно
     await state.update_data(additional_pending_birth_date=dt.isoformat())
+    logger.info(f"💾 Saved birth date to state: {dt.isoformat()}")
 
     date_str = dt.strftime("%d.%m.%Y")
     kb = InlineKeyboardMarkup(
@@ -195,6 +201,12 @@ async def handle_additional_birth_date(message: Message, state: FSMContext):
                 InlineKeyboardButton(
                     text="❌ Нет, исправить",
                     callback_data="additional_birth_date:retry"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🚫 Отменить создание",
+                    callback_data="additional_profile:cancel"
                 )
             ]
         ]
@@ -249,6 +261,12 @@ async def handle_additional_birth_city(message: Message, state: FSMContext):
                         text="❌ Нет, другой город",
                         callback_data="additional_city:retry"
                     )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🚫 Отменить создание",
+                        callback_data="additional_profile:cancel"
+                    )
                 ]
             ]
         )
@@ -265,6 +283,7 @@ async def handle_additional_birth_city(message: Message, state: FSMContext):
             "❌ Произошла ошибка при поиске города. "
             "Попробуй ещё раз."
         )
+        # НЕ сбрасываем состояние - пользователь может попробовать другой город
 
 
 async def handle_additional_birth_time_accuracy_callback(callback: CallbackQuery, state: FSMContext):
@@ -275,9 +294,12 @@ async def handle_additional_birth_time_accuracy_callback(callback: CallbackQuery
     data = callback.data.split(":")
     action = data[1]
     
+    logger.info(f"🔍 Time accuracy callback: action={action} from user {callback.from_user.id if callback.from_user else 'unknown'}")
+    
     if action == "exact":
         # Точное время
         await state.update_data(additional_birth_time_accuracy="exact")
+        logger.info(f"✅ Set time accuracy to 'exact'")
         await state.set_state(
             AdditionalProfileForm.waiting_for_additional_birth_time_local
         )
@@ -292,6 +314,7 @@ async def handle_additional_birth_time_accuracy_callback(callback: CallbackQuery
     elif action == "approx":
         # Примерное время
         await state.update_data(additional_birth_time_accuracy="approx")
+        logger.info(f"✅ Set time accuracy to 'approx'")
         await state.set_state(
             AdditionalProfileForm.waiting_for_additional_birth_time_local
         )
@@ -306,6 +329,7 @@ async def handle_additional_birth_time_accuracy_callback(callback: CallbackQuery
     elif action == "unknown":
         # Время неизвестно
         await state.update_data(additional_birth_time_accuracy="unknown")
+        logger.info(f"✅ Set time accuracy to 'unknown'")
         await state.set_state(
             AdditionalProfileForm.waiting_for_additional_birth_time_unknown_confirm
         )
@@ -338,6 +362,34 @@ async def handle_additional_birth_time_accuracy_callback(callback: CallbackQuery
             pass
     
     await callback.answer()
+
+
+async def handle_additional_profile_cancel(callback: CallbackQuery, state: FSMContext):
+    """Обработчик отмены создания дополнительного профиля"""
+    if not callback.message:
+        return
+    
+    logger.info(f"🚫 User {callback.from_user.id if callback.from_user else 'unknown'} cancelled additional profile creation")
+    
+    # Сбрасываем состояние FSM
+    await state.clear()
+    
+    # Показываем сообщение об отмене
+    try:
+        await callback.message.edit_text(
+            "❌ Создание дополнительного профиля отменено.\n\n"
+            "Если захочешь создать профиль для другого человека, "
+            "используй команду /start или кнопку 'Добавить новую дату'."
+        )
+    except Exception:
+        # Если не удалось отредактировать сообщение, отправляем новое
+        await callback.message.answer(
+            "❌ Создание дополнительного профиля отменено.\n\n"
+            "Если захочешь создать профиль для другого человека, "
+            "используй команду /start или кнопку 'Добавить новую дату'."
+        )
+    
+    await callback.answer("Создание профиля отменено")
 
 
 async def handle_additional_birth_time_local(message: Message, state: FSMContext):
@@ -374,6 +426,12 @@ async def handle_additional_birth_time_local(message: Message, state: FSMContext
                         text="❌ Нет, исправить",
                         callback_data="additional_birth_time:retry"
                     )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🚫 Отменить создание",
+                        callback_data="additional_profile:cancel"
+                    )
                 ]
             ]
         )
@@ -385,11 +443,13 @@ async def handle_additional_birth_time_local(message: Message, state: FSMContext
             reply_markup=kb
         )
 
-    except ValueError:
+    except ValueError as e:
+        logger.warning(f"❌ Failed to parse time '{text}': {e}")
         await message.answer(
             "Не получилось распознать время. Пожалуйста, пришли в формате ЧЧ:ММ\n"
             "Например: 14:30 или 09:15"
         )
+        # НЕ сбрасываем состояние - пользователь может исправить время
 
 
 async def complete_additional_profile_creation(
@@ -423,6 +483,8 @@ async def complete_additional_profile_creation(
         gender = state_data.get("additional_gender")
         birth_date_str = state_data.get("additional_pending_birth_date")
         geocode_result = state_data.get("additional_geocode_result")
+        
+        logger.info(f"🔍 Profile data check: name={name}, gender={gender}, birth_date_str={birth_date_str}, geocode={geocode_result is not None}")
         birth_time_accuracy = state_data.get(
             "additional_birth_time_accuracy", "unknown"
         )
@@ -445,15 +507,15 @@ async def complete_additional_profile_creation(
         birth_date = date.fromisoformat(birth_date_str)
 
         birth_time_str = state_data.get("additional_pending_birth_time")
+        logger.info(f"🔍 Birth time string from state: '{birth_time_str}'")
         if birth_time_str:
             birth_time_local = time.fromisoformat(birth_time_str)
-            logger.info(f"Birth time: {birth_time_local}")
+            logger.info(f"✅ Parsed birth time: {birth_time_local}")
         
         # Валидация: если выбрано точное/примерное время, оно должно быть введено
         if birth_time_accuracy in ["exact", "approx"] and not birth_time_local:
-            logger.error(
-                f"Missing birth time for accuracy={birth_time_accuracy}"
-            )
+            logger.error(f"❌ Missing birth time for accuracy={birth_time_accuracy}")
+            logger.error(f"❌ Full state data: {state_data}")
             await message.answer(
                 "❌ Ошибка: не указано время рождения!\n\n"
                 "Пожалуйста, начните создание профиля заново с /start"
@@ -796,6 +858,34 @@ async def handle_additional_gender_callback(callback: CallbackQuery, state: FSMC
             # Игнорируем ошибку если сообщение не изменилось
             pass
         await callback.answer()
+
+
+async def handle_additional_profile_cancel(callback: CallbackQuery, state: FSMContext):
+    """Обработчик отмены создания дополнительного профиля"""
+    if not callback.message:
+        return
+    
+    logger.info(f"🚫 User {callback.from_user.id if callback.from_user else 'unknown'} cancelled additional profile creation")
+    
+    # Сбрасываем состояние FSM
+    await state.clear()
+    
+    # Показываем сообщение об отмене
+    try:
+        await callback.message.edit_text(
+            "❌ Создание дополнительного профиля отменено.\n\n"
+            "Если захочешь создать профиль для другого человека, "
+            "используй команду /start или кнопку 'Добавить новую дату'."
+        )
+    except Exception:
+        # Если не удалось отредактировать сообщение, отправляем новое
+        await callback.message.answer(
+            "❌ Создание дополнительного профиля отменено.\n\n"
+            "Если захочешь создать профиль для другого человека, "
+            "используй команду /start или кнопку 'Добавить новую дату'."
+        )
+    
+    await callback.answer("Создание профиля отменено")
         
     elif action == "confirm":
         # Получаем выбранный пол из временных данных
@@ -822,6 +912,34 @@ async def handle_additional_gender_callback(callback: CallbackQuery, state: FSMC
         await callback.answer()
 
 
+async def handle_additional_profile_cancel(callback: CallbackQuery, state: FSMContext):
+    """Обработчик отмены создания дополнительного профиля"""
+    if not callback.message:
+        return
+    
+    logger.info(f"🚫 User {callback.from_user.id if callback.from_user else 'unknown'} cancelled additional profile creation")
+    
+    # Сбрасываем состояние FSM
+    await state.clear()
+    
+    # Показываем сообщение об отмене
+    try:
+        await callback.message.edit_text(
+            "❌ Создание дополнительного профиля отменено.\n\n"
+            "Если захочешь создать профиль для другого человека, "
+            "используй команду /start или кнопку 'Добавить новую дату'."
+        )
+    except Exception:
+        # Если не удалось отредактировать сообщение, отправляем новое
+        await callback.message.answer(
+            "❌ Создание дополнительного профиля отменено.\n\n"
+            "Если захочешь создать профиль для другого человека, "
+            "используй команду /start или кнопку 'Добавить новую дату'."
+        )
+    
+    await callback.answer("Создание профиля отменено")
+
+
 async def handle_additional_birth_date_callback(callback: CallbackQuery, state: FSMContext):
     """Обработчик подтверждения даты рождения для дополнительного профиля"""
     if not callback.data or not callback.message:
@@ -829,9 +947,12 @@ async def handle_additional_birth_date_callback(callback: CallbackQuery, state: 
         
     data = callback.data.split(":")
     action = data[1]
+    
+    logger.info(f"🔍 Birth date callback: action={action} from user {callback.from_user.id if callback.from_user else 'unknown'}")
 
     if action == "confirm":
         # Подтверждаем дату и переходим к месту рождения
+        logger.info(f"✅ Birth date confirmed, transitioning to city input")
         await state.set_state(AdditionalProfileForm.waiting_for_additional_birth_city)
         try:
             await callback.message.edit_text(
@@ -853,6 +974,34 @@ async def handle_additional_birth_date_callback(callback: CallbackQuery, state: 
             pass
 
     await callback.answer()
+
+
+async def handle_additional_profile_cancel(callback: CallbackQuery, state: FSMContext):
+    """Обработчик отмены создания дополнительного профиля"""
+    if not callback.message:
+        return
+    
+    logger.info(f"🚫 User {callback.from_user.id if callback.from_user else 'unknown'} cancelled additional profile creation")
+    
+    # Сбрасываем состояние FSM
+    await state.clear()
+    
+    # Показываем сообщение об отмене
+    try:
+        await callback.message.edit_text(
+            "❌ Создание дополнительного профиля отменено.\n\n"
+            "Если захочешь создать профиль для другого человека, "
+            "используй команду /start или кнопку 'Добавить новую дату'."
+        )
+    except Exception:
+        # Если не удалось отредактировать сообщение, отправляем новое
+        await callback.message.answer(
+            "❌ Создание дополнительного профиля отменено.\n\n"
+            "Если захочешь создать профиль для другого человека, "
+            "используй команду /start или кнопку 'Добавить новую дату'."
+        )
+    
+    await callback.answer("Создание профиля отменено")
 
 
 async def handle_additional_birth_city_callback(callback: CallbackQuery, state: FSMContext):
@@ -890,6 +1039,12 @@ async def handle_additional_birth_city_callback(callback: CallbackQuery, state: 
                         callback_data="additional_timeacc:unknown"
                     )
                 ],
+                [
+                    InlineKeyboardButton(
+                        text="🚫 Отменить создание",
+                        callback_data="additional_profile:cancel"
+                    )
+                ]
             ]
         )
         
@@ -913,6 +1068,34 @@ async def handle_additional_birth_city_callback(callback: CallbackQuery, state: 
             pass
 
     await callback.answer()
+
+
+async def handle_additional_profile_cancel(callback: CallbackQuery, state: FSMContext):
+    """Обработчик отмены создания дополнительного профиля"""
+    if not callback.message:
+        return
+    
+    logger.info(f"🚫 User {callback.from_user.id if callback.from_user else 'unknown'} cancelled additional profile creation")
+    
+    # Сбрасываем состояние FSM
+    await state.clear()
+    
+    # Показываем сообщение об отмене
+    try:
+        await callback.message.edit_text(
+            "❌ Создание дополнительного профиля отменено.\n\n"
+            "Если захочешь создать профиль для другого человека, "
+            "используй команду /start или кнопку 'Добавить новую дату'."
+        )
+    except Exception:
+        # Если не удалось отредактировать сообщение, отправляем новое
+        await callback.message.answer(
+            "❌ Создание дополнительного профиля отменено.\n\n"
+            "Если захочешь создать профиль для другого человека, "
+            "используй команду /start или кнопку 'Добавить новую дату'."
+        )
+    
+    await callback.answer("Создание профиля отменено")
 
 
 async def handle_additional_birth_time_callback(callback: CallbackQuery, state: FSMContext):
@@ -956,6 +1139,34 @@ async def handle_additional_birth_time_callback(callback: CallbackQuery, state: 
     await callback.answer()
 
 
+async def handle_additional_profile_cancel(callback: CallbackQuery, state: FSMContext):
+    """Обработчик отмены создания дополнительного профиля"""
+    if not callback.message:
+        return
+    
+    logger.info(f"🚫 User {callback.from_user.id if callback.from_user else 'unknown'} cancelled additional profile creation")
+    
+    # Сбрасываем состояние FSM
+    await state.clear()
+    
+    # Показываем сообщение об отмене
+    try:
+        await callback.message.edit_text(
+            "❌ Создание дополнительного профиля отменено.\n\n"
+            "Если захочешь создать профиль для другого человека, "
+            "используй команду /start или кнопку 'Добавить новую дату'."
+        )
+    except Exception:
+        # Если не удалось отредактировать сообщение, отправляем новое
+        await callback.message.answer(
+            "❌ Создание дополнительного профиля отменено.\n\n"
+            "Если захочешь создать профиль для другого человека, "
+            "используй команду /start или кнопку 'Добавить новую дату'."
+        )
+    
+    await callback.answer("Создание профиля отменено")
+
+
 async def handle_additional_time_unknown_callback(callback: CallbackQuery, state: FSMContext):
     """Обработчик неизвестного времени для дополнительного профиля"""
     if not callback.data or not callback.message:
@@ -988,3 +1199,31 @@ async def handle_additional_time_unknown_callback(callback: CallbackQuery, state
             pass
 
     await callback.answer()
+
+
+async def handle_additional_profile_cancel(callback: CallbackQuery, state: FSMContext):
+    """Обработчик отмены создания дополнительного профиля"""
+    if not callback.message:
+        return
+    
+    logger.info(f"🚫 User {callback.from_user.id if callback.from_user else 'unknown'} cancelled additional profile creation")
+    
+    # Сбрасываем состояние FSM
+    await state.clear()
+    
+    # Показываем сообщение об отмене
+    try:
+        await callback.message.edit_text(
+            "❌ Создание дополнительного профиля отменено.\n\n"
+            "Если захочешь создать профиль для другого человека, "
+            "используй команду /start или кнопку 'Добавить новую дату'."
+        )
+    except Exception:
+        # Если не удалось отредактировать сообщение, отправляем новое
+        await callback.message.answer(
+            "❌ Создание дополнительного профиля отменено.\n\n"
+            "Если захочешь создать профиль для другого человека, "
+            "используй команду /start или кнопку 'Добавить новую дату'."
+        )
+    
+    await callback.answer("Создание профиля отменено")
