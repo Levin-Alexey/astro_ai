@@ -235,7 +235,7 @@ class QuestionWorker:
         async with get_session() as session:
             # Создаем новую запись для вопроса-ответа
             question_prediction = Prediction(
-                user_id=user_id,
+                user_id=user_id,  # user_id здесь - это внутренний user_id из параметра функции
                 planet=Planet.moon,  # Вопросы привязаны к Луне
                 prediction_type=PredictionType.free,
                 content=answer,  # Сохраняем ответ в content для совместимости

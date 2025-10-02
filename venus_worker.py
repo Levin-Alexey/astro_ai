@@ -218,14 +218,14 @@ async def process_venus_prediction(
     """
     try:
         prediction_id = data.get("prediction_id")
-        user_telegram_id = data.get("user_telegram_id") or data.get("user__telegram_id")  # Support both formats
+        user_id = data.get("user_id") or data.get("user_telegram_id")  # Support both formats
         profile_id = data.get("profile_id")
         
-        if not prediction_id or not user_telegram_id:
-            logger.error(f"♀️ Missing required data: prediction_id={prediction_id}, user_telegram_id={user_telegram_id}")
+        if not prediction_id or not user_id:
+            logger.error(f"♀️ Missing required data: prediction_id={prediction_id}, user_id={user_id}")
             return False
         
-        logger.info(f"♀️ Processing Venus prediction {prediction_id} for user {user_telegram_id}, profile_id: {profile_id}")
+        logger.info(f"♀️ Processing Venus prediction {prediction_id} for user {user_id}, profile_id: {profile_id}")
         
         async with get_session() as session:
             # Получаем предсказание
@@ -238,14 +238,14 @@ async def process_venus_prediction(
                 logger.error(f"♀️ Prediction {prediction_id} not found")
                 return False
             
-            # Получаем пользователя по telegram_id
+            # Получаем пользователя по user_id
             user_result = await session.execute(
-                select(User).where(User.telegram_id == user_telegram_id)
+                select(User).where(User.user_id == user_id)
             )
             user = user_result.scalar_one_or_none()
             
             if not user:
-                logger.error(f"♀️ User with telegram_id {user_telegram_id} not found")
+                logger.error(f"♀️ User with user_id {user_id} not found")
                 return False
             
             logger.info(f"♀️ Found user: {user.first_name} (telegram_id: {user.telegram_id})")

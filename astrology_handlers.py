@@ -1270,7 +1270,7 @@ async def start_sun_analysis(user_id: int, profile_id: Optional[int] = None) -> 
         # Отправляем в очередь для обработки LLM
         try:
             await send_sun_prediction_to_queue(
-                prediction_id, user_data["telegram_id"], profile_id
+                prediction_id, user_data["user_id"], profile_id
             )
             logger.info(
                 f"Sun prediction {prediction_id} sent to queue for LLM processing"
@@ -1350,7 +1350,7 @@ async def start_mercury_analysis(user_id: int, profile_id: Optional[int] = None)
         # Отправляем в очередь для обработки LLM
         try:
             await send_mercury_prediction_to_queue(
-                prediction_id, user_data["telegram_id"], profile_id
+                prediction_id, user_data["user_id"], profile_id
             )
             logger.info(
                 f"☿️ Mercury prediction {prediction_id} sent to queue for LLM processing, profile_id={profile_id}"
@@ -1490,7 +1490,7 @@ async def start_venus_analysis(user_id: int, profile_id: Optional[int] = None) -
         # Отправляем в очередь для обработки LLM
         try:
             await send_venus_prediction_to_queue(
-                prediction_id, user_data["telegram_id"], profile_id
+                prediction_id, user_data["user_id"], profile_id
             )
             logger.info(
                 f"♀️ Venus prediction {prediction_id} sent to queue for LLM processing, profile_id={profile_id}"
@@ -1589,7 +1589,7 @@ async def start_mars_analysis(user_id: int, profile_id: Optional[int] = None) ->
         # Отправляем в очередь для обработки LLM
         try:
             await send_mars_prediction_to_queue(
-                prediction_id, user_data["telegram_id"], profile_id
+                prediction_id, user_data["user_id"], profile_id
             )
             logger.info(
                 f"♂️ Mars prediction {prediction_id} sent to queue for LLM processing, profile_id={profile_id}"

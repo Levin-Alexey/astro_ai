@@ -455,7 +455,7 @@ class SunWorker:
     async def process_prediction(self, message_data: Dict[str, Any]):
         """Обрабатывает одно предсказание"""
         prediction_id = message_data.get("prediction_id")
-        user_id = message_data.get("user_id")
+        user_id = message_data.get("user_id") or message_data.get("user_telegram_id")
         profile_id = message_data.get("profile_id")
         
         if not prediction_id or not user_id:
@@ -480,7 +480,7 @@ class SunWorker:
         # Получаем информацию о пользователе по telegram_id
         user_info = await self.get_user_info(user_id)
         if not user_info:
-            logger.error(f"User with telegram_id {user_id} not found")
+            logger.error(f"User with user_id {user_id} not found")
             try:
                 await mark_analysis_failed(user_id, "sun", "User not found")
             except:
@@ -565,7 +565,7 @@ class SunWorker:
                     if updated_prediction:
                         # Получаем данные пользователя
                         user_result = await session.execute(
-                            select(User).where(User.telegram_id == user_id)
+                            select(User).where(User.user_id == user_id)
                         )
                         user = user_result.scalar_one_or_none()
                         

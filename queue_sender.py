@@ -113,7 +113,7 @@ class QueueSender:
     async def send_mercury_prediction_for_processing(
         self,
         prediction_id: int,
-        user_telegram_id: int,
+        user_id: int,
         profile_id: int = None
     ) -> bool:
         """
@@ -121,7 +121,7 @@ class QueueSender:
 
         Args:
             prediction_id: ID предсказания
-            user_telegram_id: Telegram ID пользователя
+            user_id: ID пользователя
             profile_id: ID дополнительного профиля (опционально)
 
         Returns:
@@ -132,7 +132,7 @@ class QueueSender:
 
         message_data = {
             "prediction_id": prediction_id,
-            "user_telegram_id": user_telegram_id,
+            "user_id": user_id,
             "timestamp": asyncio.get_event_loop().time()
         }
         
@@ -329,7 +329,7 @@ class QueueSender:
     async def send_venus_prediction_for_processing(
         self,
         prediction_id: int,
-        user_telegram_id: int,
+        user_id: int,
         profile_id: int = None
     ) -> bool:
         """
@@ -337,7 +337,7 @@ class QueueSender:
 
         Args:
             prediction_id: ID предсказания
-            user_telegram_id: Telegram ID пользователя
+            user_id: ID пользователя
             profile_id: ID дополнительного профиля (опционально)
 
         Returns:
@@ -348,7 +348,7 @@ class QueueSender:
 
         message_data = {
             "prediction_id": prediction_id,
-            "user_telegram_id": user_telegram_id,
+            "user_id": user_id,
             "timestamp": asyncio.get_event_loop().time()
         }
         
@@ -377,7 +377,7 @@ class QueueSender:
     async def send_mars_prediction_for_processing(
         self,
         prediction_id: int,
-        user_telegram_id: int,
+        user_id: int,
         profile_id: int = None
     ) -> bool:
         """
@@ -385,7 +385,7 @@ class QueueSender:
 
         Args:
             prediction_id: ID предсказания
-            user_telegram_id: Telegram ID пользователя
+            user_id: ID пользователя
             profile_id: ID дополнительного профиля (опционально)
 
         Returns:
@@ -396,7 +396,7 @@ class QueueSender:
 
         message_data = {
             "prediction_id": prediction_id,
-            "user_telegram_id": user_telegram_id,
+            "user_id": user_id,
             "timestamp": asyncio.get_event_loop().time()
         }
         
@@ -710,7 +710,7 @@ async def send_mercury_recommendation_to_queue(
 
 async def send_mercury_prediction_to_queue(
     prediction_id: int,
-    user_telegram_id: int,
+    user_id: int,
     profile_id: int = None
 ) -> bool:
     """
@@ -718,7 +718,7 @@ async def send_mercury_prediction_to_queue(
 
     Args:
         prediction_id: ID предсказания
-        user_telegram_id: Telegram ID пользователя
+        user_id: ID пользователя
         profile_id: ID дополнительного профиля (опционально)
 
     Returns:
@@ -726,13 +726,13 @@ async def send_mercury_prediction_to_queue(
     """
     sender = await get_queue_sender()
     return await sender.send_mercury_prediction_for_processing(
-        prediction_id, user_telegram_id, profile_id
+        prediction_id, user_id, profile_id
     )
 
 
 async def send_venus_prediction_to_queue(
     prediction_id: int,
-    user_telegram_id: int,
+    user_id: int,
     profile_id: int = None
 ) -> bool:
     """
@@ -740,7 +740,7 @@ async def send_venus_prediction_to_queue(
 
     Args:
         prediction_id: ID предсказания
-        user_telegram_id: Telegram ID пользователя
+        user_id: ID пользователя
         profile_id: ID дополнительного профиля (опционально)
 
     Returns:
@@ -748,13 +748,13 @@ async def send_venus_prediction_to_queue(
     """
     sender = await get_queue_sender()
     return await sender.send_venus_prediction_for_processing(
-        prediction_id, user_telegram_id, profile_id
+        prediction_id, user_id, profile_id
     )
 
 
 async def send_mars_prediction_to_queue(
     prediction_id: int,
-    user_telegram_id: int,
+    user_id: int,
     profile_id: int = None
 ) -> bool:
     """
@@ -762,7 +762,7 @@ async def send_mars_prediction_to_queue(
 
     Args:
         prediction_id: ID предсказания
-        user_telegram_id: Telegram ID пользователя
+        user_id: ID пользователя
         profile_id: ID дополнительного профиля (опционально)
 
     Returns:
@@ -770,7 +770,7 @@ async def send_mars_prediction_to_queue(
     """
     sender = await get_queue_sender()
     return await sender.send_mars_prediction_for_processing(
-        prediction_id, user_telegram_id, profile_id
+        prediction_id, user_id, profile_id
     )
 
 
