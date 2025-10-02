@@ -1088,3 +1088,425 @@ async def handle_additional_time_unknown_callback(callback: CallbackQuery, state
             pass
 
     await callback.answer()
+
+
+# Функции для анализа планет дополнительных профилей (как у Луны)
+
+async def start_mercury_analysis_for_profile(message: Message, profile_id: int):
+    """
+    Запускает анализ Меркурия для дополнительного профиля
+    
+    Args:
+        message: Message объект для отправки ответов
+        profile_id: ID дополнительного профиля
+    """
+    try:
+        logger.info(f"Starting mercury analysis for additional profile {profile_id}")
+
+        # Получаем данные дополнительного профиля
+        profile_data = await get_additional_profile_astrology_data(profile_id)
+        if not profile_data:
+            logger.error(f"No profile data for profile_id={profile_id} - cannot start mercury analysis")
+            await message.answer(
+                "❌ Для анализа Меркурия необходимо точное время рождения!\n\n"
+                "Этот профиль создан без времени рождения, поэтому анализ Меркурия недоступен."
+            )
+            return
+
+        # Импортируем необходимые функции
+        from astrology_handlers import AstrologyAPIClient, ASTROLOGY_API_USER_ID, ASTROLOGY_API_KEY
+        from astrology_handlers import extract_mercury_data, format_mercury_data_for_llm
+        import json
+
+        # Инициализируем клиент AstrologyAPI
+        api_client = AstrologyAPIClient(
+            user_id=ASTROLOGY_API_USER_ID,
+            api_key=ASTROLOGY_API_KEY
+        )
+
+        # Получаем данные от AstrologyAPI
+        astrology_data = await api_client.get_western_horoscope(
+            day=profile_data["day"],
+            month=profile_data["month"],
+            year=profile_data["year"],
+            hour=profile_data["hour"],
+            minute=profile_data["minute"],
+            lat=profile_data["lat"],
+            lon=profile_data["lon"],
+            tzone=profile_data["tzone"],
+            language="en"  # Английский для стандартных названий
+        )
+
+        # Извлекаем данные Меркурия
+        mercury_data = extract_mercury_data(astrology_data)
+        formatted_mercury_data = format_mercury_data_for_llm(mercury_data)
+
+        # Сохраняем отформатированные данные Меркурия
+        raw_content = (
+            f"Mercury Analysis Data:\n{formatted_mercury_data}\n\n"
+            f"Raw AstrologyAPI data: {astrology_data}"
+        )
+
+        # Сохраняем в базу данных с profile_id
+        async with get_session() as session:
+            # Получаем telegram_id владельца профиля
+            user_result = await session.execute(
+                select(User).where(User.user_id == profile_data["owner_user_id"])
+            )
+            owner = user_result.scalar_one_or_none()
+            
+            if not owner:
+                logger.error(f"Owner user {profile_data['owner_user_id']} not found")
+                await message.answer("❌ Ошибка: владелец профиля не найден")
+                return
+            
+            telegram_id = owner.telegram_id
+            logger.info(f"Owner telegram_id: {telegram_id}")
+            
+            prediction = Prediction(
+                user_id=profile_data["owner_user_id"],
+                profile_id=profile_id,  # Указываем дополнительный профиль
+                planet=Planet.mercury,
+                prediction_type=PredictionType.paid,
+                content=raw_content,  # Сырые данные от API
+                llm_model="astrology_api",
+                expires_at=None  # Платные предсказания не истекают
+            )
+
+            session.add(prediction)
+            await session.commit()
+
+            prediction_id = prediction.prediction_id
+
+        # Отправляем в очередь для обработки LLM с profile_id
+        try:
+            # Создаем расширенное сообщение с profile_id и telegram_id
+            message_data = {
+                "prediction_id": prediction_id,
+                "user_id": telegram_id,  # ВАЖНО: используем telegram_id!
+                "profile_id": profile_id,  # Добавляем profile_id для воркера
+                "timestamp": 0  # Временная метка
+            }
+
+            # Отправляем в очередь через прямое подключение к RabbitMQ
+            import aio_pika
+            
+            RABBITMQ_URL = "amqp://astro_user:astro_password_123@31.128.40.111:5672/"
+            QUEUE_NAME = "mercury_predictions"
+            
+            connection = await aio_pika.connect_robust(RABBITMQ_URL)
+            channel = await connection.channel()
+            
+            message_queue = aio_pika.Message(
+                body=json.dumps(message_data).encode(),
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+            )
+
+            await channel.default_exchange.publish(
+                message_queue,
+                routing_key=QUEUE_NAME
+            )
+            
+            await connection.close()
+
+            logger.info(f"Mercury prediction {prediction_id} for profile {profile_id} sent to queue")
+            
+        except Exception as e:
+            logger.error(f"Failed to send mercury prediction to queue: {e}", exc_info=True)
+            # Продолжаем работу, даже если не удалось отправить в очередь
+
+        # Показываем сообщение о том, что анализ запущен
+        await message.answer(
+            "☿️ Анализ Меркурия запущен!\n\n"
+            "Это займет несколько минут. Как только разбор будет готов, "
+            "я пришлю его тебе с персональными рекомендациями."
+        )
+
+        logger.info(f"Mercury analysis started for additional profile {profile_id}")
+
+    except Exception as e:
+        logger.error(f"Error starting mercury analysis for profile {profile_id}: {e}")
+        await message.answer(
+            "❌ Произошла ошибка при создании анализа Меркурия. "
+            "Попробуй ещё раз или обратись в поддержку."
+        )
+
+
+async def start_venus_analysis_for_profile(message: Message, profile_id: int):
+    """
+    Запускает анализ Венеры для дополнительного профиля
+    
+    Args:
+        message: Message объект для отправки ответов
+        profile_id: ID дополнительного профиля
+    """
+    try:
+        logger.info(f"Starting venus analysis for additional profile {profile_id}")
+
+        # Получаем данные дополнительного профиля
+        profile_data = await get_additional_profile_astrology_data(profile_id)
+        if not profile_data:
+            logger.error(f"No profile data for profile_id={profile_id} - cannot start venus analysis")
+            await message.answer(
+                "❌ Для анализа Венеры необходимо точное время рождения!\n\n"
+                "Этот профиль создан без времени рождения, поэтому анализ Венеры недоступен."
+            )
+            return
+
+        # Импортируем необходимые функции
+        from astrology_handlers import AstrologyAPIClient, ASTROLOGY_API_USER_ID, ASTROLOGY_API_KEY
+        from astrology_handlers import extract_venus_data, format_venus_data_for_llm
+        import json
+
+        # Инициализируем клиент AstrologyAPI
+        api_client = AstrologyAPIClient(
+            user_id=ASTROLOGY_API_USER_ID,
+            api_key=ASTROLOGY_API_KEY
+        )
+
+        # Получаем данные от AstrologyAPI
+        astrology_data = await api_client.get_western_horoscope(
+            day=profile_data["day"],
+            month=profile_data["month"],
+            year=profile_data["year"],
+            hour=profile_data["hour"],
+            minute=profile_data["minute"],
+            lat=profile_data["lat"],
+            lon=profile_data["lon"],
+            tzone=profile_data["tzone"],
+            language="en"  # Английский для стандартных названий
+        )
+
+        # Извлекаем данные Венеры
+        venus_data = extract_venus_data(astrology_data)
+        formatted_venus_data = format_venus_data_for_llm(venus_data)
+
+        # Сохраняем отформатированные данные Венеры
+        raw_content = (
+            f"Venus Analysis Data:\n{formatted_venus_data}\n\n"
+            f"Raw AstrologyAPI data: {astrology_data}"
+        )
+
+        # Сохраняем в базу данных с profile_id
+        async with get_session() as session:
+            # Получаем telegram_id владельца профиля
+            user_result = await session.execute(
+                select(User).where(User.user_id == profile_data["owner_user_id"])
+            )
+            owner = user_result.scalar_one_or_none()
+            
+            if not owner:
+                logger.error(f"Owner user {profile_data['owner_user_id']} not found")
+                await message.answer("❌ Ошибка: владелец профиля не найден")
+                return
+            
+            telegram_id = owner.telegram_id
+            logger.info(f"Owner telegram_id: {telegram_id}")
+            
+            prediction = Prediction(
+                user_id=profile_data["owner_user_id"],
+                profile_id=profile_id,  # Указываем дополнительный профиль
+                planet=Planet.venus,
+                prediction_type=PredictionType.paid,
+                content=raw_content,  # Сырые данные от API
+                llm_model="astrology_api",
+                expires_at=None  # Платные предсказания не истекают
+            )
+
+            session.add(prediction)
+            await session.commit()
+
+            prediction_id = prediction.prediction_id
+
+        # Отправляем в очередь для обработки LLM с profile_id
+        try:
+            # Создаем расширенное сообщение с profile_id и telegram_id
+            message_data = {
+                "prediction_id": prediction_id,
+                "user_id": telegram_id,  # ВАЖНО: используем telegram_id!
+                "profile_id": profile_id,  # Добавляем profile_id для воркера
+                "timestamp": 0  # Временная метка
+            }
+
+            # Отправляем в очередь через прямое подключение к RabbitMQ
+            import aio_pika
+            
+            RABBITMQ_URL = "amqp://astro_user:astro_password_123@31.128.40.111:5672/"
+            QUEUE_NAME = "venus_predictions"
+            
+            connection = await aio_pika.connect_robust(RABBITMQ_URL)
+            channel = await connection.channel()
+            
+            message_queue = aio_pika.Message(
+                body=json.dumps(message_data).encode(),
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+            )
+
+            await channel.default_exchange.publish(
+                message_queue,
+                routing_key=QUEUE_NAME
+            )
+            
+            await connection.close()
+
+            logger.info(f"Venus prediction {prediction_id} for profile {profile_id} sent to queue")
+            
+        except Exception as e:
+            logger.error(f"Failed to send venus prediction to queue: {e}", exc_info=True)
+            # Продолжаем работу, даже если не удалось отправить в очередь
+
+        # Показываем сообщение о том, что анализ запущен
+        await message.answer(
+            "♀️ Анализ Венеры запущен!\n\n"
+            "Это займет несколько минут. Как только разбор будет готов, "
+            "я пришлю его тебе с персональными рекомендациями."
+        )
+
+        logger.info(f"Venus analysis started for additional profile {profile_id}")
+
+    except Exception as e:
+        logger.error(f"Error starting venus analysis for profile {profile_id}: {e}")
+        await message.answer(
+            "❌ Произошла ошибка при создании анализа Венеры. "
+            "Попробуй ещё раз или обратись в поддержку."
+        )
+
+
+async def start_mars_analysis_for_profile(message: Message, profile_id: int):
+    """
+    Запускает анализ Марса для дополнительного профиля
+    
+    Args:
+        message: Message объект для отправки ответов
+        profile_id: ID дополнительного профиля
+    """
+    try:
+        logger.info(f"Starting mars analysis for additional profile {profile_id}")
+
+        # Получаем данные дополнительного профиля
+        profile_data = await get_additional_profile_astrology_data(profile_id)
+        if not profile_data:
+            logger.error(f"No profile data for profile_id={profile_id} - cannot start mars analysis")
+            await message.answer(
+                "❌ Для анализа Марса необходимо точное время рождения!\n\n"
+                "Этот профиль создан без времени рождения, поэтому анализ Марса недоступен."
+            )
+            return
+
+        # Импортируем необходимые функции
+        from astrology_handlers import AstrologyAPIClient, ASTROLOGY_API_USER_ID, ASTROLOGY_API_KEY
+        from astrology_handlers import extract_mars_data, format_mars_data_for_llm
+        import json
+
+        # Инициализируем клиент AstrologyAPI
+        api_client = AstrologyAPIClient(
+            user_id=ASTROLOGY_API_USER_ID,
+            api_key=ASTROLOGY_API_KEY
+        )
+
+        # Получаем данные от AstrologyAPI
+        astrology_data = await api_client.get_western_horoscope(
+            day=profile_data["day"],
+            month=profile_data["month"],
+            year=profile_data["year"],
+            hour=profile_data["hour"],
+            minute=profile_data["minute"],
+            lat=profile_data["lat"],
+            lon=profile_data["lon"],
+            tzone=profile_data["tzone"],
+            language="en"  # Английский для стандартных названий
+        )
+
+        # Извлекаем данные Марса
+        mars_data = extract_mars_data(astrology_data)
+        formatted_mars_data = format_mars_data_for_llm(mars_data)
+
+        # Сохраняем отформатированные данные Марса
+        raw_content = (
+            f"Mars Analysis Data:\n{formatted_mars_data}\n\n"
+            f"Raw AstrologyAPI data: {astrology_data}"
+        )
+
+        # Сохраняем в базу данных с profile_id
+        async with get_session() as session:
+            # Получаем telegram_id владельца профиля
+            user_result = await session.execute(
+                select(User).where(User.user_id == profile_data["owner_user_id"])
+            )
+            owner = user_result.scalar_one_or_none()
+            
+            if not owner:
+                logger.error(f"Owner user {profile_data['owner_user_id']} not found")
+                await message.answer("❌ Ошибка: владелец профиля не найден")
+                return
+            
+            telegram_id = owner.telegram_id
+            logger.info(f"Owner telegram_id: {telegram_id}")
+            
+            prediction = Prediction(
+                user_id=profile_data["owner_user_id"],
+                profile_id=profile_id,  # Указываем дополнительный профиль
+                planet=Planet.mars,
+                prediction_type=PredictionType.paid,
+                content=raw_content,  # Сырые данные от API
+                llm_model="astrology_api",
+                expires_at=None  # Платные предсказания не истекают
+            )
+
+            session.add(prediction)
+            await session.commit()
+
+            prediction_id = prediction.prediction_id
+
+        # Отправляем в очередь для обработки LLM с profile_id
+        try:
+            # Создаем расширенное сообщение с profile_id и telegram_id
+            message_data = {
+                "prediction_id": prediction_id,
+                "user_id": telegram_id,  # ВАЖНО: используем telegram_id!
+                "profile_id": profile_id,  # Добавляем profile_id для воркера
+                "timestamp": 0  # Временная метка
+            }
+
+            # Отправляем в очередь через прямое подключение к RabbitMQ
+            import aio_pika
+            
+            RABBITMQ_URL = "amqp://astro_user:astro_password_123@31.128.40.111:5672/"
+            QUEUE_NAME = "mars_predictions"
+            
+            connection = await aio_pika.connect_robust(RABBITMQ_URL)
+            channel = await connection.channel()
+            
+            message_queue = aio_pika.Message(
+                body=json.dumps(message_data).encode(),
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+            )
+
+            await channel.default_exchange.publish(
+                message_queue,
+                routing_key=QUEUE_NAME
+            )
+            
+            await connection.close()
+
+            logger.info(f"Mars prediction {prediction_id} for profile {profile_id} sent to queue")
+            
+        except Exception as e:
+            logger.error(f"Failed to send mars prediction to queue: {e}", exc_info=True)
+            # Продолжаем работу, даже если не удалось отправить в очередь
+
+        # Показываем сообщение о том, что анализ запущен
+        await message.answer(
+            "♂️ Анализ Марса запущен!\n\n"
+            "Это займет несколько минут. Как только разбор будет готов, "
+            "я пришлю его тебе с персональными рекомендациями."
+        )
+
+        logger.info(f"Mars analysis started for additional profile {profile_id}")
+
+    except Exception as e:
+        logger.error(f"Error starting mars analysis for profile {profile_id}: {e}")
+        await message.answer(
+            "❌ Произошла ошибка при создании анализа Марса. "
+            "Попробуй ещё раз или обратись в поддержку."
+        )

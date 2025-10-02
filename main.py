@@ -35,7 +35,6 @@ from models import (
 )
 from sqlalchemy import select
 from datetime import datetime, timezone, date
-from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.storage.memory import MemoryStorage
 from config import BOT_TOKEN, LOG_LEVEL, LOG_FORMAT
