@@ -122,7 +122,7 @@ class OpenRouterClient:
                     "content": prompt
                 }
             ],
-            "max_tokens": 2500,
+            "max_tokens": 2000,
             "temperature": 0.7
         }
         
@@ -133,16 +133,28 @@ class OpenRouterClient:
             "X-Title": "Astro Bot"
         }
         
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=300, connect=30, sock_read=270)
+        ) as session:
             try:
                 async with session.post(
                     self.url,
                     headers=headers,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=180)
+                    json=payload
                 ) as response:
                     if response.status == 200:
-                        result = await response.json()
+                        # Читаем ответ полностью
+                        response_text = await response.text()
+                        try:
+                            result = json.loads(response_text)
+                        except json.JSONDecodeError as e:
+                            logger.error(f"Failed to parse JSON response: {e}")
+                            logger.error(f"Response text: {response_text[:500]}...")
+                            return {
+                                "success": False,
+                                "error": f"Invalid JSON response: {e}"
+                            }
+                        
                         logger.info(f"OpenRouter sun recommendations response received for {user_name}")
                         return {
                             "success": True,

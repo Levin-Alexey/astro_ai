@@ -124,13 +124,24 @@ class OpenRouterClient:
                         self.url,
                         headers=headers,
                         json=payload,
-                        timeout=aiohttp.ClientTimeout(total=180)
+                        timeout=aiohttp.ClientTimeout(total=300, connect=30, sock_read=270)
                     ) as response:
                         end_time = asyncio.get_event_loop().time()
                         logger.info(f"♂️ OpenRouter response time: {end_time - start_time:.2f}s")
                         
                         if response.status == 200:
-                            result = await response.json()
+                            # Читаем ответ полностью
+                            response_text = await response.text()
+                            try:
+                                result = json.loads(response_text)
+                            except json.JSONDecodeError as e:
+                                logger.error(f"Failed to parse JSON response: {e}")
+                                logger.error(f"Response text: {response_text[:500]}...")
+                                return {
+                                    "success": False,
+                                    "error": f"Invalid JSON response: {e}"
+                                }
+                            
                             logger.info(f"♂️ OpenRouter response received for {user_name}")
                             return {
                                 "success": True,

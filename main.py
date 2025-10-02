@@ -9,6 +9,7 @@ from aiogram.types import (
     CallbackQuery,
     User as TgUser,
 )
+from aiogram.fsm.context import FSMContext
 from typing import cast, Optional
 from db import (
     init_engine,
@@ -94,14 +95,19 @@ payment_handler = None
 
 
 @dp.message(Command("lk"))
-async def cmd_lk(message: Message):
+async def cmd_lk(message: Message, state: FSMContext):
     """Обработчик команды /lk - личный кабинет"""
+    # Сбрасываем состояние FSM при переходе в личный кабинет
+    await state.clear()
     await show_personal_cabinet(message)
 
 
 @dp.message(Command("start"))
-async def cmd_start(message: Message):
+async def cmd_start(message: Message, state: FSMContext):
     """Обработчик команды /start"""
+    # Сбрасываем состояние FSM при перезапуске
+    await state.clear()
+    
     # Созраняем/обновляем пользователя в БД при первом запуске
     tg_user = cast(TgUser, message.from_user)
     lang = tg_user.language_code or "ru"
@@ -2540,8 +2546,11 @@ async def on_question_topic(callback: CallbackQuery):
 
 
 @dp.message(Command("help"))
-async def cmd_help(message: Message):
+async def cmd_help(message: Message, state: FSMContext):
     """Обработчик команды /help"""
+    # Сбрасываем состояние FSM при запросе помощи
+    await state.clear()
+    
     help_text = """
 🔮 Я бот астролог
 

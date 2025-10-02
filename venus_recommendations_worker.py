@@ -68,7 +68,8 @@ class OpenRouterClient:
         self,
         venus_analysis: str,
         user_name: str,
-        user_gender: str
+        user_gender: str,
+        max_retries: int = 3
     ) -> Dict[str, Any]:
         """
         Генерирует рекомендации по Венере через OpenRouter
@@ -77,6 +78,7 @@ class OpenRouterClient:
             venus_analysis: Разбор Венеры пользователя
             user_name: Имя пользователя
             user_gender: Пол пользователя
+            max_retries: Максимальное количество попыток
             
         Returns:
             Dict с результатом генерации
@@ -114,7 +116,7 @@ class OpenRouterClient:
                     "content": prompt
                 }
             ],
-            "max_tokens": 2500,
+            "max_tokens": 2000,
             "temperature": 0.7
         }
         
@@ -125,46 +127,77 @@ class OpenRouterClient:
             "X-Title": "Astro Bot"
         }
         
-        async with aiohttp.ClientSession() as session:
+        # Retry логика
+        for attempt in range(max_retries):
             try:
-                async with session.post(
-                    self.url,
-                    headers=headers,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=180)
-                ) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        logger.info(
-                            f"OpenRouter venus recommendations response "
-                            f"received for {user_name}"
-                        )
-                        return {
-                            "success": True,
-                            "content": result["choices"][0]["message"]["content"],
-                            "usage": result.get("usage", {}),
-                            "model": result.get("model", "unknown")
-                        }
-                    else:
-                        error_text = await response.text()
-                        logger.error(f"OpenRouter error {response.status}: {error_text}")
-                        return {
-                            "success": False,
-                            "error": f"API error: {response.status} - {error_text}"
-                        }
-                        
+                async with aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=300, connect=30, sock_read=270)
+                ) as session:
+                    async with session.post(
+                        self.url,
+                        headers=headers,
+                        json=payload
+                    ) as response:
+                        if response.status == 200:
+                            # Читаем ответ полностью
+                            response_text = await response.text()
+                            try:
+                                result = json.loads(response_text)
+                            except json.JSONDecodeError as e:
+                                logger.error(f"Failed to parse JSON response (attempt {attempt + 1}): {e}")
+                                logger.error(f"Response text: {response_text[:500]}...")
+                                if attempt == max_retries - 1:
+                                    return {
+                                        "success": False,
+                                        "error": f"Invalid JSON response: {e}"
+                                    }
+                                continue
+                            
+                            logger.info(
+                                f"OpenRouter venus recommendations response "
+                                f"received for {user_name} (attempt {attempt + 1})"
+                            )
+                            return {
+                                "success": True,
+                                "content": result["choices"][0]["message"]["content"],
+                                "usage": result.get("usage", {}),
+                                "model": result.get("model", "unknown")
+                            }
+                        else:
+                            error_text = await response.text()
+                            logger.error(f"OpenRouter error {response.status} (attempt {attempt + 1}): {error_text}")
+                            if attempt == max_retries - 1:
+                                return {
+                                    "success": False,
+                                    "error": f"API error: {response.status} - {error_text}"
+                                }
+                            # Ждем перед повтором
+                            await asyncio.sleep(2 ** attempt)
+                            
             except asyncio.TimeoutError:
-                logger.error("OpenRouter request timeout")
-                return {
-                    "success": False,
-                    "error": "Request timeout"
-                }
+                logger.error(f"OpenRouter request timeout (attempt {attempt + 1})")
+                if attempt == max_retries - 1:
+                    return {
+                        "success": False,
+                        "error": "Request timeout"
+                    }
+                # Ждем перед повтором
+                await asyncio.sleep(2 ** attempt)
             except Exception as e:
-                logger.error(f"OpenRouter request failed: {e}")
-                return {
-                    "success": False,
-                    "error": str(e)
-                }
+                logger.error(f"OpenRouter request failed (attempt {attempt + 1}): {e}")
+                if attempt == max_retries - 1:
+                    return {
+                        "success": False,
+                        "error": str(e)
+                    }
+                # Ждем перед повтором
+                await asyncio.sleep(2 ** attempt)
+        
+        # Если все попытки исчерпаны
+        return {
+            "success": False,
+            "error": f"All {max_retries} attempts failed"
+        }
 
 
 class VenusRecommendationsWorker:
@@ -382,7 +415,7 @@ class VenusRecommendationsWorker:
             except Exception as e:
                 logger.error(f"Error sending venus recommendations to user: {e}")
         else:
-            logger.info(f"LLM processing skipped for venus recommendations - no API key")
+            logger.info("LLM processing skipped for venus recommendations - no API key")
         
         logger.info(f"Venus recommendations for prediction {prediction_id} processed successfully")
     
