@@ -191,32 +191,32 @@ async def generate_planet_analysis(user_id: int, planet: str, profile_id: int = 
         # Для Меркурия вызываем start_mercury_analysis
         elif planet == "mercury":
             from astrology_handlers import start_mercury_analysis
-            astrology_data = await start_mercury_analysis(user_id)
+            astrology_data = await start_mercury_analysis(user_id, profile_id)
             
             if astrology_data:
-                logger.info(f"☿️ Mercury analysis data generated for user {user_id}")
+                logger.info(f"☿️ Mercury analysis data generated for user {user_id}, profile_id: {profile_id}")
             else:
-                logger.error(f"❌ Failed to generate mercury analysis for user {user_id}")
+                logger.error(f"❌ Failed to generate mercury analysis for user {user_id}, profile_id: {profile_id}")
         
         # Для Венеры вызываем start_venus_analysis
         elif planet == "venus":
             from astrology_handlers import start_venus_analysis
-            astrology_data = await start_venus_analysis(user_id)
+            astrology_data = await start_venus_analysis(user_id, profile_id)
             
             if astrology_data:
-                logger.info(f"♀️ Venus analysis data generated for user {user_id}")
+                logger.info(f"♀️ Venus analysis data generated for user {user_id}, profile_id: {profile_id}")
             else:
-                logger.error(f"❌ Failed to generate venus analysis for user {user_id}")
+                logger.error(f"❌ Failed to generate venus analysis for user {user_id}, profile_id: {profile_id}")
         
         # Для Марса вызываем start_mars_analysis
         elif planet == "mars":
             from astrology_handlers import start_mars_analysis
-            astrology_data = await start_mars_analysis(user_id)
+            astrology_data = await start_mars_analysis(user_id, profile_id)
             
             if astrology_data:
-                logger.info(f"♂️ Mars analysis data generated for user {user_id}")
+                logger.info(f"♂️ Mars analysis data generated for user {user_id}, profile_id: {profile_id}")
             else:
-                logger.error(f"❌ Failed to generate mars analysis for user {user_id}")
+                logger.error(f"❌ Failed to generate mars analysis for user {user_id}, profile_id: {profile_id}")
         
         else:
             logger.warning(f"⚠️ Analysis for {planet} not implemented yet")

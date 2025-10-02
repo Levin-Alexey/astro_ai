@@ -113,7 +113,8 @@ class QueueSender:
     async def send_mercury_prediction_for_processing(
         self,
         prediction_id: int,
-        user_telegram_id: int
+        user_telegram_id: int,
+        profile_id: int = None
     ) -> bool:
         """
         Отправляет предсказание Меркурия на обработку в очередь
@@ -121,6 +122,7 @@ class QueueSender:
         Args:
             prediction_id: ID предсказания
             user_telegram_id: Telegram ID пользователя
+            profile_id: ID дополнительного профиля (опционально)
 
         Returns:
             True если сообщение отправлено успешно
@@ -133,6 +135,10 @@ class QueueSender:
             "user_telegram_id": user_telegram_id,
             "timestamp": asyncio.get_event_loop().time()
         }
+        
+        # Добавляем profile_id если указан
+        if profile_id:
+            message_data["profile_id"] = profile_id
 
         try:
             message = aio_pika.Message(
@@ -268,7 +274,8 @@ class QueueSender:
         self,
         prediction_id: int,
         user_telegram_id: int,
-        mercury_analysis: str
+        mercury_analysis: str,
+        profile_id: int = None
     ) -> bool:
         """
         Отправляет запрос на генерацию рекомендаций по Меркурию в очередь
@@ -277,6 +284,7 @@ class QueueSender:
             prediction_id: ID исходного предсказания
             user_telegram_id: Telegram ID пользователя
             mercury_analysis: Разбор Меркурия для генерации рекомендаций
+            profile_id: ID дополнительного профиля (опционально)
 
         Returns:
             True если сообщение отправлено успешно
@@ -290,6 +298,10 @@ class QueueSender:
             "mercury_analysis": mercury_analysis,
             "timestamp": asyncio.get_event_loop().time()
         }
+        
+        # Добавляем profile_id если указан
+        if profile_id:
+            message_data["profile_id"] = profile_id
 
         try:
             message = aio_pika.Message(
@@ -317,7 +329,8 @@ class QueueSender:
     async def send_venus_prediction_for_processing(
         self,
         prediction_id: int,
-        user_telegram_id: int
+        user_telegram_id: int,
+        profile_id: int = None
     ) -> bool:
         """
         Отправляет предсказание Венеры на обработку в очередь
@@ -325,6 +338,7 @@ class QueueSender:
         Args:
             prediction_id: ID предсказания
             user_telegram_id: Telegram ID пользователя
+            profile_id: ID дополнительного профиля (опционально)
 
         Returns:
             True если сообщение отправлено успешно
@@ -337,6 +351,10 @@ class QueueSender:
             "user_telegram_id": user_telegram_id,
             "timestamp": asyncio.get_event_loop().time()
         }
+        
+        # Добавляем profile_id если указан
+        if profile_id:
+            message_data["profile_id"] = profile_id
 
         try:
             message = aio_pika.Message(
@@ -359,7 +377,8 @@ class QueueSender:
     async def send_mars_prediction_for_processing(
         self,
         prediction_id: int,
-        user_telegram_id: int
+        user_telegram_id: int,
+        profile_id: int = None
     ) -> bool:
         """
         Отправляет предсказание Марса на обработку в очередь
@@ -367,6 +386,7 @@ class QueueSender:
         Args:
             prediction_id: ID предсказания
             user_telegram_id: Telegram ID пользователя
+            profile_id: ID дополнительного профиля (опционально)
 
         Returns:
             True если сообщение отправлено успешно
@@ -379,6 +399,10 @@ class QueueSender:
             "user_telegram_id": user_telegram_id,
             "timestamp": asyncio.get_event_loop().time()
         }
+        
+        # Добавляем profile_id если указан
+        if profile_id:
+            message_data["profile_id"] = profile_id
 
         try:
             message = aio_pika.Message(
@@ -402,7 +426,8 @@ class QueueSender:
         self,
         prediction_id: int,
         user_telegram_id: int,
-        venus_analysis: str
+        venus_analysis: str,
+        profile_id: int = None
     ) -> bool:
         """
         Отправляет запрос на генерацию рекомендаций по Венере в очередь
@@ -411,6 +436,7 @@ class QueueSender:
             prediction_id: ID исходного предсказания
             user_telegram_id: Telegram ID пользователя
             venus_analysis: Разбор Венеры для генерации рекомендаций
+            profile_id: ID дополнительного профиля (опционально)
 
         Returns:
             True если сообщение отправлено успешно
@@ -424,6 +450,10 @@ class QueueSender:
             "venus_analysis": venus_analysis,
             "timestamp": asyncio.get_event_loop().time()
         }
+        
+        # Добавляем profile_id если указан
+        if profile_id:
+            message_data["profile_id"] = profile_id
 
         try:
             message = aio_pika.Message(
@@ -452,7 +482,8 @@ class QueueSender:
         self,
         prediction_id: int,
         user_telegram_id: int,
-        mars_analysis: str
+        mars_analysis: str,
+        profile_id: int = None
     ) -> bool:
         """
         Отправляет запрос на генерацию рекомендаций по Марсу в очередь
@@ -461,6 +492,7 @@ class QueueSender:
             prediction_id: ID исходного предсказания
             user_telegram_id: Telegram ID пользователя
             mars_analysis: Разбор Марса для генерации рекомендаций
+            profile_id: ID дополнительного профиля (опционально)
 
         Returns:
             True если сообщение отправлено успешно
@@ -474,6 +506,10 @@ class QueueSender:
             "mars_analysis": mars_analysis,
             "timestamp": asyncio.get_event_loop().time()
         }
+        
+        # Добавляем profile_id если указан
+        if profile_id:
+            message_data["profile_id"] = profile_id
 
         try:
             message = aio_pika.Message(
@@ -651,7 +687,8 @@ async def send_question_to_queue(
 async def send_mercury_recommendation_to_queue(
     prediction_id: int,
     user_telegram_id: int,
-    mercury_analysis: str
+    mercury_analysis: str,
+    profile_id: int = None
 ) -> bool:
     """
     Удобная функция для отправки запроса на рекомендации по Меркурию в очередь
@@ -660,19 +697,21 @@ async def send_mercury_recommendation_to_queue(
         prediction_id: ID исходного предсказания
         user_telegram_id: Telegram ID пользователя
         mercury_analysis: Разбор Меркурия для генерации рекомендаций
+        profile_id: ID дополнительного профиля (опционально)
 
     Returns:
         True если сообщение отправлено успешно
     """
     sender = await get_queue_sender()
     return await sender.send_mercury_recommendation_for_processing(
-        prediction_id, user_telegram_id, mercury_analysis
+        prediction_id, user_telegram_id, mercury_analysis, profile_id
     )
 
 
 async def send_mercury_prediction_to_queue(
     prediction_id: int,
-    user_telegram_id: int
+    user_telegram_id: int,
+    profile_id: int = None
 ) -> bool:
     """
     Удобная функция для отправки Mercury prediction в очередь
@@ -680,19 +719,21 @@ async def send_mercury_prediction_to_queue(
     Args:
         prediction_id: ID предсказания
         user_telegram_id: Telegram ID пользователя
+        profile_id: ID дополнительного профиля (опционально)
 
     Returns:
         True если сообщение отправлено успешно
     """
     sender = await get_queue_sender()
     return await sender.send_mercury_prediction_for_processing(
-        prediction_id, user_telegram_id
+        prediction_id, user_telegram_id, profile_id
     )
 
 
 async def send_venus_prediction_to_queue(
     prediction_id: int,
-    user_telegram_id: int
+    user_telegram_id: int,
+    profile_id: int = None
 ) -> bool:
     """
     Удобная функция для отправки Venus prediction в очередь
@@ -700,19 +741,21 @@ async def send_venus_prediction_to_queue(
     Args:
         prediction_id: ID предсказания
         user_telegram_id: Telegram ID пользователя
+        profile_id: ID дополнительного профиля (опционально)
 
     Returns:
         True если сообщение отправлено успешно
     """
     sender = await get_queue_sender()
     return await sender.send_venus_prediction_for_processing(
-        prediction_id, user_telegram_id
+        prediction_id, user_telegram_id, profile_id
     )
 
 
 async def send_mars_prediction_to_queue(
     prediction_id: int,
-    user_telegram_id: int
+    user_telegram_id: int,
+    profile_id: int = None
 ) -> bool:
     """
     Удобная функция для отправки Mars prediction в очередь
@@ -720,20 +763,22 @@ async def send_mars_prediction_to_queue(
     Args:
         prediction_id: ID предсказания
         user_telegram_id: Telegram ID пользователя
+        profile_id: ID дополнительного профиля (опционально)
 
     Returns:
         True если сообщение отправлено успешно
     """
     sender = await get_queue_sender()
     return await sender.send_mars_prediction_for_processing(
-        prediction_id, user_telegram_id
+        prediction_id, user_telegram_id, profile_id
     )
 
 
 async def send_venus_recommendation_to_queue(
     prediction_id: int,
     user_telegram_id: int,
-    venus_analysis: str
+    venus_analysis: str,
+    profile_id: int = None
 ) -> bool:
     """
     Удобная функция для отправки запроса на рекомендации по Венере в очередь
@@ -742,20 +787,22 @@ async def send_venus_recommendation_to_queue(
         prediction_id: ID исходного предсказания
         user_telegram_id: Telegram ID пользователя
         venus_analysis: Разбор Венеры для генерации рекомендаций
+        profile_id: ID дополнительного профиля (опционально)
 
     Returns:
         True если сообщение отправлено успешно
     """
     sender = await get_queue_sender()
     return await sender.send_venus_recommendation_for_processing(
-        prediction_id, user_telegram_id, venus_analysis
+        prediction_id, user_telegram_id, venus_analysis, profile_id
     )
 
 
 async def send_mars_recommendation_to_queue(
     prediction_id: int,
     user_telegram_id: int,
-    mars_analysis: str
+    mars_analysis: str,
+    profile_id: int = None
 ) -> bool:
     """
     Удобная функция для отправки запроса на рекомендации по Марсу в очередь
@@ -764,13 +811,14 @@ async def send_mars_recommendation_to_queue(
         prediction_id: ID исходного предсказания
         user_telegram_id: Telegram ID пользователя
         mars_analysis: Разбор Марса для генерации рекомендаций
+        profile_id: ID дополнительного профиля (опционально)
 
     Returns:
         True если сообщение отправлено успешно
     """
     sender = await get_queue_sender()
     return await sender.send_mars_recommendation_for_processing(
-        prediction_id, user_telegram_id, mars_analysis
+        prediction_id, user_telegram_id, mars_analysis, profile_id
     )
 
 

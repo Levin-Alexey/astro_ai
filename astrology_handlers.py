@@ -1285,22 +1285,27 @@ async def start_sun_analysis(user_id: int, profile_id: Optional[int] = None) -> 
         return None
 
 
-async def start_mercury_analysis(user_id: int) -> Optional[Dict[str, Any]]:
+async def start_mercury_analysis(user_id: int, profile_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
     """
     Запускает анализ Меркурия для пользователя
 
     Args:
         user_id: ID пользователя в Telegram
+        profile_id: ID дополнительного профиля (если None, используется основной профиль)
 
     Returns:
         Dict с данными астрологического API или None при ошибке
     """
     try:
+        logger.info(f"start_mercury_analysis called for user_id={user_id}, profile_id={profile_id}")
+        
         # Получаем данные пользователя
-        user_data = await get_user_astrology_data(user_id)
+        user_data = await get_user_astrology_data(user_id, profile_id)
         if not user_data:
-            logger.warning(f"Cannot get astrology data for user {user_id}")
+            logger.error(f"Cannot get astrology data for user {user_id}, profile_id: {profile_id}")
             return None
+        
+        logger.info(f"User data retrieved successfully for profile_id={profile_id}")
 
         # Инициализируем клиент AstrologyAPI
         api_client = AstrologyAPIClient(
@@ -1338,16 +1343,17 @@ async def start_mercury_analysis(user_id: int) -> Optional[Dict[str, Any]]:
             prediction_type=PredictionType.paid,
             content=raw_content,
             llm_model="astrology_api",
-            expires_at=datetime.now(timezone.utc) + timedelta(days=30)  # 30 дней доступа
+            expires_at=datetime.now(timezone.utc) + timedelta(days=30),  # 30 дней доступа
+            profile_id=profile_id
         )
 
         # Отправляем в очередь для обработки LLM
         try:
             await send_mercury_prediction_to_queue(
-                prediction_id, user_data["telegram_id"]
+                prediction_id, user_data["telegram_id"], profile_id
             )
             logger.info(
-                f"☿️ Mercury prediction {prediction_id} sent to queue for LLM processing"
+                f"☿️ Mercury prediction {prediction_id} sent to queue for LLM processing, profile_id={profile_id}"
             )
         except Exception as e:
             logger.error(f"Failed to send Mercury prediction to queue: {e}")
@@ -1400,14 +1406,14 @@ async def send_sun_prediction_to_queue(prediction_id: int, user_id: int, profile
         return False
 
 
-async def send_mercury_prediction_to_queue(prediction_id: int, user_id: int) -> bool:
+async def send_mercury_prediction_to_queue(prediction_id: int, user_id: int, profile_id: Optional[int] = None) -> bool:
     """Отправляет предсказание Меркурия в очередь mercury_predictions"""
     try:
         from queue_sender import send_mercury_prediction_to_queue as queue_send
         
-        success = await queue_send(prediction_id, user_id)
+        success = await queue_send(prediction_id, user_id, profile_id)
         if success:
-            logger.info(f"☿️ Mercury prediction {prediction_id} sent to mercury_predictions queue")
+            logger.info(f"☿️ Mercury prediction {prediction_id} sent to mercury_predictions queue, profile_id={profile_id}")
         else:
             logger.error(f"❌ Failed to send Mercury prediction {prediction_id} to queue")
         return success
@@ -1417,22 +1423,27 @@ async def send_mercury_prediction_to_queue(prediction_id: int, user_id: int) -> 
         return False
 
 
-async def start_venus_analysis(user_id: int) -> Optional[Dict[str, Any]]:
+async def start_venus_analysis(user_id: int, profile_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
     """
     Запускает анализ Венеры для пользователя
 
     Args:
         user_id: ID пользователя в Telegram
+        profile_id: ID дополнительного профиля (если None, используется основной профиль)
 
     Returns:
         Dict с данными астрологического API или None при ошибке
     """
     try:
+        logger.info(f"start_venus_analysis called for user_id={user_id}, profile_id={profile_id}")
+        
         # Получаем данные пользователя
-        user_data = await get_user_astrology_data(user_id)
+        user_data = await get_user_astrology_data(user_id, profile_id)
         if not user_data:
-            logger.warning(f"Cannot get astrology data for user {user_id}")
+            logger.error(f"Cannot get astrology data for user {user_id}, profile_id: {profile_id}")
             return None
+        
+        logger.info(f"User data retrieved successfully for profile_id={profile_id}")
 
         # Инициализируем клиент AstrologyAPI
         api_client = AstrologyAPIClient(
@@ -1470,16 +1481,17 @@ async def start_venus_analysis(user_id: int) -> Optional[Dict[str, Any]]:
             prediction_type=PredictionType.paid,
             content=raw_content,
             llm_model="astrology_api",
-            expires_at=datetime.now(timezone.utc) + timedelta(days=30)  # 30 дней доступа
+            expires_at=datetime.now(timezone.utc) + timedelta(days=30),  # 30 дней доступа
+            profile_id=profile_id
         )
 
         # Отправляем в очередь для обработки LLM
         try:
             await send_venus_prediction_to_queue(
-                prediction_id, user_data["telegram_id"]
+                prediction_id, user_data["telegram_id"], profile_id
             )
             logger.info(
-                f"♀️ Venus prediction {prediction_id} sent to queue for LLM processing"
+                f"♀️ Venus prediction {prediction_id} sent to queue for LLM processing, profile_id={profile_id}"
             )
         except Exception as e:
             logger.error(f"Failed to send Venus prediction to queue: {e}")
@@ -1491,14 +1503,14 @@ async def start_venus_analysis(user_id: int) -> Optional[Dict[str, Any]]:
         return None
 
 
-async def send_venus_prediction_to_queue(prediction_id: int, user_id: int) -> bool:
+async def send_venus_prediction_to_queue(prediction_id: int, user_id: int, profile_id: Optional[int] = None) -> bool:
     """Отправляет предсказание Венеры в очередь venus_predictions"""
     try:
         from queue_sender import send_venus_prediction_to_queue as queue_send
         
-        success = await queue_send(prediction_id, user_id)
+        success = await queue_send(prediction_id, user_id, profile_id)
         if success:
-            logger.info(f"♀️ Venus prediction {prediction_id} sent to venus_predictions queue")
+            logger.info(f"♀️ Venus prediction {prediction_id} sent to venus_predictions queue, profile_id={profile_id}")
         else:
             logger.error(f"❌ Failed to send Venus prediction {prediction_id} to queue")
         return success
@@ -1508,22 +1520,27 @@ async def send_venus_prediction_to_queue(prediction_id: int, user_id: int) -> bo
         return False
 
 
-async def start_mars_analysis(user_id: int) -> Optional[Dict[str, Any]]:
+async def start_mars_analysis(user_id: int, profile_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
     """
     Запускает анализ Марса для пользователя
 
     Args:
         user_id: ID пользователя в Telegram
+        profile_id: ID дополнительного профиля (если None, используется основной профиль)
 
     Returns:
         Dict с данными астрологического API или None при ошибке
     """
     try:
+        logger.info(f"start_mars_analysis called for user_id={user_id}, profile_id={profile_id}")
+        
         # Получаем данные пользователя
-        user_data = await get_user_astrology_data(user_id)
+        user_data = await get_user_astrology_data(user_id, profile_id)
         if not user_data:
-            logger.warning(f"Cannot get astrology data for user {user_id}")
+            logger.error(f"Cannot get astrology data for user {user_id}, profile_id: {profile_id}")
             return None
+        
+        logger.info(f"User data retrieved successfully for profile_id={profile_id}")
 
         # Инициализируем клиент AstrologyAPI
         api_client = AstrologyAPIClient(
@@ -1561,16 +1578,17 @@ async def start_mars_analysis(user_id: int) -> Optional[Dict[str, Any]]:
             prediction_type=PredictionType.paid,
             content=raw_content,
             llm_model="astrology_api",
-            expires_at=datetime.now(timezone.utc) + timedelta(days=30)  # 30 дней доступа
+            expires_at=datetime.now(timezone.utc) + timedelta(days=30),  # 30 дней доступа
+            profile_id=profile_id
         )
 
         # Отправляем в очередь для обработки LLM
         try:
             await send_mars_prediction_to_queue(
-                prediction_id, user_data["telegram_id"]
+                prediction_id, user_data["telegram_id"], profile_id
             )
             logger.info(
-                f"♂️ Mars prediction {prediction_id} sent to queue for LLM processing"
+                f"♂️ Mars prediction {prediction_id} sent to queue for LLM processing, profile_id={profile_id}"
             )
         except Exception as e:
             logger.error(f"Failed to send Mars prediction to queue: {e}")
@@ -1582,14 +1600,14 @@ async def start_mars_analysis(user_id: int) -> Optional[Dict[str, Any]]:
         return None
 
 
-async def send_mars_prediction_to_queue(prediction_id: int, user_id: int) -> bool:
+async def send_mars_prediction_to_queue(prediction_id: int, user_id: int, profile_id: Optional[int] = None) -> bool:
     """Отправляет предсказание Марса в очередь mars_predictions"""
     try:
         from queue_sender import send_mars_prediction_to_queue as queue_send
         
-        success = await queue_send(prediction_id, user_id)
+        success = await queue_send(prediction_id, user_id, profile_id)
         if success:
-            logger.info(f"♂️ Mars prediction {prediction_id} sent to mars_predictions queue")
+            logger.info(f"♂️ Mars prediction {prediction_id} sent to mars_predictions queue, profile_id={profile_id}")
         else:
             logger.error(f"❌ Failed to send Mars prediction {prediction_id} to queue")
         return success

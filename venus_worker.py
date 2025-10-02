@@ -253,8 +253,8 @@ async def process_venus_prediction(
                 prediction.status = "completed"
                 await session.commit()
                 
-                # Отправляем пользователю
-                await send_venus_analysis_to_user(user.telegram_id, analysis_content)
+                # Отправляем пользователю (передаем profile_id из prediction)
+                await send_venus_analysis_to_user(user.telegram_id, analysis_content, prediction.profile_id)
                 logger.info(f"♀️ Test Venus analysis sent to user {user.telegram_id}")
                 return True
             
@@ -279,8 +279,8 @@ async def process_venus_prediction(
                 prediction.status = "completed"
                 await session.commit()
                 
-                # Отправляем пользователю
-                await send_venus_analysis_to_user(user.telegram_id, llm_result["content"])
+                # Отправляем пользователю (передаем profile_id из prediction)
+                await send_venus_analysis_to_user(user.telegram_id, llm_result["content"], prediction.profile_id)
                 
                 logger.info(f"♀️ Venus analysis generated and sent to user {user.telegram_id}")
                 logger.info(f"♀️ LLM usage: {llm_result.get('usage', 'No usage data')}")
@@ -297,7 +297,7 @@ async def process_venus_prediction(
                     "❌ Произошла ошибка при генерации разбора Венеры.\n"
                     "Мы уже работаем над исправлением. Попробуйте позже."
                 )
-                await send_venus_analysis_to_user(user.telegram_id, error_message)
+                await send_venus_analysis_to_user(user.telegram_id, error_message, prediction.profile_id)
                 return False
                 
     except Exception as e:
@@ -305,51 +305,24 @@ async def process_venus_prediction(
         return False
 
 
-async def send_venus_analysis_to_user(user_telegram_id: int, analysis_text: str):
+async def send_venus_analysis_to_user(user_telegram_id: int, analysis_text: str, profile_id: int = None):
     """
     Отправляет анализ Венеры пользователю через Telegram Bot API
     
     Args:
         user_telegram_id: Telegram ID пользователя
         analysis_text: Текст анализа
+        profile_id: ID дополнительного профиля (опционально)
     """
     try:
-        # Проверяем, является ли это частью разбора всех планет
-        is_all_planets = await _check_if_all_planets_analysis(user_telegram_id)
+        # Импортируем универсальную функцию
+        from all_planets_handler import check_if_all_planets_payment, create_planet_analysis_buttons
         
-        # Подготавливаем кнопки после разбора Венеры
-        keyboard = {
-            "inline_keyboard": [
-                [
-                    {
-                        "text": "💡 Получить рекомендации",
-                        "callback_data": "get_venus_recommendations"
-                    }
-                ]
-            ]
-        }
+        # Проверяем, является ли это частью разбора всех планет для данного профиля
+        is_all_planets = await check_if_all_planets_payment(user_telegram_id, profile_id)
         
-        if is_all_planets:
-            keyboard["inline_keyboard"].append([
-                {
-                    "text": "➡️ Следующая планета",
-                    "callback_data": "next_planet"
-                }
-            ])
-        else:
-            keyboard["inline_keyboard"].append([
-                {
-                    "text": "🔍 Исследовать другие сферы",
-                    "callback_data": "explore_other_areas"
-                }
-            ])
-        
-        keyboard["inline_keyboard"].append([
-            {
-                "text": "🏠 Главное меню",
-                "callback_data": "back_to_menu"
-            }
-        ])
+        # Создаем кнопки с учетом profile_id
+        keyboard = create_planet_analysis_buttons("venus", is_all_planets, profile_id)
         
         # Разбиваем длинный текст на части если нужно
         max_length = 4000  # Лимит Telegram для одного сообщения

@@ -379,12 +379,13 @@ class SunWorker:
         
         return message
     
-    def create_sun_analysis_buttons(self, is_all_planets: bool = False) -> Dict[str, Any]:
+    def create_sun_analysis_buttons(self, is_all_planets: bool = False, profile_id: int = None) -> Dict[str, Any]:
         """
         Создает кнопки для сообщения с разбором Солнца
         
         Args:
             is_all_planets: Если True, показывает кнопку "Следующая планета" вместо "Исследовать другие сферы"
+            profile_id: ID дополнительного профиля (если есть)
         
         Returns:
             Словарь с клавиатурой для Telegram API
@@ -399,10 +400,11 @@ class SunWorker:
         ]
         
         if is_all_planets:
+            next_planet_callback = f"next_planet:{profile_id}" if profile_id else "next_planet"
             buttons.append([
                 {
                     "text": "➡️ Следующая планета",
-                    "callback_data": "next_planet"
+                    "callback_data": next_planet_callback
                 }
             ])
         else:
@@ -417,25 +419,33 @@ class SunWorker:
             "inline_keyboard": buttons
         }
     
-    async def _check_if_all_planets_analysis(self, telegram_id: int) -> bool:
-        """Проверяет, является ли это частью разбора всех планет"""
+    async def _check_if_all_planets_analysis(self, telegram_id: int, profile_id: int = None) -> bool:
+        """Проверяет, является ли это частью разбора всех планет для конкретного профиля"""
         try:
             from models import PlanetPayment, PaymentStatus, PaymentType
             
             async with get_session() as session:
+                conditions = [
+                    PlanetPayment.user_id == telegram_id,
+                    PlanetPayment.payment_type == PaymentType.all_planets,
+                    PlanetPayment.status == PaymentStatus.completed
+                ]
+                
+                # Фильтруем по profile_id
+                if profile_id:
+                    conditions.append(PlanetPayment.profile_id == profile_id)
+                else:
+                    conditions.append(PlanetPayment.profile_id.is_(None))
+                
                 result = await session.execute(
-                    select(PlanetPayment).where(
-                        PlanetPayment.user_id == telegram_id,
-                        PlanetPayment.payment_type == PaymentType.all_planets,
-                        PlanetPayment.status == PaymentStatus.completed
-                    )
+                    select(PlanetPayment).where(*conditions)
                 )
                 payment = result.scalar_one_or_none()
                 
-                logger.info(f"🔍 Checking all planets analysis for user {telegram_id}")
+                logger.info(f"🔍 Checking all planets analysis for user {telegram_id}, profile_id={profile_id}")
                 logger.info(f"🔍 Found payment: {payment is not None}")
                 if payment:
-                    logger.info(f"🔍 Payment details: id={payment.payment_id}, status={payment.status}, type={payment.payment_type}")
+                    logger.info(f"🔍 Payment details: id={payment.payment_id}, status={payment.status}, type={payment.payment_type}, profile_id={payment.profile_id}")
                 
                 return payment is not None
         except Exception as e:
@@ -571,13 +581,16 @@ class SunWorker:
                             # Формируем и отправляем сообщение
                             message = self.format_prediction_message(updated_prediction, user, profile_name)
                             
-                            # Проверяем, является ли это частью разбора всех планет
-                            is_all_planets = await self._check_if_all_planets_analysis(user.telegram_id)
-                            logger.info(f"🔍 Sun worker: is_all_planets = {is_all_planets} for user {user.telegram_id}")
+                            # Получаем profile_id из prediction
+                            prediction_profile_id = updated_prediction.profile_id
                             
-                            # Добавляем кнопки для разбора Солнца
-                            reply_markup = self.create_sun_analysis_buttons(is_all_planets)
-                            logger.info(f"🔍 Sun worker: created buttons with is_all_planets = {is_all_planets}")
+                            # Проверяем, является ли это частью разбора всех планет для данного профиля
+                            is_all_planets = await self._check_if_all_planets_analysis(user.telegram_id, prediction_profile_id)
+                            logger.info(f"🔍 Sun worker: is_all_planets = {is_all_planets} for user {user.telegram_id}, profile_id={prediction_profile_id}")
+                            
+                            # Добавляем кнопки для разбора Солнца с profile_id
+                            reply_markup = self.create_sun_analysis_buttons(is_all_planets, prediction_profile_id)
+                            logger.info(f"🔍 Sun worker: created buttons with is_all_planets = {is_all_planets}, profile_id={prediction_profile_id}")
                             
                             success = await self.send_telegram_message(
                                 chat_id=user.telegram_id,

@@ -2129,6 +2129,9 @@ async def on_explore_all_planets(callback: CallbackQuery):
         )
     else:
         # Если доступа нет, предлагаем оплату
+        pay_callback = f"pay_all_planets:{profile_id}" if profile_id else "pay_all_planets"
+        back_callback = f"explore_other_areas:{profile_id}" if profile_id else "explore_other_areas"
+        
         await cb_msg.answer(
             "🌌 Все планеты\n\n"
             "💰 Для получения персональных астрологических разборов "
@@ -2145,20 +2148,20 @@ async def on_explore_all_planets(callback: CallbackQuery):
                     [
                         InlineKeyboardButton(
                             text="💳 Оплатить 5₽",
-                            callback_data="pay_all_planets"
+                            callback_data=pay_callback
                         )
                     ],
                     [
                         InlineKeyboardButton(
                             text="🔙 Назад",
-                            callback_data="explore_other_areas"
+                            callback_data=back_callback
                         )
                     ]
                 ]
             )
         )
         logger.info(
-            f"Пользователь {user_id} запросил разборы всех планет (доступа нет)"
+            f"Пользователь {user_id} запросил разборы всех планет (доступа нет), profile_id={profile_id}"
         )
 
 
@@ -3234,14 +3237,24 @@ async def on_pay_venus(callback: CallbackQuery):
         )
 
 
-@dp.callback_query(F.data == "pay_all_planets")
+@dp.callback_query(F.data.startswith("pay_all_planets"))
 async def on_pay_all_planets(callback: CallbackQuery):
     """Обработчик кнопки оплаты за все планеты"""
     from all_planets_handler import get_all_planets_handler
     
+    # Извлекаем profile_id из callback_data если есть
+    profile_id = None
+    if ":" in callback.data:
+        try:
+            profile_id = int(callback.data.split(":")[1])
+        except (ValueError, IndexError):
+            profile_id = None
+    
+    logger.info(f"on_pay_all_planets called with profile_id={profile_id}")
+    
     handler = get_all_planets_handler()
     if handler:
-        await handler.handle_payment_request(callback)
+        await handler.handle_payment_request(callback, profile_id)
     else:
         await callback.answer()
         cb_msg = cast(Message, callback.message)
@@ -3260,14 +3273,24 @@ async def on_pay_all_planets(callback: CallbackQuery):
         )
 
 
-@dp.callback_query(F.data == "next_planet")
+@dp.callback_query(F.data.startswith("next_planet"))
 async def on_next_planet(callback: CallbackQuery):
     """Обработчик кнопки 'Следующая планета'"""
     from all_planets_handler import get_all_planets_handler
     
+    # Извлекаем profile_id из callback_data если есть
+    profile_id = None
+    if ":" in callback.data:
+        try:
+            profile_id = int(callback.data.split(":")[1])
+        except (ValueError, IndexError):
+            profile_id = None
+    
+    logger.info(f"on_next_planet called with profile_id={profile_id}")
+    
     handler = get_all_planets_handler()
     if handler:
-        await handler.handle_next_planet(callback)
+        await handler.handle_next_planet(callback, profile_id)
     else:
         await callback.answer()
         cb_msg = cast(Message, callback.message)

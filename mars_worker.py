@@ -265,8 +265,8 @@ async def process_mars_prediction(
                 prediction.mars_analysis = analysis_content
                 await session.commit()
                 
-                # Отправляем пользователю
-                await send_mars_analysis_to_user(user.telegram_id, analysis_content)
+                # Отправляем пользователю (передаем profile_id из prediction)
+                await send_mars_analysis_to_user(user.telegram_id, analysis_content, prediction.profile_id)
                 logger.info(f"♂️ Test Mars analysis sent to user {user.telegram_id}")
                 
                 # Отмечаем анализ как завершенный
@@ -298,8 +298,8 @@ async def process_mars_prediction(
                 prediction.mars_analysis = llm_result["content"]
                 await session.commit()
                 
-                # Отправляем пользователю
-                await send_mars_analysis_to_user(user.telegram_id, llm_result["content"])
+                # Отправляем пользователю (передаем profile_id из prediction)
+                await send_mars_analysis_to_user(user.telegram_id, llm_result["content"], prediction.profile_id)
                 
                 logger.info(f"♂️ Mars analysis generated and sent to user {user.telegram_id}")
                 logger.info(f"♂️ LLM usage: {llm_result.get('usage', 'No usage data')}")
@@ -327,7 +327,7 @@ async def process_mars_prediction(
                     "❌ Произошла ошибка при генерации разбора Марса.\n"
                     "Мы уже работаем над исправлением. Попробуйте позже."
                 )
-                await send_mars_analysis_to_user(user.telegram_id, error_message)
+                await send_mars_analysis_to_user(user.telegram_id, error_message, prediction.profile_id)
                 return False
                 
     except Exception as e:
@@ -343,44 +343,21 @@ async def process_mars_prediction(
         return False
 
 
-async def send_mars_analysis_to_user(user_telegram_id: int, analysis_text: str):
+async def send_mars_analysis_to_user(user_telegram_id: int, analysis_text: str, profile_id: int = None):
     """
     Отправляет анализ Марса пользователю через Telegram Bot API
     
     Args:
         user_telegram_id: Telegram ID пользователя
         analysis_text: Текст анализа
+        profile_id: ID дополнительного профиля (опционально)
     """
     try:
-        # Проверяем, является ли это частью разбора всех планет
-        is_all_planets = await _check_if_all_planets_analysis(user_telegram_id)
+        # Импортируем универсальную функцию
+        from all_planets_handler import create_planet_analysis_buttons
         
-        # Подготавливаем кнопки после разбора Марса
-        keyboard = {
-            "inline_keyboard": [
-                [
-                    {
-                        "text": "💡 Получить рекомендации",
-                        "callback_data": "get_mars_recommendations"
-                    }
-                ]
-            ]
-        }
-        
-        # Для Марса всегда показываем "Исследовать другие сферы" (не "Следующая планета")
-        keyboard["inline_keyboard"].append([
-            {
-                "text": "🔍 Исследовать другие сферы",
-                "callback_data": "explore_other_areas"
-            }
-        ])
-        
-        keyboard["inline_keyboard"].append([
-            {
-                "text": "🏠 Главное меню",
-                "callback_data": "back_to_menu"
-            }
-        ])
+        # Для Марса (последняя планета) всегда is_all_planets=False, нет кнопки "Следующая планета"
+        keyboard = create_planet_analysis_buttons("mars", is_all_planets=False, profile_id=profile_id)
         
         # Разбиваем длинный текст на части если нужно
         max_length = 4000  # Лимит Telegram для одного сообщения
