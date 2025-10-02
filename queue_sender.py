@@ -137,7 +137,7 @@ class QueueSender:
         }
         
         # Добавляем profile_id если указан
-        if profile_id:
+        if profile_id is not None:
             message_data["profile_id"] = profile_id
 
         try:
@@ -188,7 +188,7 @@ class QueueSender:
         }
         
         # Добавляем profile_id если указан
-        if profile_id:
+        if profile_id is not None:
             message_data["profile_id"] = profile_id
 
         try:
@@ -244,7 +244,7 @@ class QueueSender:
         }
         
         # Добавляем profile_id если указан
-        if profile_id:
+        if profile_id is not None:
             message_data["profile_id"] = profile_id
 
         try:
@@ -300,7 +300,7 @@ class QueueSender:
         }
         
         # Добавляем profile_id если указан
-        if profile_id:
+        if profile_id is not None:
             message_data["profile_id"] = profile_id
 
         try:
@@ -353,7 +353,7 @@ class QueueSender:
         }
         
         # Добавляем profile_id если указан
-        if profile_id:
+        if profile_id is not None:
             message_data["profile_id"] = profile_id
 
         try:
@@ -401,7 +401,7 @@ class QueueSender:
         }
         
         # Добавляем profile_id если указан
-        if profile_id:
+        if profile_id is not None:
             message_data["profile_id"] = profile_id
 
         try:
@@ -452,7 +452,7 @@ class QueueSender:
         }
         
         # Добавляем profile_id если указан
-        if profile_id:
+        if profile_id is not None:
             message_data["profile_id"] = profile_id
 
         try:
@@ -508,7 +508,7 @@ class QueueSender:
         }
         
         # Добавляем profile_id если указан
-        if profile_id:
+        if profile_id is not None:
             message_data["profile_id"] = profile_id
 
         try:

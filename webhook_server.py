@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 import logging
 import asyncio
 from datetime import datetime, timezone
+from typing import Optional
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -51,7 +52,7 @@ async def yookassa_webhook(request: Request):
                     logger.error("❌ All planets handler not initialized")
             else:
                 # Отправляем уведомление пользователю для отдельных планет
-                profile_id_int = int(profile_id) if profile_id else None
+                profile_id_int = int(profile_id) if profile_id and profile_id != "None" else None
                 logger.info(f"🔥 Processing SINGLE PLANET payment: planet={planet}, profile_id={profile_id_int}")
                 await notify_user_payment_success(telegram_id, planet, profile_id_int)
             
@@ -140,7 +141,7 @@ async def update_payment_status(user_id: int, planet: str, external_payment_id: 
         logger.error(f"❌ Error updating payment status: {e}")
 
 
-async def notify_user_payment_success(user_id: int, planet: str, profile_id: int = None):
+async def notify_user_payment_success(user_id: int, planet: str, profile_id: Optional[int] = None):
     """Отправляет уведомление пользователю об успешной оплате"""
     try:
         from main import bot
@@ -173,7 +174,7 @@ async def notify_user_payment_success(user_id: int, planet: str, profile_id: int
         logger.error(f"❌ Error sending notification to user {user_id}: {e}")
 
 
-async def generate_planet_analysis(user_id: int, planet: str, profile_id: int = None):
+async def generate_planet_analysis(user_id: int, planet: str, profile_id: Optional[int] = None):
     """Генерирует астрологический разбор планеты через воркер"""
     try:
         logger.info(f"🚀 Starting planet analysis for user {user_id}, planet {planet}, profile_id: {profile_id}")
