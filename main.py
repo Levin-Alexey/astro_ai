@@ -2312,7 +2312,7 @@ async def on_explore_mercury(callback: CallbackQuery):
                     [
                         InlineKeyboardButton(
                             text="💳 Оплатить 10₽",
-                            callback_data="pay_mercury"
+                            callback_data=f"pay_mercury:{profile_id}" if profile_id else "pay_mercury"
                         )
                     ],
                     [
@@ -2388,7 +2388,7 @@ async def on_explore_venus(callback: CallbackQuery):
                     [
                         InlineKeyboardButton(
                             text="💳 Оплатить 10₽",
-                            callback_data="pay_venus"
+                            callback_data=f"pay_venus:{profile_id}" if profile_id else "pay_venus"
                         )
                     ],
                     [
@@ -2465,7 +2465,7 @@ async def on_explore_mars(callback: CallbackQuery):
                     [
                         InlineKeyboardButton(
                             text="💳 Оплатить 10₽",
-                            callback_data="pay_mars"
+                            callback_data=f"pay_mars:{profile_id}" if profile_id else "pay_mars"
                         )
                     ],
                     [
@@ -2870,12 +2870,20 @@ async def on_pay_sun(callback: CallbackQuery):
         )
 
 
-@dp.callback_query(F.data == "pay_mars")
+@dp.callback_query(F.data.startswith("pay_mars"))
 async def on_pay_mars(callback: CallbackQuery):
     """Обработчик кнопки оплаты за Марс"""
     await callback.answer()
     cb_msg = cast(Message, callback.message)
     user_id = callback.from_user.id
+    
+    # Извлекаем profile_id из callback_data если есть
+    profile_id = None
+    if ":" in callback.data:
+        try:
+            profile_id = int(callback.data.split(":")[1])
+        except (ValueError, IndexError):
+            profile_id = None
     
     if payment_handler is None:
         await cb_msg.answer(
@@ -2900,7 +2908,8 @@ async def on_pay_mars(callback: CallbackQuery):
         payment_data = payment_handler.create_payment_data(
             user_id=user_id,
             planet="mars",
-            description="Астрологический разбор Марса"
+            description="Астрологический разбор Марса",
+            profile_id=profile_id
         )
         logger.info(f"🔥 ДАННЫЕ ПЛАТЕЖА СОЗДАНЫ: {payment_data}")
         
@@ -2998,12 +3007,20 @@ async def on_pay_mars(callback: CallbackQuery):
         )
 
 
-@dp.callback_query(F.data == "pay_mercury")
+@dp.callback_query(F.data.startswith("pay_mercury"))
 async def on_pay_mercury(callback: CallbackQuery):
     """Обработчик кнопки оплаты за Меркурий"""
     await callback.answer()
     cb_msg = cast(Message, callback.message)
     user_id = callback.from_user.id
+    
+    # Извлекаем profile_id из callback_data если есть
+    profile_id = None
+    if ":" in callback.data:
+        try:
+            profile_id = int(callback.data.split(":")[1])
+        except (ValueError, IndexError):
+            profile_id = None
     
     if payment_handler is None:
         await cb_msg.answer(
@@ -3028,7 +3045,8 @@ async def on_pay_mercury(callback: CallbackQuery):
         payment_data = payment_handler.create_payment_data(
             user_id=user_id,
             planet="mercury",
-            description="Астрологический разбор Меркурия"
+            description="Астрологический разбор Меркурия",
+            profile_id=profile_id
         )
         logger.info(f"🔥 ДАННЫЕ ПЛАТЕЖА СОЗДАНЫ: {payment_data}")
         
@@ -3125,12 +3143,20 @@ async def on_pay_mercury(callback: CallbackQuery):
         )
 
 
-@dp.callback_query(F.data == "pay_venus")
+@dp.callback_query(F.data.startswith("pay_venus"))
 async def on_pay_venus(callback: CallbackQuery):
     """Обработчик кнопки оплаты за Венеру"""
     await callback.answer()
     cb_msg = cast(Message, callback.message)
     user_id = callback.from_user.id
+    
+    # Извлекаем profile_id из callback_data если есть
+    profile_id = None
+    if ":" in callback.data:
+        try:
+            profile_id = int(callback.data.split(":")[1])
+        except (ValueError, IndexError):
+            profile_id = None
     
     if payment_handler is None:
         await cb_msg.answer(
@@ -3155,7 +3181,8 @@ async def on_pay_venus(callback: CallbackQuery):
         payment_data = payment_handler.create_payment_data(
             user_id=user_id,
             planet="venus",
-            description="Астрологический разбор Венеры"
+            description="Астрологический разбор Венеры",
+            profile_id=profile_id
         )
         logger.info(f"🔥 ДАННЫЕ ПЛАТЕЖА СОЗДАНЫ: {payment_data}")
         
