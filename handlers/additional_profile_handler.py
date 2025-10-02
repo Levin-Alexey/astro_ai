@@ -792,9 +792,12 @@ async def start_moon_analysis_for_profile(message: Message, profile_id: int):
             message_data = {
                 "prediction_id": prediction_id,
                 "user_id": telegram_id,  # ВАЖНО: используем telegram_id!
-                "profile_id": profile_id,  # Добавляем profile_id для воркера
                 "timestamp": 0  # Временная метка
             }
+            
+            # Добавляем profile_id только если он есть
+            if profile_id:
+                message_data["profile_id"] = profile_id
 
             # Отправляем в очередь через queue_sender
             from queue_sender import get_queue_sender
@@ -1092,7 +1095,7 @@ async def handle_additional_time_unknown_callback(callback: CallbackQuery, state
 
 # Функции для анализа планет дополнительных профилей (как у Луны)
 
-async def start_mercury_analysis_for_profile(message: Message, profile_id: int):
+async def start_mercury_analysis_for_profile(message: Message, profile_id: int = None):
     """
     Запускает анализ Меркурия для дополнительного профиля
     
@@ -1103,15 +1106,28 @@ async def start_mercury_analysis_for_profile(message: Message, profile_id: int):
     try:
         logger.info(f"Starting mercury analysis for additional profile {profile_id}")
 
-        # Получаем данные дополнительного профиля
-        profile_data = await get_additional_profile_astrology_data(profile_id)
-        if not profile_data:
-            logger.error(f"No profile data for profile_id={profile_id} - cannot start mercury analysis")
-            await message.answer(
-                "❌ Для анализа Меркурия необходимо точное время рождения!\n\n"
-                "Этот профиль создан без времени рождения, поэтому анализ Меркурия недоступен."
-            )
-            return
+        # Получаем данные профиля (основного или дополнительного)
+        if profile_id:
+            # Дополнительный профиль
+            profile_data = await get_additional_profile_astrology_data(profile_id)
+            if not profile_data:
+                logger.error(f"No profile data for profile_id={profile_id} - cannot start mercury analysis")
+                await message.answer(
+                    "❌ Для анализа Меркурия необходимо точное время рождения!\n\n"
+                    "Этот профиль создан без времени рождения, поэтому анализ Меркурия недоступен."
+                )
+                return
+        else:
+            # Основной профиль - получаем данные из базы
+            from astrology_handlers import get_user_astrology_data
+            profile_data = await get_user_astrology_data(message.from_user.id, None)
+            if not profile_data:
+                logger.error(f"No user data for telegram_id={message.from_user.id} - cannot start mercury analysis")
+                await message.answer(
+                    "❌ Для анализа Меркурия необходимо заполнить профиль!\n\n"
+                    "Используйте /start для создания профиля."
+                )
+                return
 
         # Импортируем необходимые функции
         from astrology_handlers import AstrologyAPIClient, ASTROLOGY_API_USER_ID, ASTROLOGY_API_KEY
@@ -1149,23 +1165,30 @@ async def start_mercury_analysis_for_profile(message: Message, profile_id: int):
 
         # Сохраняем в базу данных с profile_id
         async with get_session() as session:
-            # Получаем telegram_id владельца профиля
-            user_result = await session.execute(
-                select(User).where(User.user_id == profile_data["owner_user_id"])
-            )
-            owner = user_result.scalar_one_or_none()
+            if profile_id:
+                # Дополнительный профиль - получаем telegram_id владельца
+                user_result = await session.execute(
+                    select(User).where(User.user_id == profile_data["owner_user_id"])
+                )
+                owner = user_result.scalar_one_or_none()
+                
+                if not owner:
+                    logger.error(f"Owner user {profile_data['owner_user_id']} not found")
+                    await message.answer("❌ Ошибка: владелец профиля не найден")
+                    return
+                
+                telegram_id = owner.telegram_id
+                user_id_for_db = profile_data["owner_user_id"]
+            else:
+                # Основной профиль
+                telegram_id = message.from_user.id
+                user_id_for_db = profile_data["user_id"]
             
-            if not owner:
-                logger.error(f"Owner user {profile_data['owner_user_id']} not found")
-                await message.answer("❌ Ошибка: владелец профиля не найден")
-                return
-            
-            telegram_id = owner.telegram_id
-            logger.info(f"Owner telegram_id: {telegram_id}")
+            logger.info(f"Telegram ID: {telegram_id}, User ID: {user_id_for_db}")
             
             prediction = Prediction(
-                user_id=profile_data["owner_user_id"],
-                profile_id=profile_id,  # Указываем дополнительный профиль
+                user_id=user_id_for_db,
+                profile_id=profile_id,  # None для основного профиля, ID для дополнительного
                 planet=Planet.mercury,
                 prediction_type=PredictionType.paid,
                 content=raw_content,  # Сырые данные от API
@@ -1184,9 +1207,12 @@ async def start_mercury_analysis_for_profile(message: Message, profile_id: int):
             message_data = {
                 "prediction_id": prediction_id,
                 "user_id": telegram_id,  # ВАЖНО: используем telegram_id!
-                "profile_id": profile_id,  # Добавляем profile_id для воркера
                 "timestamp": 0  # Временная метка
             }
+            
+            # Добавляем profile_id только если он есть
+            if profile_id:
+                message_data["profile_id"] = profile_id
 
             # Отправляем в очередь через прямое подключение к RabbitMQ
             import aio_pika
@@ -1232,7 +1258,7 @@ async def start_mercury_analysis_for_profile(message: Message, profile_id: int):
         )
 
 
-async def start_venus_analysis_for_profile(message: Message, profile_id: int):
+async def start_venus_analysis_for_profile(message: Message, profile_id: int = None):
     """
     Запускает анализ Венеры для дополнительного профиля
     
@@ -1243,15 +1269,28 @@ async def start_venus_analysis_for_profile(message: Message, profile_id: int):
     try:
         logger.info(f"Starting venus analysis for additional profile {profile_id}")
 
-        # Получаем данные дополнительного профиля
-        profile_data = await get_additional_profile_astrology_data(profile_id)
-        if not profile_data:
-            logger.error(f"No profile data for profile_id={profile_id} - cannot start venus analysis")
-            await message.answer(
-                "❌ Для анализа Венеры необходимо точное время рождения!\n\n"
-                "Этот профиль создан без времени рождения, поэтому анализ Венеры недоступен."
-            )
-            return
+        # Получаем данные профиля (основного или дополнительного)
+        if profile_id:
+            # Дополнительный профиль
+            profile_data = await get_additional_profile_astrology_data(profile_id)
+            if not profile_data:
+                logger.error(f"No profile data for profile_id={profile_id} - cannot start venus analysis")
+                await message.answer(
+                    "❌ Для анализа Венеры необходимо точное время рождения!\n\n"
+                    "Этот профиль создан без времени рождения, поэтому анализ Венеры недоступен."
+                )
+                return
+        else:
+            # Основной профиль - получаем данные из базы
+            from astrology_handlers import get_user_astrology_data
+            profile_data = await get_user_astrology_data(message.from_user.id, None)
+            if not profile_data:
+                logger.error(f"No user data for telegram_id={message.from_user.id} - cannot start venus analysis")
+                await message.answer(
+                    "❌ Для анализа Венеры необходимо заполнить профиль!\n\n"
+                    "Используйте /start для создания профиля."
+                )
+                return
 
         # Импортируем необходимые функции
         from astrology_handlers import AstrologyAPIClient, ASTROLOGY_API_USER_ID, ASTROLOGY_API_KEY
@@ -1289,23 +1328,30 @@ async def start_venus_analysis_for_profile(message: Message, profile_id: int):
 
         # Сохраняем в базу данных с profile_id
         async with get_session() as session:
-            # Получаем telegram_id владельца профиля
-            user_result = await session.execute(
-                select(User).where(User.user_id == profile_data["owner_user_id"])
-            )
-            owner = user_result.scalar_one_or_none()
+            if profile_id:
+                # Дополнительный профиль - получаем telegram_id владельца
+                user_result = await session.execute(
+                    select(User).where(User.user_id == profile_data["owner_user_id"])
+                )
+                owner = user_result.scalar_one_or_none()
+                
+                if not owner:
+                    logger.error(f"Owner user {profile_data['owner_user_id']} not found")
+                    await message.answer("❌ Ошибка: владелец профиля не найден")
+                    return
+                
+                telegram_id = owner.telegram_id
+                user_id_for_db = profile_data["owner_user_id"]
+            else:
+                # Основной профиль
+                telegram_id = message.from_user.id
+                user_id_for_db = profile_data["user_id"]
             
-            if not owner:
-                logger.error(f"Owner user {profile_data['owner_user_id']} not found")
-                await message.answer("❌ Ошибка: владелец профиля не найден")
-                return
-            
-            telegram_id = owner.telegram_id
-            logger.info(f"Owner telegram_id: {telegram_id}")
+            logger.info(f"Telegram ID: {telegram_id}, User ID: {user_id_for_db}")
             
             prediction = Prediction(
-                user_id=profile_data["owner_user_id"],
-                profile_id=profile_id,  # Указываем дополнительный профиль
+                user_id=user_id_for_db,
+                profile_id=profile_id,  # None для основного профиля, ID для дополнительного
                 planet=Planet.venus,
                 prediction_type=PredictionType.paid,
                 content=raw_content,  # Сырые данные от API
@@ -1324,9 +1370,12 @@ async def start_venus_analysis_for_profile(message: Message, profile_id: int):
             message_data = {
                 "prediction_id": prediction_id,
                 "user_id": telegram_id,  # ВАЖНО: используем telegram_id!
-                "profile_id": profile_id,  # Добавляем profile_id для воркера
                 "timestamp": 0  # Временная метка
             }
+            
+            # Добавляем profile_id только если он есть
+            if profile_id:
+                message_data["profile_id"] = profile_id
 
             # Отправляем в очередь через прямое подключение к RabbitMQ
             import aio_pika
@@ -1372,7 +1421,7 @@ async def start_venus_analysis_for_profile(message: Message, profile_id: int):
         )
 
 
-async def start_mars_analysis_for_profile(message: Message, profile_id: int):
+async def start_mars_analysis_for_profile(message: Message, profile_id: int = None):
     """
     Запускает анализ Марса для дополнительного профиля
     
@@ -1383,15 +1432,28 @@ async def start_mars_analysis_for_profile(message: Message, profile_id: int):
     try:
         logger.info(f"Starting mars analysis for additional profile {profile_id}")
 
-        # Получаем данные дополнительного профиля
-        profile_data = await get_additional_profile_astrology_data(profile_id)
-        if not profile_data:
-            logger.error(f"No profile data for profile_id={profile_id} - cannot start mars analysis")
-            await message.answer(
-                "❌ Для анализа Марса необходимо точное время рождения!\n\n"
-                "Этот профиль создан без времени рождения, поэтому анализ Марса недоступен."
-            )
-            return
+        # Получаем данные профиля (основного или дополнительного)
+        if profile_id:
+            # Дополнительный профиль
+            profile_data = await get_additional_profile_astrology_data(profile_id)
+            if not profile_data:
+                logger.error(f"No profile data for profile_id={profile_id} - cannot start mars analysis")
+                await message.answer(
+                    "❌ Для анализа Марса необходимо точное время рождения!\n\n"
+                    "Этот профиль создан без времени рождения, поэтому анализ Марса недоступен."
+                )
+                return
+        else:
+            # Основной профиль - получаем данные из базы
+            from astrology_handlers import get_user_astrology_data
+            profile_data = await get_user_astrology_data(message.from_user.id, None)
+            if not profile_data:
+                logger.error(f"No user data for telegram_id={message.from_user.id} - cannot start mars analysis")
+                await message.answer(
+                    "❌ Для анализа Марса необходимо заполнить профиль!\n\n"
+                    "Используйте /start для создания профиля."
+                )
+                return
 
         # Импортируем необходимые функции
         from astrology_handlers import AstrologyAPIClient, ASTROLOGY_API_USER_ID, ASTROLOGY_API_KEY
@@ -1429,23 +1491,30 @@ async def start_mars_analysis_for_profile(message: Message, profile_id: int):
 
         # Сохраняем в базу данных с profile_id
         async with get_session() as session:
-            # Получаем telegram_id владельца профиля
-            user_result = await session.execute(
-                select(User).where(User.user_id == profile_data["owner_user_id"])
-            )
-            owner = user_result.scalar_one_or_none()
+            if profile_id:
+                # Дополнительный профиль - получаем telegram_id владельца
+                user_result = await session.execute(
+                    select(User).where(User.user_id == profile_data["owner_user_id"])
+                )
+                owner = user_result.scalar_one_or_none()
+                
+                if not owner:
+                    logger.error(f"Owner user {profile_data['owner_user_id']} not found")
+                    await message.answer("❌ Ошибка: владелец профиля не найден")
+                    return
+                
+                telegram_id = owner.telegram_id
+                user_id_for_db = profile_data["owner_user_id"]
+            else:
+                # Основной профиль
+                telegram_id = message.from_user.id
+                user_id_for_db = profile_data["user_id"]
             
-            if not owner:
-                logger.error(f"Owner user {profile_data['owner_user_id']} not found")
-                await message.answer("❌ Ошибка: владелец профиля не найден")
-                return
-            
-            telegram_id = owner.telegram_id
-            logger.info(f"Owner telegram_id: {telegram_id}")
+            logger.info(f"Telegram ID: {telegram_id}, User ID: {user_id_for_db}")
             
             prediction = Prediction(
-                user_id=profile_data["owner_user_id"],
-                profile_id=profile_id,  # Указываем дополнительный профиль
+                user_id=user_id_for_db,
+                profile_id=profile_id,  # None для основного профиля, ID для дополнительного
                 planet=Planet.mars,
                 prediction_type=PredictionType.paid,
                 content=raw_content,  # Сырые данные от API
@@ -1464,9 +1533,12 @@ async def start_mars_analysis_for_profile(message: Message, profile_id: int):
             message_data = {
                 "prediction_id": prediction_id,
                 "user_id": telegram_id,  # ВАЖНО: используем telegram_id!
-                "profile_id": profile_id,  # Добавляем profile_id для воркера
                 "timestamp": 0  # Временная метка
             }
+            
+            # Добавляем profile_id только если он есть
+            if profile_id:
+                message_data["profile_id"] = profile_id
 
             # Отправляем в очередь через прямое подключение к RabbitMQ
             import aio_pika

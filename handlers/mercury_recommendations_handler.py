@@ -28,6 +28,7 @@ async def handle_get_mercury_recommendations(
     await callback.answer()
     
     user_id = callback.from_user.id
+    
     logger.info(f"handle_get_mercury_recommendations called for user {user_id}")
     
     # Получаем данные пользователя
@@ -48,7 +49,7 @@ async def handle_get_mercury_recommendations(
         
         logger.info(f"User found: user_id={user.user_id}")
         
-        # Находим готовый разбор Меркурия (последний созданный, может быть несколько профилей)
+        # Находим готовый разбор Меркурия (последний созданный)
         prediction_result = await session.execute(
             select(Prediction).where(
                 Prediction.user_id == user.user_id,
@@ -59,7 +60,7 @@ async def handle_get_mercury_recommendations(
                 Prediction.mercury_analysis.is_not(None)  # Готовый анализ
             ).order_by(desc(Prediction.created_at))
         )
-        prediction = prediction_result.scalars().first()  # Используем first() для множества результатов
+        prediction = prediction_result.scalars().first()
         
         logger.info(f"Prediction found: {prediction is not None}, has analysis: {prediction.mercury_analysis is not None if prediction else False}")
         
