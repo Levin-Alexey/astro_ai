@@ -18,7 +18,7 @@ from sqlalchemy import select
 
 from config import BOT_TOKEN
 from db import get_session, init_engine, dispose_engine
-from models import Prediction, User, Planet, PredictionType
+from models import Prediction, User, Planet, PredictionType, AdditionalProfile
 
 # Загружаем переменные окружения из .env файла
 load_dotenv()
@@ -197,6 +197,26 @@ class OpenRouterClient:
                         }
 
 
+async def get_additional_profile_info(profile_id: int) -> Optional[Dict[str, Any]]:
+    """Получает информацию о дополнительном профиле из БД"""
+    async with get_session() as session:
+        result = await session.execute(
+            select(AdditionalProfile).where(AdditionalProfile.profile_id == profile_id)
+        )
+        profile = result.scalar_one_or_none()
+        
+        if not profile:
+            logger.warning(f"Additional profile with ID {profile_id} not found")
+            return None
+        
+        return {
+            "profile_id": profile.profile_id,
+            "owner_user_id": profile.owner_user_id,
+            "full_name": profile.full_name,
+            "gender": profile.gender.value if profile.gender else "unknown"
+        }
+
+
 async def process_mars_recommendations(
     data: Dict[str, Any],
     openrouter_client: Optional[OpenRouterClient] = None
@@ -215,12 +235,13 @@ async def process_mars_recommendations(
         prediction_id = data.get("prediction_id")
         user_telegram_id = data.get("user_telegram_id")
         mars_analysis = data.get("mars_analysis")
+        profile_id = data.get("profile_id")
         
         if not prediction_id or not user_telegram_id or not mars_analysis:
             logger.error(f"♂️ Missing required data: prediction_id={prediction_id}, user_telegram_id={user_telegram_id}, mars_analysis={'present' if mars_analysis else 'missing'}")
             return False
         
-        logger.info(f"♂️ Processing Mars recommendations for prediction {prediction_id}, user {user_telegram_id}")
+        logger.info(f"♂️ Processing Mars recommendations for prediction {prediction_id}, user {user_telegram_id}, profile_id: {profile_id}")
         
         async with get_session() as session:
             # Получаем предсказание
@@ -245,10 +266,24 @@ async def process_mars_recommendations(
             
             logger.info(f"♂️ Found user: {user.first_name} (telegram_id: {user.telegram_id})")
             
+            # Определяем данные для LLM в зависимости от типа профиля
+            if profile_id:
+                profile_info = await get_additional_profile_info(profile_id)
+                if not profile_info:
+                    logger.error(f"♂️ Additional profile {profile_id} not found")
+                    return False
+                llm_user_name = profile_info["full_name"] or "Друг"
+                llm_user_gender = profile_info["gender"]
+                logger.info(f"♂️ Using additional profile data for recommendations: {llm_user_name}, gender: {llm_user_gender}")
+            else:
+                llm_user_name = user.first_name or "Друг"
+                llm_user_gender = user.gender.value if user.gender else "не указан"
+                logger.info(f"♂️ Using main user data for recommendations: {llm_user_name}, gender: {llm_user_gender}")
+            
             # Если нет клиента OpenRouter, создаем тестовые рекомендации
             if not openrouter_client or not OPENROUTER_API_KEY:
                 logger.warning("♂️ OpenRouter not available, creating test recommendations")
-                recommendations_content = f"""🔥 Тестовые рекомендации по Марсу для {user.first_name}
+                recommendations_content = f"""🔥 Тестовые рекомендации по Марсу для {llm_user_name}
 
 • Занимайся спортом минимум 3 раза в неделю
 • Учись говорить "нет" и защищать свои границы
@@ -264,7 +299,8 @@ async def process_mars_recommendations(
                 await session.commit()
                 
                 # Отправляем пользователю
-                await send_mars_recommendations_to_user(user.telegram_id, recommendations_content)
+                profile_name = llm_user_name if profile_id else None
+                await send_mars_recommendations_to_user(user.telegram_id, recommendations_content, profile_name)
                 logger.info(f"♂️ Test Mars recommendations sent to user {user.telegram_id}")
                 
                 return True
@@ -272,8 +308,8 @@ async def process_mars_recommendations(
             # Генерируем рекомендации через OpenRouter
             llm_result = await openrouter_client.generate_mars_recommendations(
                 mars_analysis=mars_analysis,
-                user_name=user.first_name or "Друг",
-                user_gender=user.gender or "не указан"
+                user_name=llm_user_name,
+                user_gender=llm_user_gender
             )
             
             if llm_result["success"]:
@@ -282,7 +318,8 @@ async def process_mars_recommendations(
                 await session.commit()
                 
                 # Отправляем пользователю
-                await send_mars_recommendations_to_user(user.telegram_id, llm_result["content"])
+                profile_name = llm_user_name if profile_id else None
+                await send_mars_recommendations_to_user(user.telegram_id, llm_result["content"], profile_name)
                 
                 logger.info(f"♂️ Mars recommendations generated and sent to user {user.telegram_id}")
                 logger.info(f"♂️ LLM usage: {llm_result.get('usage', 'No usage data')}")
@@ -304,13 +341,14 @@ async def process_mars_recommendations(
         return False
 
 
-async def send_mars_recommendations_to_user(user_telegram_id: int, recommendations_text: str):
+async def send_mars_recommendations_to_user(user_telegram_id: int, recommendations_text: str, profile_name: Optional[str] = None):
     """
     Отправляет рекомендации по Марсу пользователю через Telegram Bot API
     
     Args:
         user_telegram_id: Telegram ID пользователя
         recommendations_text: Текст рекомендаций
+        profile_name: Имя дополнительного профиля (опционально)
     """
     try:
         # Подготавливаем кнопки после рекомендаций
@@ -331,14 +369,20 @@ async def send_mars_recommendations_to_user(user_telegram_id: int, recommendatio
             ]
         }
         
+        # Форматируем сообщение с именем профиля
+        if profile_name:
+            formatted_text = f"♂️ Персональные рекомендации по Марсу для {profile_name}\n\n{recommendations_text}"
+        else:
+            formatted_text = f"♂️ Персональные рекомендации по Марсу\n\n{recommendations_text}"
+        
         # Разбиваем длинный текст на части если нужно
         max_length = 4000  # Лимит Telegram для одного сообщения
         
-        if len(recommendations_text) <= max_length:
+        if len(formatted_text) <= max_length:
             # Отправляем одним сообщением
             payload = {
                 "chat_id": user_telegram_id,
-                "text": recommendations_text,
+                "text": formatted_text,
                 "reply_markup": keyboard,
                 "parse_mode": "HTML"
             }
@@ -356,8 +400,8 @@ async def send_mars_recommendations_to_user(user_telegram_id: int, recommendatio
         else:
             # Разбиваем на части
             parts = []
-            for i in range(0, len(recommendations_text), max_length):
-                parts.append(recommendations_text[i:i+max_length])
+            for i in range(0, len(formatted_text), max_length):
+                parts.append(formatted_text[i:i+max_length])
             
             # Отправляем первые части без кнопок
             for i, part in enumerate(parts[:-1]):

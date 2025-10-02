@@ -16,7 +16,7 @@ import aiohttp
 from sqlalchemy import select
 
 from db import get_session, init_engine, dispose_engine
-from models import Prediction, User
+from models import Prediction, User, AdditionalProfile
 from config import BOT_TOKEN
 
 # Настройка логирования
@@ -50,6 +50,26 @@ MARS_ANALYSIS_PROMPT = """Ты астролог с опытом 10 лет, ко�
 Данные: {astrology_data}
 Имя: {user_name}
 Пол: {user_gender}"""
+
+
+async def get_additional_profile_info(profile_id: int) -> Optional[Dict[str, Any]]:
+    """Получает информацию о дополнительном профиле из БД"""
+    async with get_session() as session:
+        result = await session.execute(
+            select(AdditionalProfile).where(AdditionalProfile.profile_id == profile_id)
+        )
+        profile = result.scalar_one_or_none()
+        
+        if not profile:
+            logger.warning(f"Additional profile with ID {profile_id} not found")
+            return None
+        
+        return {
+            "profile_id": profile.profile_id,
+            "owner_user_id": profile.owner_user_id,
+            "full_name": profile.full_name,
+            "gender": profile.gender.value if profile.gender else "unknown"
+        }
 
 
 class OpenRouterClient:
@@ -200,12 +220,13 @@ async def process_mars_prediction(
     try:
         prediction_id = data.get("prediction_id")
         user_telegram_id = data.get("user_telegram_id") or data.get("user__telegram_id")  # Support both formats
+        profile_id = data.get("profile_id")
         
         if not prediction_id or not user_telegram_id:
             logger.error(f"♂️ Missing required data: prediction_id={prediction_id}, user_telegram_id={user_telegram_id}")
             return False
         
-        logger.info(f"♂️ Processing Mars prediction {prediction_id} for user {user_telegram_id}")
+        logger.info(f"♂️ Processing Mars prediction {prediction_id} for user {user_telegram_id}, profile_id: {profile_id}")
         
         # Интеграция с системой защиты платежей
         try:
@@ -242,12 +263,26 @@ async def process_mars_prediction(
             
             logger.info(f"♂️ Found user: {user.first_name} (telegram_id: {user.telegram_id})")
             
+            # Определяем данные для LLM в зависимости от типа профиля
+            if profile_id:
+                profile_info = await get_additional_profile_info(profile_id)
+                if not profile_info:
+                    logger.error(f"♂️ Additional profile {profile_id} not found")
+                    return False
+                llm_user_name = profile_info["full_name"] or "Друг"
+                llm_user_gender = profile_info["gender"]
+                logger.info(f"♂️ Using additional profile data for analysis: {llm_user_name}, gender: {llm_user_gender}")
+            else:
+                llm_user_name = user.first_name or "Друг"
+                llm_user_gender = user.gender.value if user.gender else "не указан"
+                logger.info(f"♂️ Using main user data for analysis: {llm_user_name}, gender: {llm_user_gender}")
+            
             # Если нет клиента OpenRouter, создаем тестовый разбор
             if not openrouter_client or not OPENROUTER_API_KEY:
                 logger.warning("♂️ OpenRouter not available, creating test analysis")
-                analysis_content = f"""♂️ Тестовый разбор Марса для {user.first_name}
+                analysis_content = f"""♂️ Тестовый разбор Марса для {llm_user_name}
 
-Привет, {user.first_name}! 
+Привет, {llm_user_name}! 
 
 Твой Марс показывает уникальные особенности твоей энергии и силы воли:
 
@@ -289,8 +324,8 @@ async def process_mars_prediction(
             
             llm_result = await openrouter_client.generate_mars_analysis(
                 astrology_data=astrology_data,
-                user_name=user.first_name or "Друг",
-                user_gender=user.gender or "не указан"
+                user_name=llm_user_name,
+                user_gender=llm_user_gender
             )
             
             if llm_result["success"]:
