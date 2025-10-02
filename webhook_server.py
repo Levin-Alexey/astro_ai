@@ -202,6 +202,7 @@ async def generate_planet_analysis(user_id: int, planet: str, profile_id: int = 
         # Для Венеры вызываем start_venus_analysis
         elif planet == "venus":
             from astrology_handlers import start_venus_analysis
+            logger.info(f"🚀 Calling start_venus_analysis for user {user_id}, profile_id: {profile_id}")
             astrology_data = await start_venus_analysis(user_id, profile_id)
             
             if astrology_data:
@@ -212,6 +213,7 @@ async def generate_planet_analysis(user_id: int, planet: str, profile_id: int = 
         # Для Марса вызываем start_mars_analysis
         elif planet == "mars":
             from astrology_handlers import start_mars_analysis
+            logger.info(f"🚀 Calling start_mars_analysis for user {user_id}, profile_id: {profile_id}")
             astrology_data = await start_mars_analysis(user_id, profile_id)
             
             if astrology_data:

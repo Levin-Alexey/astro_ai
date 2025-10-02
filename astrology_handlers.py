@@ -1412,6 +1412,7 @@ async def send_mercury_prediction_to_queue(prediction_id: int, user_id: int, pro
         from queue_sender import send_mercury_prediction_to_queue as queue_send
         
         logger.info(f"☿️ Sending Mercury prediction to queue: prediction_id={prediction_id}, user_id={user_id}, profile_id={profile_id}")
+        logger.info(f"☿️ profile_id type: {type(profile_id)}, value: {profile_id}")
         success = await queue_send(prediction_id, user_id, profile_id)
         if success:
             logger.info(f"☿️ Mercury prediction {prediction_id} sent to mercury_predictions queue, profile_id={profile_id}")
@@ -1509,6 +1510,8 @@ async def send_venus_prediction_to_queue(prediction_id: int, user_id: int, profi
     try:
         from queue_sender import send_venus_prediction_to_queue as queue_send
         
+        logger.info(f"♀️ Sending Venus prediction to queue: prediction_id={prediction_id}, user_id={user_id}, profile_id={profile_id}")
+        logger.info(f"♀️ profile_id type: {type(profile_id)}, value: {profile_id}")
         success = await queue_send(prediction_id, user_id, profile_id)
         if success:
             logger.info(f"♀️ Venus prediction {prediction_id} sent to venus_predictions queue, profile_id={profile_id}")
@@ -1606,6 +1609,8 @@ async def send_mars_prediction_to_queue(prediction_id: int, user_id: int, profil
     try:
         from queue_sender import send_mars_prediction_to_queue as queue_send
         
+        logger.info(f"♂️ Sending Mars prediction to queue: prediction_id={prediction_id}, user_id={user_id}, profile_id={profile_id}")
+        logger.info(f"♂️ profile_id type: {type(profile_id)}, value: {profile_id}")
         success = await queue_send(prediction_id, user_id, profile_id)
         if success:
             logger.info(f"♂️ Mars prediction {prediction_id} sent to mars_predictions queue, profile_id={profile_id}")

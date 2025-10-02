@@ -228,6 +228,12 @@ async def process_mercury_prediction(
         logger.info(f"☿️ Processing Mercury prediction {prediction_id} for user {user_telegram_id}, profile_id: {profile_id}")
         logger.info(f"☿️ Full message data: {data}")
         
+        # Проверяем, что profile_id действительно пришел в сообщении
+        if "profile_id" in data:
+            logger.info(f"☿️ profile_id found in message data: {data['profile_id']}")
+        else:
+            logger.warning(f"☿️ profile_id NOT found in message data!")
+        
         # Интеграция с системой защиты платежей
         try:
             import sys
