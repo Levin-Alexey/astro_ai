@@ -767,8 +767,8 @@ async def get_user_astrology_data(user_id: int, profile_id: Optional[int] = None
                 "lat": float(user.birth_lat),
                 "lon": float(user.birth_lon),
                 "tzone": float(user.tz_offset_minutes) / 60.0,  # Минуты->часы
-                "user_id": user.user_id,
-                "telegram_id": user.telegram_id
+                "user_id": user.user_id,  # user is User object, not AdditionalProfile
+                "telegram_id": user.telegram_id  # user is User object, not AdditionalProfile
             }
 
 
@@ -1028,7 +1028,7 @@ async def check_existing_moon_prediction(user_id: int) -> bool:
                 Prediction.moon_analysis.is_not(None)
             )
         )
-        existing_prediction = prediction_result.scalar_one_or_none()
+        existing_prediction = prediction_result.scalars().first()
 
         return existing_prediction is not None
 
@@ -1411,7 +1411,7 @@ async def send_mercury_prediction_to_queue(prediction_id: int, user_id: int, pro
     try:
         from queue_sender import send_mercury_prediction_to_queue as queue_send
         
-        success = await queue_send(prediction_id, user_id, profile_id)
+        success = await queue_send(prediction_id, user_id, profile_id or 0)
         if success:
             logger.info(f"☿️ Mercury prediction {prediction_id} sent to mercury_predictions queue, profile_id={profile_id}")
         else:
@@ -1508,7 +1508,7 @@ async def send_venus_prediction_to_queue(prediction_id: int, user_id: int, profi
     try:
         from queue_sender import send_venus_prediction_to_queue as queue_send
         
-        success = await queue_send(prediction_id, user_id, profile_id)
+        success = await queue_send(prediction_id, user_id, profile_id or 0)
         if success:
             logger.info(f"♀️ Venus prediction {prediction_id} sent to venus_predictions queue, profile_id={profile_id}")
         else:
@@ -1605,7 +1605,7 @@ async def send_mars_prediction_to_queue(prediction_id: int, user_id: int, profil
     try:
         from queue_sender import send_mars_prediction_to_queue as queue_send
         
-        success = await queue_send(prediction_id, user_id, profile_id)
+        success = await queue_send(prediction_id, user_id, profile_id or 0)
         if success:
             logger.info(f"♂️ Mars prediction {prediction_id} sent to mars_predictions queue, profile_id={profile_id}")
         else:
