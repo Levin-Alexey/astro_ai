@@ -200,6 +200,18 @@ class OpenRouterClient:
                             "success": False,
                             "error": str(e)
                         }
+            
+            # Если все попытки исчерпаны, возвращаем ошибку
+            return {
+                "success": False,
+                "error": "All retry attempts failed"
+            }
+        
+        # Этот return никогда не должен выполниться, но нужен для линтера
+        return {
+            "success": False,
+            "error": "Unexpected end of function"
+        }
 
 
 async def process_mercury_prediction(
@@ -234,18 +246,6 @@ async def process_mercury_prediction(
         else:
             logger.warning(f"☿️ profile_id NOT found in message data!")
         
-        # Интеграция с системой защиты платежей
-        try:
-            import sys
-            sys.path.append('.')
-            from payment_access import mark_analysis_started, mark_analysis_completed, mark_analysis_failed
-            
-            # Отмечаем начало анализа
-            await mark_analysis_started(user.telegram_id, "mercury")
-            logger.info(f"☿️ Marked Mercury analysis as started for user {user.telegram_id}")
-        except Exception as e:
-            logger.error(f"☿️ Failed to mark analysis as started: {e}")
-            # Продолжаем выполнение, даже если не удалось обновить статус
         async with get_session() as session:
             # Получаем предсказание
             result = await session.execute(
@@ -268,6 +268,19 @@ async def process_mercury_prediction(
                 return False
             
             logger.info(f"☿️ Found user: {user.first_name} (telegram_id: {user.telegram_id})")
+            
+            # Интеграция с системой защиты платежей
+            try:
+                import sys
+                sys.path.append('.')
+                from payment_access import mark_analysis_started, mark_analysis_completed, mark_analysis_failed
+                
+                # Отмечаем начало анализа
+                await mark_analysis_started(prediction_id)
+                logger.info(f"☿️ Marked Mercury analysis as started for user {user.telegram_id}")
+            except Exception as e:
+                logger.error(f"☿️ Failed to mark analysis as started: {e}")
+                # Продолжаем выполнение, даже если не удалось обновить статус
             
             # Определяем данные для LLM в зависимости от типа профиля
             if profile_id:
@@ -304,7 +317,6 @@ async def process_mercury_prediction(
                 
                 # Сохраняем результат
                 prediction.mercury_analysis = analysis_content
-                prediction.status = "completed"
                 await session.commit()
                 
                 # Отправляем пользователю
@@ -313,7 +325,7 @@ async def process_mercury_prediction(
                 
                 # Отмечаем анализ как завершенный
                 try:
-                    await mark_analysis_completed(user.telegram_id, "mercury")
+                    await mark_analysis_completed(prediction_id)
                     logger.info(f"☿️ Marked Mercury analysis as delivered for user {user.telegram_id}")
                 except Exception as e:
                     logger.error(f"☿️ Failed to mark analysis as delivered: {e}")
@@ -338,18 +350,17 @@ async def process_mercury_prediction(
             if llm_result["success"]:
                 # Сохраняем результат
                 prediction.mercury_analysis = llm_result["content"]
-                prediction.status = "completed"
                 await session.commit()
                 
                 # Отправляем пользователю (передаем profile_id из prediction)
-                await send_mercury_analysis_to_user(user.telegram_id, llm_result["content"], prediction.profile_id)
+                await send_mercury_analysis_to_user(user.telegram_id, llm_result["content"], prediction.profile_id or None)
                 
                 logger.info(f"☿️ Mercury analysis generated and sent to user {user.telegram_id}")
                 logger.info(f"☿️ LLM usage: {llm_result.get('usage', 'No usage data')}")
                 
                 # Отмечаем анализ как завершенный
                 try:
-                    await mark_analysis_completed(user.telegram_id, "mercury")
+                    await mark_analysis_completed(prediction_id)
                     logger.info(f"☿️ Marked Mercury analysis as delivered for user {user.telegram_id}")
                 except Exception as e:
                     logger.error(f"☿️ Failed to mark analysis as delivered: {e}")
@@ -359,12 +370,11 @@ async def process_mercury_prediction(
                 logger.error(f"☿️ Failed to generate Mercury analysis: {llm_result['error']}")
                 
                 # Обновляем статус на ошибку
-                prediction.status = "error"
                 await session.commit()
                 
                 # Отмечаем анализ как неудачный
                 try:
-                    await mark_analysis_failed(user.telegram_id, "mercury", f"LLM error: {llm_result['error']}")
+                    await mark_analysis_failed(prediction_id, f"LLM error: {llm_result['error']}")
                     logger.info(f"☿️ Marked Mercury analysis as failed for user {user.telegram_id}")
                 except Exception as e:
                     logger.error(f"☿️ Failed to mark analysis as failed: {e}")
@@ -381,16 +391,21 @@ async def process_mercury_prediction(
         logger.error(f"☿️ Error processing Mercury prediction: {e}")
         
         # Отмечаем анализ как неудачный в случае общей ошибки
-        try:
-            await mark_analysis_failed(user.telegram_id, "mercury", f"Processing error: {str(e)}")
-            logger.info(f"☿️ Marked Mercury analysis as failed due to processing error for user {user.telegram_id}")
-        except Exception as mark_error:
-            logger.error(f"☿️ Failed to mark analysis as failed: {mark_error}")
+        # Но только если user и prediction_id были определены
+        if 'user' in locals() and 'prediction_id' in locals() and prediction_id is not None and user is not None:
+            try:
+                import sys
+                sys.path.append('.')
+                from payment_access import mark_analysis_failed
+                await mark_analysis_failed(prediction_id, f"Processing error: {str(e)}")
+                logger.info(f"☿️ Marked Mercury analysis as failed due to processing error for user {user.telegram_id if user else 'unknown'}")
+            except Exception as mark_error:
+                logger.error(f"☿️ Failed to mark analysis as failed: {mark_error}")
         
         return False
 
 
-async def send_mercury_analysis_to_user(user_telegram_id: int, analysis_text: str, profile_id: int = None):
+async def send_mercury_analysis_to_user(user_telegram_id: int, analysis_text: str, profile_id: Optional[int] = None):
     """
     Отправляет анализ Меркурия пользователю через Telegram Bot API
     
