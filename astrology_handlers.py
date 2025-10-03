@@ -1368,38 +1368,16 @@ async def start_mercury_analysis(user_id: int, profile_id: Optional[int] = None)
 async def send_sun_prediction_to_queue(prediction_id: int, user_id: int, profile_id: Optional[int] = None) -> bool:
     """Отправляет предсказание Солнца в очередь sun_predictions"""
     try:
-        # Подключение к RabbitMQ
-        RABBITMQ_URL = "amqp://astro_user:astro_password_123@31.128.40.111:5672/"
-        QUEUE_NAME = "sun_predictions"
+        from queue_sender import send_sun_prediction_to_queue as queue_send
         
-        connection = await aio_pika.connect_robust(RABBITMQ_URL)
-        channel = await connection.channel()
-        
-        # Объявляем очередь
-        await channel.declare_queue(QUEUE_NAME, durable=True)
-        
-        # Создаем сообщение
-        message_data = {
-            "prediction_id": prediction_id,
-            "user_id": user_id
-        }
-        
-        # Добавляем profile_id если указан
-        if profile_id:
-            message_data["profile_id"] = profile_id
-        
-        # Отправляем сообщение
-        await channel.default_exchange.publish(
-            aio_pika.Message(
-                json.dumps(message_data).encode(),
-                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
-            ),
-            routing_key=QUEUE_NAME
-        )
-        
-        await connection.close()
-        logger.info(f"✅ Sun prediction {prediction_id} sent to sun_predictions queue")
-        return True
+        logger.info(f"☀️ Sending Sun prediction to queue: prediction_id={prediction_id}, user_id={user_id}, profile_id={profile_id}")
+        logger.info(f"☀️ profile_id type: {type(profile_id)}, value: {profile_id}")
+        success = await queue_send(prediction_id, user_id, profile_id)
+        if success:
+            logger.info(f"☀️ Sun prediction {prediction_id} sent to sun_predictions queue, profile_id={profile_id}")
+        else:
+            logger.error(f"❌ Failed to send Sun prediction {prediction_id} to queue")
+        return success
         
     except Exception as e:
         logger.error(f"❌ Error sending sun prediction to queue: {e}")

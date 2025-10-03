@@ -110,6 +110,54 @@ class QueueSender:
             logger.error(f"Failed to send message to queue: {e}")
             return False
 
+    async def send_sun_prediction_for_processing(
+        self,
+        prediction_id: int,
+        user_id: int,
+        profile_id: int = None
+    ) -> bool:
+        """
+        Отправляет предсказание Солнца на обработку в очередь
+
+        Args:
+            prediction_id: ID предсказания
+            user_id: ID пользователя
+            profile_id: ID дополнительного профиля (опционально)
+
+        Returns:
+            True если сообщение отправлено успешно
+        """
+        if not self.channel:
+            await self.initialize()
+
+        message_data = {
+            "prediction_id": prediction_id,
+            "user_id": user_id,
+            "timestamp": asyncio.get_event_loop().time()
+        }
+        
+        # Добавляем profile_id если указан
+        if profile_id is not None:
+            message_data["profile_id"] = profile_id
+
+        try:
+            message = aio_pika.Message(
+                body=json.dumps(message_data).encode(),
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+            )
+
+            await self.channel.default_exchange.publish(
+                message,
+                routing_key=SUN_QUEUE_NAME
+            )
+
+            logger.info(f"☀️ Sent Sun prediction {prediction_id} to queue")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Failed to send Sun message to queue: {e}")
+            return False
+
     async def send_mercury_prediction_for_processing(
         self,
         prediction_id: int,
@@ -705,6 +753,28 @@ async def send_mercury_recommendation_to_queue(
     sender = await get_queue_sender()
     return await sender.send_mercury_recommendation_for_processing(
         prediction_id, user_telegram_id, mercury_analysis, profile_id
+    )
+
+
+async def send_sun_prediction_to_queue(
+    prediction_id: int,
+    user_id: int,
+    profile_id: int = None
+) -> bool:
+    """
+    Удобная функция для отправки Sun prediction в очередь
+
+    Args:
+        prediction_id: ID предсказания
+        user_id: ID пользователя
+        profile_id: ID дополнительного профиля (опционально)
+
+    Returns:
+        True если сообщение отправлено успешно
+    """
+    sender = await get_queue_sender()
+    return await sender.send_sun_prediction_for_processing(
+        prediction_id, user_id, profile_id
     )
 
 
