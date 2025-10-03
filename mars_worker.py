@@ -201,6 +201,18 @@ class OpenRouterClient:
                             "success": False,
                             "error": str(e)
                         }
+            
+            # Если все попытки исчерпаны, возвращаем ошибку
+            return {
+                "success": False,
+                "error": "All retry attempts failed"
+            }
+        
+        # Этот return никогда не должен выполниться, но нужен для линтера
+        return {
+            "success": False,
+            "error": "Unexpected end of function"
+        }
 
 
 async def process_mars_prediction(
@@ -251,9 +263,11 @@ async def process_mars_prediction(
                 logger.error(f"♂️ Prediction {prediction_id} not found")
                 return False
             
-            # Получаем пользователя по user_id
+            # Получаем пользователя по user_id или telegram_id
             user_result = await session.execute(
-                select(User).where(User.user_id == user_id)
+                select(User).where(
+                    (User.user_id == user_id) | (User.telegram_id == user_id)
+                )
             )
             user = user_result.scalar_one_or_none()
             
@@ -369,16 +383,21 @@ async def process_mars_prediction(
         logger.error(f"♂️ Error processing Mars prediction: {e}")
         
         # Отмечаем анализ как неудачный в случае общей ошибки
-        try:
-            await mark_analysis_failed(prediction_id, f"Processing error: {str(e)}")
-            logger.info(f"♂️ Marked Mars analysis as failed due to processing error for user {user_id}")
-        except Exception as mark_error:
-            logger.error(f"♂️ Failed to mark analysis as failed: {mark_error}")
+        # Но только если prediction_id был определен
+        if 'prediction_id' in locals() and prediction_id is not None:
+            try:
+                import sys
+                sys.path.append('.')
+                from payment_access import mark_analysis_failed
+                await mark_analysis_failed(prediction_id, f"Processing error: {str(e)}")
+                logger.info(f"♂️ Marked Mars analysis as failed due to processing error for user {user_id if 'user_id' in locals() else 'unknown'}")
+            except Exception as mark_error:
+                logger.error(f"♂️ Failed to mark analysis as failed: {mark_error}")
         
         return False
 
 
-async def send_mars_analysis_to_user(user_telegram_id: int, analysis_text: str, profile_id: int = None):
+async def send_mars_analysis_to_user(user_telegram_id: int, analysis_text: str, profile_id: Optional[int] = None):
     """
     Отправляет анализ Марса пользователю через Telegram Bot API
     

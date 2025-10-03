@@ -565,7 +565,9 @@ class SunWorker:
                     if updated_prediction:
                         # Получаем данные пользователя
                         user_result = await session.execute(
-                            select(User).where(User.user_id == user_id)
+                            select(User).where(
+                                (User.user_id == user_id) | (User.telegram_id == user_id)
+                            )
                         )
                         user = user_result.scalar_one_or_none()
                         

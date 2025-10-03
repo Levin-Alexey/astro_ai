@@ -257,9 +257,11 @@ async def process_mercury_prediction(
                 logger.error(f"☿️ Prediction {prediction_id} not found")
                 return False
             
-            # Получаем пользователя по user_id
+            # Получаем пользователя по user_id или telegram_id
             user_result = await session.execute(
-                select(User).where(User.user_id == user_id)
+                select(User).where(
+                    (User.user_id == user_id) | (User.telegram_id == user_id)
+                )
             )
             user = user_result.scalar_one_or_none()
             
