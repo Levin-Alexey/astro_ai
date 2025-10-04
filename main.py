@@ -371,19 +371,12 @@ async def show_personal_cabinet(message_or_callback):
             
             text_parts.append("")
             text_parts.append("**💡 Доступные действия:**")
-            text_parts.append("• Задать вопрос астрологу")
             text_parts.append("• Купить новые разборы")
             text_parts.append("• Начать разбор по новой дате")
             
             # Создаем клавиатуру с действиями
             kb = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="❓ Задать вопрос",
-                            callback_data="ask_question"
-                        )
-                    ],
                     [
                         InlineKeyboardButton(
                             text="💳 Купить разбор",
@@ -1894,46 +1887,7 @@ async def process_user_question(message: Message, state: FSMContext):
         )
         return
     
-    # Проверяем лимит вопросов еще раз
-    from handlers.ask_question_handler import (
-        get_user_question_count, 
-        MAX_QUESTIONS_PER_USER
-    )
-    
     user_id = message.from_user.id if message.from_user else 0
-    question_count = await get_user_question_count(user_id)
-    
-    if question_count >= MAX_QUESTIONS_PER_USER:
-        await message.answer(
-            f"❌ Лимит вопросов исчерпан\n\n"
-            f"Ты уже задал {question_count} вопросов. "
-            f"Максимальное количество: {MAX_QUESTIONS_PER_USER}\n\n"
-            "Но ты можешь получить рекомендации или исследовать другие сферы:",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="💡 Получить рекомендации",
-                            callback_data="get_recommendations"
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text="🔍 Исследовать другие сферы",
-                            callback_data="explore_other_areas"
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text="🏠 Главное меню",
-                            callback_data="back_to_menu"
-                        )
-                    ]
-                ]
-            )
-        )
-        await state.clear()
-        return
     
     # Показываем сообщение о начале обработки
     await message.answer(
@@ -2608,6 +2562,12 @@ async def echo_message(message: Message, state: FSMContext):
     # Проверяем, находится ли пользователь в состоянии ожидания вопроса
     if current_state == QuestionForm.waiting_for_question:
         # Если пользователь в состоянии ожидания вопроса, не обрабатываем сообщение здесь
+        # Пусть его обработает соответствующий обработчик состояния
+        return
+    
+    # Проверяем, находится ли пользователь в состоянии общения со службой заботы
+    if current_state == SupportForm.waiting_for_message:
+        # Если пользователь пишет в службу заботы, не обрабатываем сообщение здесь
         # Пусть его обработает соответствующий обработчик состояния
         return
     

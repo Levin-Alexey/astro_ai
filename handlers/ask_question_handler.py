@@ -10,30 +10,12 @@ from aiogram.types import (
     InlineKeyboardButton
 )
 from aiogram.fsm.context import FSMContext
-from sqlalchemy import select, func
+from sqlalchemy import select
 
 from db import get_session
 from models import User, Prediction, Planet, PredictionType
 
 logger = logging.getLogger(__name__)
-
-# Максимальное количество вопросов для пользователя
-MAX_QUESTIONS_PER_USER = 2
-
-
-async def get_user_question_count(user_id: int) -> int:
-    """Получает количество уже заданных вопросов пользователем"""
-    async with get_session() as session:
-        result = await session.execute(
-            select(func.count(Prediction.prediction_id)).where(
-                Prediction.user_id == user_id,
-                Prediction.prediction_type == PredictionType.free,
-                Prediction.is_active.is_(True),
-                Prediction.is_deleted.is_(False),
-                Prediction.question.is_not(None)  # Только записи с вопросами
-            )
-        )
-        return result.scalar() or 0
 
 
 async def handle_ask_question(callback: CallbackQuery, state: FSMContext):
@@ -48,43 +30,6 @@ async def handle_ask_question(callback: CallbackQuery, state: FSMContext):
     
     user_id = callback.from_user.id
     logger.info(f"User {user_id} clicked 'Ask question' button")
-    
-    # Проверяем количество уже заданных вопросов
-    question_count = await get_user_question_count(user_id)
-    
-    if question_count >= MAX_QUESTIONS_PER_USER:
-        if callback.message:
-            await callback.message.answer(
-                f"❌ Лимит вопросов исчерпан\n\n"
-                f"Ты уже задал {question_count} вопросов. "
-                f"Максимальное количество: {MAX_QUESTIONS_PER_USER}\n\n"
-                
-                "Но ты можешь получить рекомендации или исследовать "
-                "другие сферы:",
-                reply_markup=InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [
-                            InlineKeyboardButton(
-                                text="💡 Получить рекомендации",
-                                callback_data="get_recommendations"
-                            )
-                        ],
-                        [
-                            InlineKeyboardButton(
-                                text="🔍 Исследовать другие сферы",
-                                callback_data="explore_other_areas"
-                            )
-                        ],
-                        [
-                            InlineKeyboardButton(
-                                text="🏠 Главное меню",
-                                callback_data="back_to_menu"
-                            )
-                        ]
-                    ]
-                )
-            )
-        return
     
     # Получаем данные пользователя
     async with get_session() as session:
@@ -110,7 +55,7 @@ async def handle_ask_question(callback: CallbackQuery, state: FSMContext):
                 Prediction.is_active.is_(True),
                 Prediction.is_deleted.is_(False),
                 Prediction.moon_analysis.is_not(None)  # Готовый анализ
-            )
+            ).limit(1)
         )
         prediction = prediction_result.scalar_one_or_none()
         
@@ -135,13 +80,9 @@ async def handle_ask_question(callback: CallbackQuery, state: FSMContext):
     )
     
     # Отправляем сообщение с предложением задать вопрос
-    remaining_questions = MAX_QUESTIONS_PER_USER - question_count
-    
     if callback.message:
         await callback.message.answer(
             f"❓ Задай свой вопрос\n\n"
-            f"Осталось вопросов: {remaining_questions} из "
-            f"{MAX_QUESTIONS_PER_USER}\n\n"
             "Напиши любой вопрос, и я отвечу на основе твоей "
             "астрологической карты! 🔮",
             reply_markup=keyboard
