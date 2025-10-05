@@ -21,6 +21,15 @@ SUPPORT_TOPIC_ID = 8  # ID темы в группе
 bot = Bot(token=BOT_TOKEN)
 
 
+def escape_markdown(text: str) -> str:
+    """Экранирует специальные символы для Markdown"""
+    return (text.replace('*', '\\*')
+                .replace('_', '\\_')
+                .replace('[', '\\[')
+                .replace(']', '\\]')
+                .replace('`', '\\`'))
+
+
 class SupportForm(StatesGroup):
     waiting_for_message = State()
 
@@ -50,7 +59,8 @@ async def handle_support_message(message: Message, state: FSMContext):
     try:
         # Если есть текст
         if message.text:
-            support_message += f"💬 **Сообщение:**\n{message.text}"
+            escaped_text = escape_markdown(message.text)
+            support_message += f"💬 **Сообщение:**\n{escaped_text}"
         
         # Если есть файл/фото/документ
         if message.photo:
