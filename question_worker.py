@@ -212,7 +212,7 @@ class QuestionWorker:
                     Prediction.is_active.is_(True),
                     Prediction.is_deleted.is_(False),
                     Prediction.moon_analysis.is_not(None)
-                )
+                ).limit(1)
             )
             prediction = result.scalar_one_or_none()
             
