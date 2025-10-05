@@ -180,29 +180,40 @@ async def start_support_conversation(message: Message, state: FSMContext):
     """
     Начинает диалог с службой поддержки.
     """
-    await state.set_state(SupportForm.waiting_for_message)
-    
-    await message.answer(
-        "🆘 **Служба заботы**\n\n"
-        "Опишите вашу проблему или задайте вопрос.\n"
-        "Вы можете:\n"
-        "• Написать текстовое сообщение\n"
-        "• Прикрепить фото или скриншот\n"
-        "• Отправить документ\n"
-        "• Записать голосовое сообщение\n\n"
-        "Ваше сообщение будет отправлено в службу поддержки, и мы ответим в течение 24 часов.",
-        reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="❌ Отмена",
-                        callback_data="cancel_support"
-                    )
+    try:
+        await state.set_state(SupportForm.waiting_for_message)
+        logger.info("Support conversation started successfully")
+        
+        await message.answer(
+            "🆘 **Служба заботы**\n\n"
+            "Опишите вашу проблему или задайте вопрос.\n"
+            "Вы можете:\n"
+            "• Написать текстовое сообщение\n"
+            "• Прикрепить фото или скриншот\n"
+            "• Отправить документ\n"
+            "• Записать голосовое сообщение\n\n"
+            "Ваше сообщение будет отправлено в службу поддержки, "
+            "и мы ответим в течение 24 часов.",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="❌ Отмена",
+                            callback_data="cancel_support"
+                        )
+                    ]
                 ]
-            ]
-        ),
-        parse_mode="Markdown"
-    )
+            ),
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.error(f"Error in start_support_conversation: {e}")
+        await message.answer(
+            "❌ Произошла ошибка при отправке сообщения в службу поддержки.\n\n"
+            "Попробуйте позже или обратитесь напрямую:\n"
+            "📧 Email: support@astro-bot.ru\n"
+            "💬 Telegram: @astro_support"
+        )
 
 
 async def cancel_support(message: Message, state: FSMContext):
