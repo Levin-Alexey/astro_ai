@@ -1645,13 +1645,27 @@ async def on_faq(callback: CallbackQuery):
 @dp.callback_query(F.data == "support")
 async def on_support(callback: CallbackQuery, state: FSMContext):
     """Обработчик кнопки 'Служба заботы'"""
-    await callback.answer()
-    
-    # Импортируем функцию из обработчика поддержки
-    from handlers.support_handler import start_support_conversation
-    
-    cb_msg = cast(Message, callback.message)
-    await start_support_conversation(cb_msg, state)
+    try:
+        logger.info("Support button clicked, starting handler")
+        await callback.answer()
+        
+        # Импортируем функцию из обработчика поддержки
+        from handlers.support_handler import start_support_conversation
+        
+        cb_msg = cast(Message, callback.message)
+        logger.info("About to call start_support_conversation")
+        await start_support_conversation(cb_msg, state)
+        logger.info("start_support_conversation completed successfully")
+        
+    except Exception as e:
+        logger.error(f"ERROR in on_support handler: {e}")
+        if callback.message:
+            await callback.message.answer(
+                "❌ Произошла ошибка при отправке сообщения в службу поддержки.\n\n"
+                "Попробуйте позже или обратитесь напрямую:\n"
+                "📧 Email: support@astro-bot.ru\n"
+                "💬 Telegram: @astro_support"
+            )
 
 
 @dp.callback_query(F.data == "cancel_support")
