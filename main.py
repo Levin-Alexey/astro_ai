@@ -391,6 +391,18 @@ async def show_personal_cabinet(message_or_callback):
                     ],
                     [
                         InlineKeyboardButton(
+                            text="📚 Мои разборы",
+                            callback_data="my_analyses"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🧾 История покупок",
+                            callback_data="purchase_history"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
                             text="🏠 Главное меню",
                             callback_data="back_to_menu"
                         )
@@ -1484,19 +1496,76 @@ async def on_add_new_date(callback: CallbackQuery, state: FSMContext):
 
 
 @dp.callback_query(F.data == "new_analysis")
-async def on_new_analysis(callback: CallbackQuery):
-    """Обработчик кнопки 'Начать разбор по новой дате'"""
+async def on_new_analysis(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Новый разбор' - перенаправляет на создание доп. профиля"""
+    await callback.answer()
+    
+    # Используем тот же обработчик, что и для "Добавить новую дату"
+    await start_additional_profile_creation(callback, state)
+
+
+@dp.callback_query(F.data == "my_analyses")
+async def on_my_analyses(callback: CallbackQuery):
+    """Обработчик кнопки 'Мои разборы' - показывает выбор типа разборов"""
     await callback.answer()
     cb_msg = cast(Message, callback.message)
     
     try:
-        # Получаем ID пользователя
         user_id = callback.from_user.id if callback.from_user else 0
+        logger.info(f"User {user_id} requested my analyses")
         
-        # Получаем информацию о пользователе
+        await cb_msg.answer(
+            "📚 **Мои разборы**\n\n"
+            "Выберите тип разборов:\n\n"
+            "📋 **Мои разборы** - ваши основные астрологические разборы\n"
+            "👥 **Дополнительные разборы** - разборы других людей (семья, друзья)",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="📋 Мои разборы",
+                            callback_data="my_main_analyses"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="👥 Дополнительные разборы",
+                            callback_data="my_additional_analyses"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="← Назад в кабинет",
+                            callback_data="personal_cabinet"
+                        )
+                    ]
+                ]
+            ),
+            parse_mode="Markdown"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in my_analyses for user {user_id}: {e}")
+        await cb_msg.answer(
+            "❌ Произошла ошибка при загрузке разборов.\n"
+            "Попробуйте позже или обратитесь в службу заботы."
+        )
+
+
+@dp.callback_query(F.data == "my_main_analyses")
+async def on_my_main_analyses(callback: CallbackQuery):
+    """Обработчик для показа основных разборов пользователя по планетам"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    
+    try:
+        user_id = callback.from_user.id if callback.from_user else 0
+        logger.info(f"User {user_id} requested main analyses")
+        
+        # Получаем информацию о разборах пользователя из БД
         from db import get_session
         from models import User, Prediction
-        from sqlalchemy import select, func
+        from sqlalchemy import select
         
         async with get_session() as session:
             # Находим пользователя
@@ -1512,75 +1581,234 @@ async def on_new_analysis(callback: CallbackQuery):
                 )
                 return
             
-            # Получаем количество существующих разборов
-            predictions_count = await session.execute(
-                select(func.count(Prediction.prediction_id))
+            # Получаем все разборы пользователя
+            predictions_result = await session.execute(
+                select(Prediction.planet)
                 .where(
                     Prediction.user_id == user.user_id,
-                    Prediction.is_deleted.is_(False)
+                    Prediction.is_deleted.is_(False),
+                    Prediction.additional_profile_id.is_(None)  # Только основные разборы
                 )
+                .distinct()
             )
-            existing_count = predictions_count.scalar()
+            existing_planets = {row[0] for row in predictions_result.fetchall()}
             
-            # Формируем текст с информацией о текущих данных
-            text_parts = [
-                "🆕 **Начать разбор по новой дате**\n",
-                "Ты можешь создать новый разбор с обновленными данными рождения.\n"
+            # Определяем планеты и их эмоджи
+            planets = [
+                ("moon", "🌙 Луна"),
+                ("sun", "☀️ Солнце"), 
+                ("mercury", "☿️ Меркурий"),
+                ("venus", "♀️ Венера"),
+                ("mars", "♂️ Марс")
             ]
             
-            if user.full_name:
-                text_parts.append(f"📝 **Текущее имя:** {user.full_name}")
-            if user.birth_date:
-                text_parts.append(f"🎂 **Текущая дата рождения:** {user.birth_date.strftime('%d.%m.%Y')}")
-            if user.birth_place_name:
-                text_parts.append(f"📍 **Текущее место рождения:** {user.birth_place_name}")
+            # Создаем кнопки для планет с батарейками
+            planet_buttons = []
+            for planet_code, planet_name in planets:
+                if planet_code in existing_planets:
+                    # Полная батарейка - есть разбор
+                    button_text = f"{planet_name} 🔋"
+                else:
+                    # Красная батарейка - нет разбора  
+                    button_text = f"{planet_name} 🪫"
+                
+                planet_buttons.append([
+                    InlineKeyboardButton(
+                        text=button_text,
+                        callback_data=f"view_planet:{planet_code}"
+                    )
+                ])
             
-            text_parts.extend([
-                "",
-                f"📊 **Текущие разборы:** {existing_count}",
-                "",
-                "⚠️ **Важно:**",
-                "• Новый разбор заменит существующие данные",
-                "• Все предыдущие разборы останутся доступными",
-                "• Заполнение анкеты займет 3-5 минут",
-                "",
-                "Хочешь начать заполнение новой анкеты?"
+            # Добавляем кнопку "Назад"
+            planet_buttons.append([
+                InlineKeyboardButton(
+                    text="← Назад к выбору типа разборов",
+                    callback_data="my_analyses"
+                )
             ])
             
-            # Создаем клавиатуру
-            kb = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="✅ Да, начать анкету",
-                            callback_data="start_new_analysis"
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text="👤 Посмотреть профиль",
-                            callback_data="personal_cabinet"
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text="❌ Отмена",
-                            callback_data="back_to_menu"
-                        )
-                    ]
-                ]
-            )
-            
             await cb_msg.answer(
-                "\n".join(text_parts),
-                reply_markup=kb,
+                "📋 **Мои основные разборы**\n\n"
+                "Выберите планету для просмотра разбора:\n\n"
+                "🔋 - разбор есть\n"
+                "🪫 - разбор не создан",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=planet_buttons),
                 parse_mode="Markdown"
             )
             
     except Exception as e:
-        logger.error(f"Ошибка в новом разборе для пользователя {user_id}: {e}")
+        logger.error(f"Error in my_main_analyses for user {user_id}: {e}")
         await cb_msg.answer(
-            "❌ Произошла ошибка при загрузке формы нового разбора.\n"
+            "❌ Произошла ошибка при загрузке разборов.\n"
+            "Попробуйте позже или обратитесь в службу заботы."
+        )
+
+
+@dp.callback_query(F.data.startswith("view_planet:"))
+async def on_view_planet(callback: CallbackQuery):
+    """Обработчик для просмотра разбора планеты"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    
+    try:
+        user_id = callback.from_user.id if callback.from_user else 0
+        planet_code = callback.data.split(":")[1]
+        logger.info(f"User {user_id} requested planet {planet_code}")
+        
+        # Получаем разбор из БД
+        from db import get_session
+        from models import User, Prediction
+        from sqlalchemy import select
+        
+        async with get_session() as session:
+            # Находим пользователя
+            user_result = await session.execute(
+                select(User).where(User.telegram_id == user_id)
+            )
+            user = user_result.scalar_one_or_none()
+            
+            if not user:
+                await cb_msg.answer(
+                    "❌ Пользователь не найден в базе данных.\n"
+                    "Попробуйте перезапустить бота командой /start"
+                )
+                return
+            
+            # Проверяем наличие разбора для планеты
+            prediction_result = await session.execute(
+                select(Prediction)
+                .where(
+                    Prediction.user_id == user.user_id,
+                    Prediction.planet == planet_code,
+                    Prediction.is_deleted.is_(False),
+                    Prediction.additional_profile_id.is_(None)  # Только основные
+                )
+                .limit(1)
+            )
+            prediction = prediction_result.scalar_one_or_none()
+            
+            planet_names = {
+                "moon": "🌙 Луна",
+                "sun": "☀️ Солнце",
+                "mercury": "☿️ Меркурий", 
+                "venus": "♀️ Венера",
+                "mars": "♂️ Марс"
+            }
+            planet_name = planet_names.get(planet_code, planet_code)
+            
+            if prediction and prediction.prediction_text:
+                # Есть разбор - показываем его
+                await cb_msg.answer(
+                    f"📋 **Разбор: {planet_name}**\n\n"
+                    f"{prediction.prediction_text}",
+                    reply_markup=InlineKeyboardMarkup(
+                        inline_keyboard=[
+                            [
+                                InlineKeyboardButton(
+                                    text="← Назад к планетам",
+                                    callback_data="my_main_analyses"
+                                )
+                            ]
+                        ]
+                    ),
+                    parse_mode="Markdown"
+                )
+            else:
+                # Нет разбора - предлагаем купить
+                await cb_msg.answer(
+                    f"🪫 **Разбор: {planet_name}**\n\n"
+                    f"У вас пока нет разбора для планеты {planet_name}.\n\n"
+                    f"Хотите приобрести разбор?",
+                    reply_markup=InlineKeyboardMarkup(
+                        inline_keyboard=[
+                            [
+                                InlineKeyboardButton(
+                                    text="💳 Купить разбор",
+                                    callback_data="buy_analysis"
+                                )
+                            ],
+                            [
+                                InlineKeyboardButton(
+                                    text="← Назад к планетам",
+                                    callback_data="my_main_analyses"
+                                )
+                            ]
+                        ]
+                    ),
+                    parse_mode="Markdown"
+                )
+                
+    except Exception as e:
+        logger.error(f"Error in view_planet for user {user_id}: {e}")
+        await cb_msg.answer(
+            "❌ Произошла ошибка при загрузке разбора.\n"
+            "Попробуйте позже или обратитесь в службу заботы."
+        )
+
+
+@dp.callback_query(F.data == "my_additional_analyses")
+async def on_my_additional_analyses(callback: CallbackQuery):
+    """Обработчик для дополнительных разборов (заглушка)"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    
+    await cb_msg.answer(
+        "👥 **Дополнительные разборы**\n\n"
+        "🔧 Функция в разработке.\n\n"
+        "Здесь будут отображаться разборы других людей "
+        "(семья, друзья, партнеры).\n\n"
+        "Скоро функция будет доступна!",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="← Назад к выбору типа разборов",
+                        callback_data="my_analyses"
+                    )
+                ]
+            ]
+        ),
+        parse_mode="Markdown"
+    )
+
+
+@dp.callback_query(F.data == "purchase_history")
+async def on_purchase_history(callback: CallbackQuery):
+    """Обработчик кнопки 'История покупок'"""
+    await callback.answer()
+    cb_msg = cast(Message, callback.message)
+    
+    try:
+        user_id = callback.from_user.id if callback.from_user else 0
+        logger.info(f"User {user_id} requested purchase history")
+        
+        # TODO: Здесь будет логика показа истории покупок
+        await cb_msg.answer(
+            "🧾 **История покупок**\n\n"
+            "🔧 Функция в разработке.\n\n"
+            "Здесь будет отображаться:\n"
+            "• История всех платежей\n"
+            "• Статус платежей (успешно/ошибка)\n"
+            "• Даты и суммы покупок\n"
+            "• Купленные разборы\n\n"
+            "Скоро функция будет доступна!",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="← Назад в кабинет",
+                            callback_data="personal_cabinet"
+                        )
+                    ]
+                ]
+            ),
+            parse_mode="Markdown"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in purchase_history for user {user_id}: {e}")
+        await cb_msg.answer(
+            "❌ Произошла ошибка при загрузке истории покупок.\n"
             "Попробуйте позже или обратитесь в службу заботы."
         )
 
