@@ -886,7 +886,9 @@ async def on_birth_city_confirm(callback: CallbackQuery, state: FSMContext):
     city_data = data.get("pending_birth_city")
     if not city_data:
         await callback.answer(
-            "Не нашла данные о городе. Пожалуйста, введите снова.",
+            "Ой... я не могу распознать это 😿\n"
+            "👇🏼 Введи место рождения еще раз в формате "
+            "Москва (без пробелов и других знаков)",
             show_alert=True,
         )
         return
