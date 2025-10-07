@@ -1587,7 +1587,7 @@ async def on_my_main_analyses(callback: CallbackQuery):
                 .where(
                     Prediction.user_id == user.user_id,
                     Prediction.is_deleted.is_(False),
-                    Prediction.additional_profile_id.is_(None)  # Только основные разборы
+                    Prediction.profile_id.is_(None)  # Только основные разборы
                 )
                 .distinct()
             )
@@ -1681,7 +1681,7 @@ async def on_view_planet(callback: CallbackQuery):
                     Prediction.user_id == user.user_id,
                     Prediction.planet == planet_code,
                     Prediction.is_deleted.is_(False),
-                    Prediction.additional_profile_id.is_(None)  # Только основные
+                    Prediction.profile_id.is_(None)  # Только основные
                 )
                 .limit(1)
             )
@@ -1696,11 +1696,25 @@ async def on_view_planet(callback: CallbackQuery):
             }
             planet_name = planet_names.get(planet_code, planet_code)
             
-            if prediction and prediction.prediction_text:
+            # Получаем текст разбора в зависимости от планеты
+            prediction_text = None
+            if prediction:
+                if planet_code == "moon":
+                    prediction_text = prediction.moon_analysis
+                elif planet_code == "sun":
+                    prediction_text = prediction.sun_analysis
+                elif planet_code == "mercury":
+                    prediction_text = prediction.mercury_analysis
+                elif planet_code == "venus":
+                    prediction_text = prediction.venus_analysis
+                elif planet_code == "mars":
+                    prediction_text = prediction.mars_analysis
+            
+            if prediction_text:
                 # Есть разбор - показываем его
                 await cb_msg.answer(
                     f"📋 **Разбор: {planet_name}**\n\n"
-                    f"{prediction.prediction_text}",
+                    f"{prediction_text}",
                     reply_markup=InlineKeyboardMarkup(
                         inline_keyboard=[
                             [
