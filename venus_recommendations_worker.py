@@ -366,7 +366,6 @@ class VenusRecommendationsWorker:
     
     def format_venus_recommendations_message(self, recommendations: str, user_name: str, profile_name: Optional[str] = None) -> str:
         """Форматирует сообщение с рекомендациями по Венере"""
-        from datetime import datetime
         
         if profile_name:
             message = f"♀️ Персональные рекомендации по Венере для {profile_name}\n\n"
@@ -374,10 +373,6 @@ class VenusRecommendationsWorker:
             message = f"♀️ Персональные рекомендации по Венере для {user_name}\n\n"
         
         message += recommendations
-        
-        # Добавляем время создания
-        now = datetime.now()
-        message += f"\n\n✨ Создано: {now.strftime('%d.%m.%Y в %H:%M')}"
         
         return message
     

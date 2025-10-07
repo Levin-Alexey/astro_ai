@@ -340,7 +340,6 @@ class RecommendationsWorker:
     
     def format_recommendations_message(self, recommendations: str, user_name: str, profile_name: Optional[str] = None) -> str:
         """Форматирует сообщение с рекомендациями"""
-        from datetime import datetime
         
         # Адаптируем заголовок для дополнительного профиля или основного
         if profile_name:
@@ -349,10 +348,6 @@ class RecommendationsWorker:
             message = f"💡 Персональные рекомендации для {user_name}\n\n"
         
         message += recommendations
-        
-        # Добавляем время создания
-        now = datetime.now()
-        message += f"\n\n✨ Создано: {now.strftime('%d.%m.%Y в %H:%M')}"
         
         return message
     

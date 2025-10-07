@@ -350,7 +350,6 @@ class SunRecommendationsWorker:
     
     def format_sun_recommendations_message(self, recommendations: str, user_name: str, profile_name: Optional[str] = None) -> str:
         """Форматирует сообщение с рекомендациями по Солнцу"""
-        from datetime import datetime
         
         if profile_name:
             message = f"☀️ Персональные рекомендации по Солнцу для {profile_name}\n\n"
@@ -358,10 +357,6 @@ class SunRecommendationsWorker:
             message = f"☀️ Персональные рекомендации по Солнцу для {user_name}\n\n"
         
         message += recommendations
-        
-        # Добавляем время создания
-        now = datetime.now()
-        message += f"\n\n✨ Создано: {now.strftime('%d.%m.%Y в %H:%M')}"
         
         return message
     

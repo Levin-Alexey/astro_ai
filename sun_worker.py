@@ -369,12 +369,6 @@ class SunWorker:
         
         message += content
         
-        # Добавляем подпись
-        message += f"\n\n✨ Создано: {prediction.created_at.strftime('%d.%m.%Y %H:%M')}"
-        
-        if prediction.llm_model:
-            message += f"\n🤖 Модель: {prediction.llm_model}"
-        
         return message
     
     def create_sun_analysis_buttons(self, is_all_planets: bool = False, profile_id: int = None) -> Dict[str, Any]:

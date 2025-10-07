@@ -370,7 +370,6 @@ class MercuryRecommendationsWorker:
     
     def format_mercury_recommendations_message(self, recommendations: str, user_name: str, profile_name: Optional[str] = None) -> str:
         """Форматирует сообщение с рекомендациями по Меркурию"""
-        from datetime import datetime
         
         if profile_name:
             message = f"☿️ Персональные рекомендации по Меркурию для {profile_name}\n\n"
@@ -378,10 +377,6 @@ class MercuryRecommendationsWorker:
             message = f"☿️ Персональные рекомендации по Меркурию для {user_name}\n\n"
         
         message += recommendations
-        
-        # Добавляем время создания
-        now = datetime.now()
-        message += f"\n\n✨ Создано: {now.strftime('%d.%m.%Y в %H:%M')}"
         
         return message
     
