@@ -273,7 +273,7 @@ def build_gender_kb(selected: str | None) -> InlineKeyboardMarkup:
 async def show_personal_cabinet(message_or_callback):
     """Показывает личный кабинет пользователя"""
     # Определяем тип объекта (Message или CallbackQuery)
-    if hasattr(message_or_callback, 'from_user'):
+    if isinstance(message_or_callback, CallbackQuery):
         # Это CallbackQuery
         user_id = message_or_callback.from_user.id if message_or_callback.from_user else 0
         cb_msg = cast(Message, message_or_callback.message)
