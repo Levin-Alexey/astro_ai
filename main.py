@@ -937,25 +937,7 @@ async def on_birth_city_confirm(callback: CallbackQuery, state: FSMContext):
     except Exception:
         pass
 
-    # Показываем результат и переходим к следующему шагу
-    if geo:
-        place = geo["place_name"]
-        lat = geo["lat"]
-        lon = geo["lon"]
-        cb_msg = cast(Message, callback.message)
-        await cb_msg.answer(
-            f"Принято! Нашла: {place}\n"
-            f"Координаты: {lat:.5f}, {lon:.5f} ✅"
-        )
-    else:
-        cb_msg = cast(Message, callback.message)
-        await cb_msg.answer(
-            "Принято! Но не удалось найти город по базе. "
-            "Можешь попробовать указать иначе (например: 'Россия, Краснодар') "
-            "или выбрать ближайший крупный город."
-        )
-
-    # Следующий шаг — спросить про время рождения
+    # Переходим к следующему шагу — спросить про время рождения
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [
