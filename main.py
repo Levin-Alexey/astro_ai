@@ -108,6 +108,38 @@ async def cmd_start(message: Message, state: FSMContext):
     # Сбрасываем состояние FSM при перезапуске
     await state.clear()
     
+    # Парсим UTM метки из команды /start
+    # Формат: /start utm_source_medium_campaign_content_term
+    # Или: /start ref_КОД для реферальных ссылок
+    utm_data = {}
+    command_args = message.text.split(maxsplit=1) if message.text else []
+    
+    if len(command_args) > 1:
+        param = command_args[1]
+        
+        # Проверяем реферальную ссылку
+        if param.startswith("ref_"):
+            utm_data["referral_code"] = param[4:]  # Убираем префикс ref_
+            logger.info(f"Реферальный код: {utm_data['referral_code']}")
+        else:
+            # Парсим UTM метки, разделенные подчеркиванием
+            # Формат: source_medium_campaign_content_term
+            parts = param.split("_")
+            
+            if len(parts) >= 1 and parts[0]:
+                utm_data["utm_source"] = parts[0]
+            if len(parts) >= 2 and parts[1]:
+                utm_data["utm_medium"] = parts[1]
+            if len(parts) >= 3 and parts[2]:
+                utm_data["utm_campaign"] = parts[2]
+            if len(parts) >= 4 and parts[3]:
+                utm_data["utm_content"] = parts[3]
+            if len(parts) >= 5 and parts[4]:
+                utm_data["utm_term"] = parts[4]
+            
+            if utm_data:
+                logger.info(f"UTM метки: {utm_data}")
+    
     # Созраняем/обновляем пользователя в БД при первом запуске
     tg_user = cast(TgUser, message.from_user)
     lang = tg_user.language_code or "ru"
@@ -118,6 +150,7 @@ async def cmd_start(message: Message, state: FSMContext):
         )
         user = res.scalar_one_or_none()
         if user is None:
+            # Новый пользователь - сохраняем все данные включая UTM
             user = DbUser(
                 telegram_id=tg_user.id,
                 username=tg_user.username,
@@ -126,8 +159,10 @@ async def cmd_start(message: Message, state: FSMContext):
                 lang=lang,
                 joined_at=now,
                 last_seen_at=now,
+                **utm_data  # Добавляем UTM метки
             )
             session.add(user)
+            logger.info(f"Новый пользователь {tg_user.id} создан с UTM: {utm_data}")
         else:
             # Обновим базовые поля, если изменились, и отметим активность
             user.username = tg_user.username
@@ -135,6 +170,26 @@ async def cmd_start(message: Message, state: FSMContext):
             user.last_name = tg_user.last_name
             user.lang = lang or user.lang
             user.last_seen_at = now
+            
+            # UTM метки обновляем только если их еще не было
+            # (сохраняем источник первого прихода)
+            if utm_data:
+                if not user.utm_source and utm_data.get("utm_source"):
+                    user.utm_source = utm_data["utm_source"]
+                if not user.utm_medium and utm_data.get("utm_medium"):
+                    user.utm_medium = utm_data["utm_medium"]
+                if not user.utm_campaign and utm_data.get("utm_campaign"):
+                    user.utm_campaign = utm_data["utm_campaign"]
+                if not user.utm_content and utm_data.get("utm_content"):
+                    user.utm_content = utm_data["utm_content"]
+                if not user.utm_term and utm_data.get("utm_term"):
+                    user.utm_term = utm_data["utm_term"]
+                if not user.referral_code and utm_data.get("referral_code"):
+                    user.referral_code = utm_data["referral_code"]
+                
+                logger.info(f"Существующий пользователь {tg_user.id}, UTM обновлены: {utm_data}")
+        
+        await session.commit()
 
     # Проверяем, есть ли у пользователя уже бесплатный разбор Луны
     has_moon_analysis = await check_existing_moon_prediction(tg_user.id)

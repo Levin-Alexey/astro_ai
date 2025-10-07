@@ -237,6 +237,14 @@ class User(Base):
     geo_provider: Mapped[Optional[str]] = mapped_column(Text)
     geo_provider_place_id: Mapped[Optional[str]] = mapped_column(Text)
 
+    # UTM метки и источники трафика
+    utm_source: Mapped[Optional[str]] = mapped_column(Text)
+    utm_medium: Mapped[Optional[str]] = mapped_column(Text)
+    utm_campaign: Mapped[Optional[str]] = mapped_column(Text)
+    utm_content: Mapped[Optional[str]] = mapped_column(Text)
+    utm_term: Mapped[Optional[str]] = mapped_column(Text)
+    referral_code: Mapped[Optional[str]] = mapped_column(Text)  # Для реферальных ссылок
+    
     # Служебное
     is_deleted: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")
@@ -543,6 +551,11 @@ Index("users_last_seen_idx", User.last_seen_at.desc())
 Index("users_birth_utc_idx", User.birth_datetime_utc)
 Index("users_tg_username_idx", func.lower(User.username))
 Index("users_zodiac_idx", User.zodiac_sign)
+
+# Индексы для UTM меток (для аналитики)
+Index("users_utm_source_idx", User.utm_source)
+Index("users_utm_campaign_idx", User.utm_campaign)
+Index("users_referral_code_idx", User.referral_code)
 
 # Индексы для таблицы predictions
 Index("predictions_user_id_idx", Prediction.user_id)
