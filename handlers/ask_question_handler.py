@@ -53,17 +53,31 @@ async def handle_ask_question(callback: CallbackQuery, state: FSMContext):
                 Prediction.planet == Planet.moon,
                 Prediction.prediction_type == PredictionType.free,
                 Prediction.is_active.is_(True),
-                Prediction.is_deleted.is_(False),
-                Prediction.moon_analysis.is_not(None)  # Готовый анализ
+                Prediction.is_deleted.is_(False)
             ).limit(1)
         )
         prediction = prediction_result.scalar_one_or_none()
         
-        if not prediction or not prediction.moon_analysis:
+        if not prediction:
             if callback.message:
                 await callback.message.answer(
-                    "❌ Астрологический разбор не найден или еще не готов.\n\n"
-                    "Сначала получите разбор, а затем задайте вопрос."
+                    "❌ Астрологический разбор не найден.\n\n"
+                    "Сначала получите бесплатный разбор Луны, а затем задайте вопрос."
+                )
+            return
+        
+        # Проверяем, есть ли готовый анализ (в любом поле)
+        has_analysis = (
+            prediction.moon_analysis or 
+            prediction.content or 
+            prediction.qa_responses
+        )
+        
+        if not has_analysis:
+            if callback.message:
+                await callback.message.answer(
+                    "❌ Астрологический разбор еще не готов.\n\n"
+                    "Дождитесь завершения анализа, а затем задайте вопрос."
                 )
             return
     
@@ -89,6 +103,9 @@ async def handle_ask_question(callback: CallbackQuery, state: FSMContext):
         )
         
         # Устанавливаем состояние ожидания вопроса
-        # Импортируем здесь, чтобы избежать циклических импортов
-        from main import QuestionForm
+        from aiogram.fsm.state import State, StatesGroup
+        
+        class QuestionForm(StatesGroup):
+            waiting_for_question = State()
+            
         await state.set_state(QuestionForm.waiting_for_question)
