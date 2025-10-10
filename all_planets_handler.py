@@ -237,12 +237,13 @@ class AllPlanetsHandler:
                         "или возврата в главное меню.",
                         reply_markup=InlineKeyboardMarkup(
                             inline_keyboard=[
-                                [
-                                    InlineKeyboardButton(
-                                        text="💡 Получить рекомендации",
-                                        callback_data="get_recommendations"
-                                    )
-                                ],
+                                # Временно закомментирована кнопка "Получить рекомендации"
+                                # [
+                                #     InlineKeyboardButton(
+                                #         text="💡 Получить рекомендации",
+                                #         callback_data="get_recommendations"
+                                #     )
+                                # ],
                                 [
                                     InlineKeyboardButton(
                                         text="🏠 Главное меню",
@@ -454,14 +455,15 @@ class AllPlanetsHandler:
 
     def create_planet_buttons(self, planet: str, profile_id: Optional[int] = None) -> InlineKeyboardMarkup:
         """Создает кнопки для разбора планеты"""
-        buttons = [
-            [
-                InlineKeyboardButton(
-                    text="💡 Получить рекомендации",
-                    callback_data=f"get_{planet}_recommendations"
-                )
-            ]
-        ]
+        buttons = []
+        
+        # Временно закомментирована кнопка "Получить рекомендации"
+        # [
+        #     InlineKeyboardButton(
+        #         text="💡 Получить рекомендации",
+        #         callback_data=f"get_{planet}_recommendations"
+        #     )
+        # ]
 
         # Добавляем кнопку "Следующая планета" для всех планет кроме Марса
         if planet != "mars":
@@ -556,12 +558,13 @@ def create_planet_analysis_buttons(planet: str, is_all_planets: bool = False, pr
         Словарь с клавиатурой для Telegram API
     """
     buttons = [
-        [
-            {
-                "text": "💡 Получить рекомендации",
-                "callback_data": f"get_{planet}_recommendations"
-            }
-        ]
+        # Временно закомментирована кнопка "Получить рекомендации"
+        # [
+        #     {
+        #         "text": "💡 Получить рекомендации",
+        #         "callback_data": f"get_{planet}_recommendations"
+        #     }
+        # ]
     ]
     
     if is_all_planets:
