@@ -2211,18 +2211,30 @@ async def on_buy_profile_planet(callback: CallbackQuery):
         }
         
         if planet_code in planet_handlers:
-            # Создаем новый callback с нужным data
-            callback.data = planet_handlers[planet_code]
+            # Создаем MockCallback для обхода frozen instance
+            class MockCallback:
+                def __init__(self, original, new_data):
+                    self.data = new_data
+                    self.from_user = original.from_user
+                    self.message = original.message
+                    self.id = original.id
+                    self.chat_instance = original.chat_instance
+                    self._original = original
+                
+                async def answer(self, *args, **kwargs):
+                    return await self._original.answer(*args, **kwargs)
+            
+            mock_callback = MockCallback(callback, planet_handlers[planet_code])
             
             # Вызываем соответствующий обработчик
             if planet_code == "sun":
-                await on_pay_sun(callback)
+                await on_pay_sun(mock_callback)
             elif planet_code == "mercury":
-                await on_pay_mercury(callback)
+                await on_pay_mercury(mock_callback)
             elif planet_code == "venus":
-                await on_pay_venus(callback)
+                await on_pay_venus(mock_callback)
             elif planet_code == "mars":
-                await on_pay_mars(callback)
+                await on_pay_mars(mock_callback)
         else:
             # Луна бесплатная, не должно быть покупки
             cb_msg = cast(Message, callback.message)
