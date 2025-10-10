@@ -1311,7 +1311,7 @@ async def on_birth_time_redo(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-@dp.callback_query(F.data == "btime_approx:confirm")
+@dp.callback_query(F.data.startswith("btime_approx:confirm"))
 async def on_birth_time_approx_confirm(
     callback: CallbackQuery, state: FSMContext
 ):
@@ -2276,6 +2276,11 @@ async def on_buy_profile_planet(callback: CallbackQuery):
         )
 
 
+@dp.message(Command("pay"))
+async def cmd_pay(message: Message, state: FSMContext):
+    """Обработчик команды /pay — вызывает меню покупки разбора, как и кнопка 'Купить разбор'"""
+    from handlers.buy_analysis_handler import show_buy_analysis_menu
+    await show_buy_analysis_menu(message)
 
 
 @dp.callback_query(F.data == "faq")
@@ -2368,8 +2373,7 @@ async def on_cancel_support(callback: CallbackQuery, state: FSMContext):
     
     from handlers.support_handler import cancel_support
     
-    cb_msg = cast(Message, callback.message)
-    await cancel_support(cb_msg, state)
+    await cancel_support(callback, state)
 
 
 @dp.message(SupportForm.waiting_for_message)
