@@ -265,7 +265,6 @@ class QuestionWorker:
         payload = {
             "chat_id": chat_id,
             "text": text,
-            "parse_mode": "HTML",
             "disable_web_page_preview": True
         }
         
@@ -298,10 +297,45 @@ class QuestionWorker:
                 logger.error(f"Telegram API request failed: {e}")
                 return False
     
+    def clean_text_for_telegram(self, text: str) -> str:
+        """Очищает текст от проблемных символов для Telegram API"""
+        import re
+        
+        # Убираем специальные маркеры от LLM и LaTeX
+        text = re.sub(
+            r'\\begin\{[^}]+\}.*?\\end\{[^}]+\}', '', text, flags=re.DOTALL
+        )
+        text = re.sub(r'\uff5c[^\uff5c]*\uff5c', '', text)
+        text = re.sub(r'<[^>]*>', '', text)  # Убираем HTML теги
+        text = re.sub(r'\*{2,}', '', text)  # Убираем множественные звездочки
+        text = re.sub(r'_{2,}', '', text)  # Убираем подчеркивания
+        
+        # Убираем проблемные Unicode символы
+        text = re.sub(r'[\uff5c\u2581]+', '', text)
+        
+        # Убираем специальные символы форматирования
+        text = re.sub(r'[\u200b-\u200d\ufeff]', '', text)  # Невидимые символы
+        
+        # Заменяем тройные и более переносы строк на двойные
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        
+        # Убираем лишние пробелы
+        text = re.sub(r' {2,}', ' ', text)
+        text = text.strip()
+        
+        # Ограничиваем длину сообщения (Telegram лимит ~4096 символов)
+        if len(text) > 4000:
+            text = text[:4000] + "...\n\n(Ответ сокращен)"
+        
+        return text
+    
     def format_answer_message(self, answer: str, user_name: str) -> str:
         """Форматирует сообщение с ответом"""
+        # Очищаем текст от проблемных символов
+        clean_answer = self.clean_text_for_telegram(answer)
+        
         message = f"🔮 Ответ для {user_name}\n\n"
-        message += answer
+        message += clean_answer
         return message
     
     def create_question_reply_markup(self) -> dict:
@@ -332,7 +366,9 @@ class QuestionWorker:
             logger.error(f"Invalid message data: {message_data}")
             return
         
-        logger.info(f"Processing question for user {user_id}: {question[:50]}...")
+        logger.info(
+            f"Processing question for user {user_id}: {question[:50]}..."
+        )
         
         # Получаем информацию о пользователе
         user_info = await self.get_user_info(user_id)
@@ -393,7 +429,7 @@ class QuestionWorker:
             except Exception as e:
                 logger.error(f"Error sending answer to user: {e}")
         else:
-            logger.info(f"LLM processing skipped for question - no API key")
+            logger.info("LLM processing skipped for question - no API key")
         
         logger.info(f"Question for user {user_id} processed successfully")
     
@@ -407,7 +443,10 @@ class QuestionWorker:
         async def process_message(message: aio_pika.IncomingMessage):
             async with message.process():
                 try:
-                    logger.info(f"Received message from queue: {message.body.decode()[:100]}...")
+                    msg_preview = message.body.decode()[:100]
+                    logger.info(
+                        f"Received message from queue: {msg_preview}..."
+                    )
                     message_data = json.loads(message.body.decode())
                     logger.info(f"Parsed message data: {message_data}")
                     await self.process_question(message_data)
