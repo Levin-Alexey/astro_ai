@@ -256,7 +256,8 @@ class QuestionWorker:
     async def send_telegram_message(
         self, 
         chat_id: int, 
-        text: str
+        text: str,
+        reply_markup: dict = None
     ) -> bool:
         """Отправляет сообщение через Telegram Bot API"""
         url = f"{BOT_API_URL}/sendMessage"
@@ -267,6 +268,9 @@ class QuestionWorker:
             "parse_mode": "HTML",
             "disable_web_page_preview": True
         }
+        
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
         
         async with aiohttp.ClientSession() as session:
             try:
@@ -299,6 +303,25 @@ class QuestionWorker:
         message = f"🔮 Ответ для {user_name}\n\n"
         message += answer
         return message
+    
+    def create_question_reply_markup(self) -> dict:
+        """Создает клавиатуру с кнопками после ответа на вопрос"""
+        return {
+            "inline_keyboard": [
+                [
+                    {
+                        "text": "❓ Задать еще вопрос",
+                        "callback_data": "ask_question"
+                    }
+                ],
+                [
+                    {
+                        "text": "🏠 Главное меню",
+                        "callback_data": "back_to_menu"
+                    }
+                ]
+            ]
+        }
     
     async def process_question(self, message_data: Dict[str, Any]):
         """Обрабатывает один вопрос"""
@@ -353,9 +376,13 @@ class QuestionWorker:
                     user_name=user_info["first_name"] or "Друг"
                 )
                 
+                # Создаем клавиатуру с кнопками
+                reply_markup = self.create_question_reply_markup()
+                
                 success = await self.send_telegram_message(
                     chat_id=user_id,
-                    text=message
+                    text=message,
+                    reply_markup=reply_markup
                 )
                 
                 if success:

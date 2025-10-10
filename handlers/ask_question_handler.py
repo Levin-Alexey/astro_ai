@@ -103,9 +103,17 @@ async def handle_ask_question(callback: CallbackQuery, state: FSMContext):
         )
         
         # Устанавливаем состояние ожидания вопроса
-        from aiogram.fsm.state import State, StatesGroup
-        
-        class QuestionForm(StatesGroup):
-            waiting_for_question = State()
+        # Импортируем QuestionForm из main.py
+        import sys
+        main_module = sys.modules.get('__main__')
+        if main_module and hasattr(main_module, 'QuestionForm'):
+            QuestionForm = main_module.QuestionForm
+            await state.set_state(QuestionForm.waiting_for_question)
+        else:
+            # Fallback - создаем локальный класс
+            from aiogram.fsm.state import State, StatesGroup
             
-        await state.set_state(QuestionForm.waiting_for_question)
+            class QuestionForm(StatesGroup):
+                waiting_for_question = State()
+                
+            await state.set_state(QuestionForm.waiting_for_question)
