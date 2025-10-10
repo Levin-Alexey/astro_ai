@@ -6,7 +6,7 @@ from sqlalchemy import select
 from datetime import datetime
 
 from db import get_session
-from models import PlanetPayment, PaymentStatus, PaymentType, Planet
+from models import PlanetPayment, PaymentStatus, PaymentType, Planet, User
 
 router = Router()
 
@@ -14,7 +14,7 @@ router = Router()
 def get_back_to_profile_keyboard():
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="⬅️ Назад", callback_data="profile_menu")]
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="personal_cabinet")]
         ]
     )
 
@@ -47,10 +47,21 @@ def format_payment(payment: PlanetPayment) -> str:
 
 @router.callback_query(lambda c: c.data == "purchase_history")
 async def purchase_history_handler(callback: CallbackQuery):
-    user_id = callback.from_user.id
+    telegram_id = callback.from_user.id
     async with get_session() as session:  # type: AsyncSession
+        # Сначала находим пользователя по telegram_id
+        user_result = await session.execute(
+            select(User).where(User.telegram_id == telegram_id)
+        )
+        user = user_result.scalar_one_or_none()
+        
+        if not user:
+            await callback.answer("Пользователь не найден в базе данных")
+            return
+        
+        # Теперь ищем платежи по внутреннему user_id
         result = await session.execute(
-            select(PlanetPayment).where(PlanetPayment.user_id == user_id).order_by(PlanetPayment.created_at.desc())
+            select(PlanetPayment).where(PlanetPayment.user_id == user.user_id).order_by(PlanetPayment.created_at.desc())
         )
         payments = result.scalars().all()
     if not payments:
