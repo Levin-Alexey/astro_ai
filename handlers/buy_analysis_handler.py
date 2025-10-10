@@ -97,12 +97,13 @@ async def handle_buy_analysis_self(callback: CallbackQuery, state: FSMContext):
                 )
                 return
             
-            # Получаем уже купленные разборы
+            # Получаем уже купленные разборы (только основного профиля)
             existing_predictions = await session.execute(
                 select(Prediction.planet)
                 .where(
                     Prediction.user_id == user.user_id,
-                    Prediction.is_deleted.is_(False)
+                    Prediction.is_deleted.is_(False),
+                    Prediction.profile_id.is_(None)  # Только основные разборы
                 )
                 .distinct()
             )

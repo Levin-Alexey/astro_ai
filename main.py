@@ -4040,12 +4040,13 @@ async def check_user_payment_access(user_id: int, planet: str) -> bool:
     from models import PlanetPayment, PaymentStatus, PaymentType, Planet
     
     async with get_session() as session:
-        # Проверяем, есть ли оплата за все планеты
+        # Проверяем, есть ли оплата за все планеты (только для основного профиля)
         all_planets_payment = await session.execute(
             select(PlanetPayment).where(
                 PlanetPayment.user_id == user_id,
                 PlanetPayment.payment_type == PaymentType.all_planets,
-                PlanetPayment.status == PaymentStatus.completed
+                PlanetPayment.status == PaymentStatus.completed,
+                PlanetPayment.profile_id.is_(None)  # Только основной профиль
             )
         )
         if all_planets_payment.scalar_one_or_none():
@@ -4060,7 +4061,8 @@ async def check_user_payment_access(user_id: int, planet: str) -> bool:
                         PlanetPayment.user_id == user_id,
                         PlanetPayment.payment_type == PaymentType.single_planet,
                         PlanetPayment.planet == planet_enum,
-                        PlanetPayment.status == PaymentStatus.completed
+                        PlanetPayment.status == PaymentStatus.completed,
+                        PlanetPayment.profile_id.is_(None)  # Только основной профиль
                     )
                 )
                 return single_planet_payment.scalar_one_or_none() is not None
