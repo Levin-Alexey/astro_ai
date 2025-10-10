@@ -74,6 +74,7 @@ from handlers.additional_profile_handler import (
 )
 from payment_handler import init_payment_handler
 from all_planets_handler import init_all_planets_handler
+from handlers.purchase_history_handler import router as purchase_history_router
 
 # Настройка логирования
 logging.basicConfig(level=getattr(logging, LOG_LEVEL), format=LOG_FORMAT)
@@ -89,6 +90,9 @@ if BOT_TOKEN in ["YOUR_BOT_TOKEN_HERE", "ваш_токен_здесь"]:
 # Создание объектов бота и диспетчера
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
+
+# Подключаем router purchase_history_handler
+dp.include_router(purchase_history_router)
 
 # Глобальная переменная для payment_handler
 payment_handler = None
@@ -824,7 +828,7 @@ async def on_birth_date_confirm(
     iso = data.get("pending_birth_date")
     if not iso:
         await callback.answer(
-            "Не нашла дату. Пожалуйста, введите снова.",
+            "Не нашла дату. Пожалуйста, введите дату снова.",
             show_alert=True,
         )
         return
@@ -1197,7 +1201,7 @@ async def on_birth_time_confirm(callback: CallbackQuery, state: FSMContext):
     time_iso = data.get("pending_birth_time")
     if not time_iso:
         await callback.answer(
-            "Не нашла время. Пожалуйста, введите снова.",
+            "Не нашла время. Пожалуйста, введите время снова.",
             show_alert=True,
         )
         return
@@ -1317,7 +1321,7 @@ async def on_birth_time_approx_confirm(
     time_iso = data.get("pending_birth_time")
     if not time_iso:
         await callback.answer(
-            "Не нашла время. Пожалуйста, введите снова.",
+            "Не нашла время. Пожалуйста, введите время снова.",
             show_alert=True,
         )
         return
@@ -1410,39 +1414,19 @@ async def on_birth_time_approx_confirm(
     await callback.answer()
 
 
-@dp.callback_query(F.data == "btime_approx:redo")
-async def on_birth_time_approx_redo(
-    callback: CallbackQuery, state: FSMContext
-):
-    """Просим ввести примерное время рождения заново"""
-    await state.update_data(pending_birth_time=None)
-    cb_msg = cast(Message, callback.message)
-    await cb_msg.answer(
-        "Окей! Пришли примерное время своего рождения в формате ЧЧ:ММ\n"
-        "например: 11:00"
-    )
-    try:
-        await cb_msg.edit_reply_markup(reply_markup=None)
-    except Exception:
-        pass
-    await state.set_state(ProfileForm.waiting_for_birth_time_local)
+@dp.callback_query(F.data.startswith("btime_unknown:"))
+async def on_birth_time_unknown(callback: CallbackQuery):
+    """Обработчик кнопки для подтверждения работы без времени рождения"""
     await callback.answer()
-
-
-@dp.callback_query(F.data == "btime_unknown:confirm")
-async def on_birth_time_unknown_confirm(
-    callback: CallbackQuery, state: FSMContext
-):
-    """Подтверждение работы без времени рождения: завершаем анкету"""
+    cb_msg = cast(Message, callback.message)
+    
     # Убираем клавиатуру
     try:
-        cb_msg = cast(Message, callback.message)
         await cb_msg.edit_reply_markup(reply_markup=None)
     except Exception:
         pass
 
     # Показываем сообщение о завершении
-    cb_msg = cast(Message, callback.message)
     await cb_msg.answer(
         "Принято! 🔮  \n\n"
         "Ничего страшного, если ты не знаешь время своего рождения 👌🏼 \n"
@@ -2091,9 +2075,10 @@ async def on_view_profile_planet(callback: CallbackQuery):
                 )
             )
             profile = profile_result.scalar_one_or_none()
-            
+
             if not profile:
                 await cb_msg.answer("❌ Профиль не найден")
+
                 return
             
             # Получаем разбор планеты
@@ -2246,12 +2231,14 @@ async def on_buy_profile_planet(callback: CallbackQuery):
             await cb_msg.answer(
                 "❌ Разбор Луны бесплатный и доступен всем профилям",
                 reply_markup=InlineKeyboardMarkup(
-                    inline_keyboard=[[
-                        InlineKeyboardButton(
-                            text="← Назад",
-                            callback_data=f"view_profile:{profile_id}"
-                        )
-                    ]]
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text="← Назад",
+                                callback_data="view_profile:{profile_id}"
+                            )
+                        ]
+                    ]
                 )
             )
             
@@ -2261,55 +2248,18 @@ async def on_buy_profile_planet(callback: CallbackQuery):
         await cb_msg.answer(
             "❌ Произошла ошибка при обработке покупки",
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[[
-                    InlineKeyboardButton(
-                        text="← Назад",
-                        callback_data="my_additional_analyses"
-                    )
-                ]]
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="← Назад",
+                            callback_data="my_additional_analyses"
+                        )
+                    ]
+                ]
             )
         )
 
 
-@dp.callback_query(F.data == "purchase_history")
-async def on_purchase_history(callback: CallbackQuery):
-    """Обработчик кнопки 'История покупок'"""
-    await callback.answer()
-    cb_msg = cast(Message, callback.message)
-    
-    try:
-        user_id = callback.from_user.id if callback.from_user else 0
-        logger.info(f"User {user_id} requested purchase history")
-        
-        # TODO: Здесь будет логика показа истории покупок
-        await cb_msg.answer(
-            "🧾 **История покупок**\n\n"
-            "🔧 Функция в разработке.\n\n"
-            "Здесь будет отображаться:\n"
-            "• История всех платежей\n"
-            "• Статус платежей (успешно/ошибка)\n"
-            "• Даты и суммы покупок\n"
-            "• Купленные разборы\n\n"
-            "Скоро функция будет доступна!",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="← Назад в кабинет",
-                            callback_data="personal_cabinet"
-                        )
-                    ]
-                ]
-            ),
-            parse_mode="Markdown"
-        )
-        
-    except Exception as e:
-        logger.error(f"Error in purchase_history for user {user_id}: {e}")
-        await cb_msg.answer(
-            "❌ Произошла ошибка при загрузке истории покупок.\n"
-            "Попробуйте позже или обратитесь в службу заботы."
-        )
 
 
 @dp.callback_query(F.data == "faq")
@@ -2672,8 +2622,6 @@ async def process_user_question(message: Message, state: FSMContext):
             "❌ Произошла ошибка при обработке вопроса.\n\n"
             "Попробуйте позже или обратитесь в поддержку."
         )
-
-
 
 
 async def get_last_moon_prediction_profile_id(user_id: int) -> Optional[int]:
@@ -3466,7 +3414,7 @@ async def on_pay_sun(callback: CallbackQuery):
         return
     
     try:
-        logger.info(f"🔥 НАЧИНАЕМ СОЗДАНИЕ ПЛАТЕЖА для пользователя {user_id}")
+        logger.info(f"🔥 НАЧИНАЕМ СОЗДАНИЕ ПЛАТЕЖА ЗА СОЛНЦЕ для пользователя {user_id}")
         
         # Создаем данные для платежа
         payment_data = payment_handler.create_payment_data(
@@ -3648,6 +3596,7 @@ async def on_pay_mars(callback: CallbackQuery):
                 amount_kopecks=1000,  # 10 рублей в копейках
                 external_payment_id=external_payment_id,
                 payment_url=payment_url,
+                profile_id=profile_id,  # Добавляем поддержку дополнительных профилей
                 notes="Платеж за разбор Марса"
             )
             logger.info(f"🔥 СОЗДАЕМ ЗАПИСЬ ПЛАТЕЖА: {payment_record}")
@@ -3667,8 +3616,7 @@ async def on_pay_mars(callback: CallbackQuery):
             "• Решительность в действиях\n"
             "• Спортивный дух и выносливость\n"
             "• Умение разрешать конфликты\n"
-            "• Уверенность в начинании нового\n\n"
-            "💳 Нажмите кнопку ниже для оплаты:",
+            "• Уверенность в начинании нового",
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
@@ -3785,6 +3733,7 @@ async def on_pay_mercury(callback: CallbackQuery):
                 amount_kopecks=1000,  # 10 рублей в копейках
                 external_payment_id=external_payment_id,
                 payment_url=payment_url,
+                profile_id=profile_id,  # Добавляем поддержку дополнительных профилей
                 notes="Платеж за разбор Меркурия"
             )
             logger.info(f"🔥 СОЗДАЕМ ЗАПИСЬ ПЛАТЕЖА: {payment_record}")
@@ -3803,8 +3752,7 @@ async def on_pay_mercury(callback: CallbackQuery):
             "• Развитие речи и мышления\n"
             "• Умение убеждать и договариваться\n"
             "• Лёгкое обучение и ясная подача идей\n"
-            "• Улучшение коммуникативных навыков\n\n"
-            "💳 Нажмите кнопку ниже для оплаты:",
+            "• Улучшение коммуникативных навыков",
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
@@ -3816,7 +3764,7 @@ async def on_pay_mercury(callback: CallbackQuery):
                     [
                         InlineKeyboardButton(
                             text="🔙 Назад",
-                            callback_data="explore_mercury"
+                            callback_data="explore_other_areas"
                         )
                     ]
                 ]
@@ -3921,6 +3869,7 @@ async def on_pay_venus(callback: CallbackQuery):
                 amount_kopecks=1000,  # 10 рублей в копейках
                 external_payment_id=external_payment_id,
                 payment_url=payment_url,
+                profile_id=profile_id,  # Добавляем поддержку дополнительных профилей
                 notes="Платеж за разбор Венеры"
             )
             logger.info(f"🔥 СОЗДАЕМ ЗАПИСЬ ПЛАТЕЖА: {payment_record}")
@@ -3939,8 +3888,7 @@ async def on_pay_venus(callback: CallbackQuery):
             "• Разбор блоков в отношениях и финансах\n"
             "• Женственность и притягательность\n"
             "• Построение гармоничных отношений\n"
-            "• Расширение финансовой ёмкости\n\n"
-            "💳 Нажмите кнопку ниже для оплаты:",
+            "• Расширение финансовой ёмкости",
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
