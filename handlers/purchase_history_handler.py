@@ -1,5 +1,5 @@
 from aiogram import Router, types
-from aiogram.filters import CallbackQuery, Command
+ # Удалено: CallbackQuery, Command из aiogram.filters
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
