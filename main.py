@@ -203,6 +203,11 @@ async def cmd_start(message: Message, state: FSMContext):
         )
     else:
         # Если разбора нет, запускаем стандартный опросник
+        # Отправляем картинку перед приветственным сообщением
+        from aiogram.types import FSInputFile
+        photo = FSInputFile("src/Group 1.png")
+        await message.answer_photo(photo)
+        
         # Первое сообщение
         await message.answer(
             (
@@ -497,7 +502,7 @@ async def show_main_menu(message_or_callback):
             ],
             [
                 InlineKeyboardButton(
-                    text="❓ Задать вопрос",
+                    text="🔮 Общение с Лилит",
                     callback_data="ask_question"
                 )
             ],
