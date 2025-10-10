@@ -117,8 +117,15 @@ class OpenRouterClient:
             "X-Title": "Astro Bot"
         }
         
+        # Логируем детали запроса для отладки
+        payload_keys = list(payload.keys())
+        logger.debug(f"OpenRouter request payload keys: {payload_keys}")
+        logger.debug(f"Model: {payload.get('model', 'not specified')}")
+        logger.debug(f"Messages count: {len(payload.get('messages', []))}")
+        
         async with aiohttp.ClientSession() as session:
             try:
+                logger.info(f"Sending OpenRouter request for user {user_name}")
                 async with session.post(
                     self.url,
                     headers=headers,
