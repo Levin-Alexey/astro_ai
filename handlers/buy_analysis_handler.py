@@ -12,19 +12,26 @@ logger = logging.getLogger(__name__)
 
 async def show_buy_analysis_menu(message: Message):
     """
-    Показывает меню покупки разборов с тремя опциями:
+    Показывает меню покупки разборов с четырьмя опциями:
     1. Купить разбор для себя
-    2. Добавить новую дату  
-    3. Главное меню
+    2. Купить разбор для дополнительных дат
+    3. Добавить новую дату  
+    4. Главное меню
     """
     
-    # Создаем клавиатуру с тремя кнопками
+    # Создаем клавиатуру с четырьмя кнопками
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
                     text="💳 Купить разбор для себя",
                     callback_data="buy_analysis_self"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="👥 Купить разбор для дополнительных дат",
+                    callback_data="buy_analysis_additional"
                 )
             ],
             [
@@ -57,6 +64,336 @@ async def show_buy_analysis_menu(message: Message):
         reply_markup=kb,
         parse_mode="Markdown"
     )
+
+
+async def show_additional_profiles_for_purchase(callback: CallbackQuery):
+    """
+    Показывает список дополнительных профилей для покупки разборов.
+    Переиспользует логику из личного кабинета.
+    """
+    await callback.answer()
+    cb_msg = callback.message
+    
+    try:
+        user_id = callback.from_user.id if callback.from_user else 0
+        logger.info(f"User {user_id} selecting additional profile for purchase")
+        
+        # Получаем список дополнительных профилей пользователя
+        from db import get_session
+        from models import User, AdditionalProfile
+        from sqlalchemy import select
+        
+        async with get_session() as session:
+            # Находим пользователя
+            user_result = await session.execute(
+                select(User).where(User.telegram_id == user_id)
+            )
+            user = user_result.scalar_one_or_none()
+            
+            if not user:
+                await cb_msg.answer(
+                    "❌ Пользователь не найден в базе данных.\n"
+                    "Попробуйте перезапустить бота командой /start"
+                )
+                return
+            
+            # Получаем все дополнительные профили пользователя
+            profiles_result = await session.execute(
+                select(AdditionalProfile)
+                .where(
+                    AdditionalProfile.owner_user_id == user.user_id,
+                    AdditionalProfile.is_active.is_(True)
+                )
+                .order_by(AdditionalProfile.created_at.desc())
+            )
+            profiles = profiles_result.scalars().all()
+            
+            if not profiles:
+                # Нет дополнительных профилей
+                await cb_msg.answer(
+                    "👥 **Покупка разборов для дополнительных дат**\n\n"
+                    "У вас пока нет дополнительных профилей.\n\n"
+                    "Вы можете создать профиль для:\n"
+                    "• Члена семьи (мама, папа, брат, сестра)\n"
+                    "• Партнера или друга\n"
+                    "• Ребенка\n\n"
+                    "Для создания профиля нажмите кнопку ниже 👇",
+                    reply_markup=InlineKeyboardMarkup(
+                        inline_keyboard=[
+                            [
+                                InlineKeyboardButton(
+                                    text="➕ Создать профиль",
+                                    callback_data="add_new_date"
+                                )
+                            ],
+                            [
+                                InlineKeyboardButton(
+                                    text="← Назад к выбору покупки",
+                                    callback_data="buy_analysis"
+                                )
+                            ]
+                        ]
+                    )
+                )
+                return
+            
+            # Формируем список профилей с кнопками
+            text = "👥 **Покупка разборов для дополнительных дат**\n\n"
+            text += f"У вас {len(profiles)} "
+            if len(profiles) == 1:
+                text += "дополнительный профиль"
+            elif len(profiles) < 5:
+                text += "дополнительных профиля"
+            else:
+                text += "дополнительных профилей"
+            text += ".\n\nВыберите профиль, чтобы купить разборы:"
+            
+            # Создаем кнопки для каждого профиля
+            buttons = []
+            for profile in profiles:
+                gender_emoji = {
+                    "male": "👨",
+                    "female": "👩", 
+                    "other": "🧑"
+                }.get(profile.gender.value if profile.gender else "unknown", "👤")
+                
+                profile_button = InlineKeyboardButton(
+                    text=f"{gender_emoji} {profile.full_name}",
+                    callback_data=f"buy_for_profile:{profile.profile_id}"
+                )
+                buttons.append([profile_button])
+            
+            # Добавляем кнопки управления
+            buttons.extend([
+                [
+                    InlineKeyboardButton(
+                        text="➕ Создать новый профиль",
+                        callback_data="add_new_date"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="← Назад к выбору покупки",
+                        callback_data="buy_analysis"
+                    )
+                ]
+            ])
+            
+            await cb_msg.answer(
+                text,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+                parse_mode="Markdown"
+            )
+            
+    except Exception as e:
+        logger.error(f"Error in show_additional_profiles_for_purchase: {e}")
+        await cb_msg.answer(
+            "❌ Произошла ошибка при загрузке профилей.\n"
+            "Попробуйте еще раз.",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="← Назад к выбору покупки",
+                            callback_data="buy_analysis"
+                        )
+                    ]
+                ]
+            )
+        )
+
+
+async def handle_buy_for_profile(callback: CallbackQuery, state: FSMContext):
+    """
+    Обработчик покупки разборов для дополнительного профиля.
+    Показывает список планет для покупки на основе данных профиля.
+    """
+    try:
+        # Извлекаем profile_id из callback_data
+        profile_id = int(callback.data.split(":")[1])
+        user_id = callback.from_user.id if callback.from_user else 0
+        
+        logger.info(f"User {user_id} buying analysis for profile {profile_id}")
+        
+        from db import get_session
+        from models import User, AdditionalProfile, Prediction, Planet
+        from sqlalchemy import select
+        
+        async with get_session() as session:
+            # Проверяем права пользователя на этот профиль
+            user_result = await session.execute(
+                select(User).where(User.telegram_id == user_id)
+            )
+            user = user_result.scalar_one_or_none()
+            
+            if not user:
+                await callback.message.answer(
+                    "❌ Пользователь не найден в базе данных."
+                )
+                return
+            
+            # Получаем профиль
+            profile_result = await session.execute(
+                select(AdditionalProfile)
+                .where(
+                    AdditionalProfile.profile_id == profile_id,
+                    AdditionalProfile.owner_user_id == user.user_id,
+                    AdditionalProfile.is_active.is_(True)
+                )
+            )
+            profile = profile_result.scalar_one_or_none()
+            
+            if not profile:
+                await callback.message.answer(
+                    "❌ Профиль не найден или у вас нет доступа к нему.",
+                    reply_markup=InlineKeyboardMarkup(
+                        inline_keyboard=[
+                            [
+                                InlineKeyboardButton(
+                                    text="← Назад к профилям",
+                                    callback_data="buy_analysis_additional"
+                                )
+                            ]
+                        ]
+                    )
+                )
+                return
+            
+            # Получаем информацию о разборах для этого профиля
+            predictions_result = await session.execute(
+                select(Prediction)
+                .where(
+                    Prediction.profile_id == profile_id,
+                    Prediction.is_active.is_(True)
+                )
+            )
+            existing_predictions = predictions_result.scalars().all()
+            
+            # Определяем какие планеты уже есть
+            existing_planets = {pred.planet for pred in existing_predictions}
+            
+            # Информация о планетах и ценах
+            planets_info = {
+                Planet.sun: {
+                    "emoji": "☀️",
+                    "name": "Солнце", 
+                    "price": 500,
+                    "description": "Ядро личности и жизненный путь"
+                },
+                Planet.moon: {
+                    "emoji": "🌙",
+                    "name": "Луна",
+                    "price": 500, 
+                    "description": "Эмоции и внутренний мир"
+                },
+                Planet.mercury: {
+                    "emoji": "☿️",
+                    "name": "Меркурий",
+                    "price": 500,
+                    "description": "Общение и мышление"
+                },
+                Planet.venus: {
+                    "emoji": "♀️", 
+                    "name": "Венера",
+                    "price": 500,
+                    "description": "Любовь и отношения"
+                },
+                Planet.mars: {
+                    "emoji": "♂️",
+                    "name": "Марс", 
+                    "price": 500,
+                    "description": "Энергия и действия"
+                }
+            }
+            
+            # Создаем кнопки для доступных планет
+            available_buttons = []
+            total_available = 0
+            
+            for planet, info in planets_info.items():
+                if planet not in existing_planets:
+                    available_buttons.append([
+                        InlineKeyboardButton(
+                            text=f"{info['emoji']} {info['name']} - {info['price']}₽",
+                            callback_data=f"buy_planet:{profile_id}:{planet.value}"
+                        )
+                    ])
+                    total_available += 1
+            
+            if total_available == 0:
+                # Все планеты уже куплены
+                await callback.message.answer(
+                    f"🎉 **{profile.full_name}**\n\n"
+                    f"Все планеты уже куплены для этого профиля!\n\n"
+                    f"Вы можете посмотреть разборы в разделе "
+                    f"'Личный кабинет → Дополнительные разборы'.",
+                    reply_markup=InlineKeyboardMarkup(
+                        inline_keyboard=[
+                            [
+                                InlineKeyboardButton(
+                                    text="← Назад к профилям",
+                                    callback_data="buy_analysis_additional"
+                                )
+                            ]
+                        ]
+                    ),
+                    parse_mode="Markdown"
+                )
+                return
+            
+            # Добавляем кнопку "Купить все планеты со скидкой" если доступно больше 1
+            if total_available > 1:
+                total_price = total_available * 500
+                discounted_price = int(total_price * 0.75)  # 25% скидка
+                
+                available_buttons.append([
+                    InlineKeyboardButton(
+                        text=f"🎁 Купить все ({total_available} планет) - {discounted_price}₽",
+                        callback_data=f"buy_all_planets:{profile_id}"
+                    )
+                ])
+            
+            # Добавляем навигационные кнопки
+            available_buttons.extend([
+                [
+                    InlineKeyboardButton(
+                        text="← Назад к профилям",
+                        callback_data="buy_analysis_additional"
+                    )
+                ]
+            ])
+            
+            gender_emoji = {
+                "male": "👨",
+                "female": "👩",
+                "other": "🧑"
+            }.get(profile.gender.value if profile.gender else "unknown", "👤")
+            
+            await callback.message.answer(
+                f"💳 **Покупка разборов для {profile.full_name}**\n\n"
+                f"{gender_emoji} Выберите планету для покупки разбора:\n\n"
+                f"📋 **Доступно планет:** {total_available}\n"
+                f"💰 **Цена за планету:** 500₽\n\n"
+                f"Все разборы сохраняются в личном кабинете!",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=available_buttons),
+                parse_mode="Markdown"
+            )
+            
+    except Exception as e:
+        logger.error(f"Error in handle_buy_for_profile: {e}")
+        await callback.message.answer(
+            "❌ Произошла ошибка при загрузке данных профиля.",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="← Назад к профилям", 
+                            callback_data="buy_analysis_additional"
+                        )
+                    ]
+                ]
+            )
+        )
 
 
 async def handle_buy_analysis_self(callback: CallbackQuery, state: FSMContext):

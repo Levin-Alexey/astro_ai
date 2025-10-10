@@ -1514,6 +1514,22 @@ async def on_buy_analysis_self(callback: CallbackQuery, state: FSMContext):
     await handle_buy_analysis_self(callback, state)
 
 
+@dp.callback_query(F.data == "buy_analysis_additional")
+async def on_buy_analysis_additional(callback: CallbackQuery):
+    """Обработчик кнопки 'Купить разбор для дополнительных дат'"""
+    from handlers.buy_analysis_handler import show_additional_profiles_for_purchase
+    
+    await show_additional_profiles_for_purchase(callback)
+
+
+@dp.callback_query(F.data.startswith("buy_for_profile:"))
+async def on_buy_for_profile(callback: CallbackQuery, state: FSMContext):
+    """Обработчик выбора профиля для покупки разборов"""
+    from handlers.buy_analysis_handler import handle_buy_for_profile
+    
+    await handle_buy_for_profile(callback, state)
+
+
 @dp.callback_query(F.data == "add_new_date")
 async def on_add_new_date(callback: CallbackQuery, state: FSMContext):
     """Обработчик кнопки 'Добавить новую дату'"""
