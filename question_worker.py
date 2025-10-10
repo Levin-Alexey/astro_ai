@@ -128,9 +128,45 @@ class OpenRouterClient:
                     if response.status == 200:
                         result = await response.json()
                         logger.info(f"OpenRouter answer response received for {user_name}")
+                        
+                        # Добавляем детальное логирование ответа
+                        logger.debug(f"OpenRouter response keys: {list(result.keys())}")
+                        
+                        # Проверяем наличие ключа choices
+                        if "choices" not in result:
+                            logger.error(f"Missing 'choices' key in OpenRouter response. Response keys: {list(result.keys())}")
+                            logger.error(f"Full response: {result}")
+                            return {
+                                "success": False,
+                                "error": f"Invalid response format - missing 'choices' key"
+                            }
+                        
+                        if not result["choices"] or len(result["choices"]) == 0:
+                            logger.error("Empty choices array in OpenRouter response")
+                            return {
+                                "success": False,
+                                "error": "Empty choices in response"
+                            }
+                        
+                        # Проверяем структуру первого choice
+                        choice = result["choices"][0]
+                        if "message" not in choice:
+                            logger.error(f"Missing 'message' key in choice. Choice keys: {list(choice.keys())}")
+                            return {
+                                "success": False,
+                                "error": "Invalid choice format - missing 'message'"
+                            }
+                        
+                        if "content" not in choice["message"]:
+                            logger.error(f"Missing 'content' key in message. Message keys: {list(choice['message'].keys())}")
+                            return {
+                                "success": False,
+                                "error": "Invalid message format - missing 'content'"
+                            }
+                        
                         return {
                             "success": True,
-                            "content": result["choices"][0]["message"]["content"],
+                            "content": choice["message"]["content"],
                             "usage": result.get("usage", {}),
                             "model": result.get("model", "unknown")
                         }
@@ -391,8 +427,25 @@ class QuestionWorker:
                 user_gender=user_info["gender"]
             )
             
-            if not llm_result["success"]:
-                logger.error(f"LLM generation failed: {llm_result['error']}")
+            if not llm_result or not llm_result.get("success", False):
+                error_msg = (
+                    llm_result.get("error", "Unknown error")
+                    if llm_result else "LLM result is None"
+                )
+                logger.error(f"LLM generation failed: {error_msg}")
+                
+                # Отправляем сообщение об ошибке пользователю
+                error_message = (
+                    "Извините, произошла ошибка при генерации ответа. "
+                    "Попробуйте еще раз."
+                )
+                reply_markup = self.create_question_reply_markup()
+                
+                await self.send_telegram_message(
+                    chat_id=user_id,  # user_id это telegram_id
+                    text=error_message,
+                    reply_markup=reply_markup
+                )
                 return
             
             # Сохраняем вопрос и ответ в базу
