@@ -142,8 +142,8 @@ async def start_additional_profile_creation(callback: CallbackQuery, state: FSMC
     # Начинаем опросник для дополнительного профиля
     await state.set_state(AdditionalProfileForm.waiting_for_additional_name)
     await message.answer(
-        "👥 Отлично! Давайте создадим профиль для дополнительной даты рождения.\n\n"
-        "📝 Как зовут человека, для которого создаем разбор?\n\n"
+        "👥 Создаем дополнительный профиль!\n\n"
+        "Как зовут этого человека? 💫\n\n"
         "Например: Мама, Папа, Моя Зайка, Дочь, Сын, Друг"
     )
 
@@ -160,7 +160,7 @@ async def handle_additional_name(message: Message, state: FSMContext):
 
     # Переходим к выбору пола
     await message.answer(
-        f"Отлично, {name}! 👋\n\n"
+        f"Очень приятно, {name}! �🏼\n\n"
         "Теперь выбери пол:",
         reply_markup=build_additional_gender_kb(None)
     )
@@ -212,8 +212,7 @@ async def handle_additional_birth_date(message: Message, state: FSMContext):
     )
 
     await message.answer(
-        f"📅 Проверь дату рождения: {date_str}\n\n"
-        "Всё правильно?",
+        f"� Дата рождения: {date_str} -\nВерно? Нажми кнопку 👇🏼",
         reply_markup=kb
     )
 
@@ -271,8 +270,7 @@ async def handle_additional_birth_city(message: Message, state: FSMContext):
         )
 
         await loading_msg.edit_text(
-            f"🏙️ Найден город: {geocode_result['place_name']}\n\n"
-            "Это правильный город?",
+            f"📍 Место рождения: {geocode_result['place_name']}\nВерно? Нажми кнопку 👇🏼",
             reply_markup=kb
         )
 
@@ -305,9 +303,9 @@ async def handle_additional_birth_time_accuracy_callback(callback: CallbackQuery
         )
         try:
             await callback.message.edit_text(
-                "⏰ Отлично! В какое время родился человек?\n\n"
-                "Напиши время в формате ЧЧ:ММ\n"
-                "Например: 14:30 или 09:15"
+                "Супер! 🤌🏼  \n\n"
+                "тогда напиши время рождения в формате ЧЧ:ММ\n\n"
+                "пример: 10:38"
             )
         except Exception:
             pass
@@ -320,9 +318,9 @@ async def handle_additional_birth_time_accuracy_callback(callback: CallbackQuery
         )
         try:
             await callback.message.edit_text(
-                "⏰ Примерное время тоже хорошо!\n\n"
-                "Напиши примерное время в формате ЧЧ:ММ\n"
-                "Например: 14:30 или 09:15"
+                "Принято! ✌🏼  \n\n"
+                "🕰 Напиши примерное время рождения в формате ЧЧ:ММ\n\n"
+                "пример: 11:00"
             )
         except Exception:
             pass
@@ -442,12 +440,16 @@ async def handle_additional_birth_time_local(message: Message, state: FSMContext
             ]
         )
 
-        accuracy_text = "точное" if accuracy == "exact" else "примерное"
-        await message.answer(
-            f"⏰ Проверь {accuracy_text} время рождения: {time_str}\n\n"
-            "Всё правильно?",
-            reply_markup=kb
-        )
+        if accuracy == "exact":
+            await message.answer(
+                f"Точное время рождения: {time_str}\nВерно? Нажми кнопку 👇🏼",
+                reply_markup=kb
+            )
+        else:
+            await message.answer(
+                f"Примерное время рождения: {time_str}\nВерно? Нажми кнопку 👇🏼",
+                reply_markup=kb
+            )
 
     except ValueError as e:
         logger.warning(f"❌ Failed to parse time '{text}': {e}")
@@ -621,9 +623,9 @@ async def complete_additional_profile_creation(
 
         # Показываем успешное создание профиля
         await message.answer(
-            f"✅ Отлично! Профиль для {name} создан!\n\n"
-            f"📅 Дата рождения: {birth_date.strftime('%d.%m.%Y')}\n"
-            f"🏙️ Место рождения: {geocode_result['place_name']}\n"
+            f"✅ Профиль для {name} успешно создан!\n\n"
+            f"� Дата рождения: {birth_date.strftime('%d.%m.%Y')}\n"
+            f"📍 Место рождения: {geocode_result['place_name']}\n"
             f"⏰ Время: {format_time_accuracy_message(birth_time_accuracy, birth_time_local)}\n\n"
             "🌙 Сейчас создам бесплатный разбор Луны для этого профиля..."
         )
