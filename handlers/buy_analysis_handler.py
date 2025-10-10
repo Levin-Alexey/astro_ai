@@ -369,12 +369,37 @@ async def handle_buy_for_profile(callback: CallbackQuery, state: FSMContext):
                 "other": "🧑"
             }.get(profile.gender.value if profile.gender else "unknown", "👤")
             
+            # Формируем список всех планет с батарейками
+            text_parts = [
+                f"💳 **Покупка разборов для {profile.full_name}**\n",
+                f"{gender_emoji} Состояние планет:\n"
+            ]
+            
+            for planet, info in planets_info.items():
+                if planet in existing_planets:
+                    battery = "🔋"  # Зеленая батарейка - есть разбор
+                else:
+                    battery = "🪫"  # Красная батарейка - нет разбора
+                
+                planet_text = (
+                    f"{battery} {info['emoji']} **{info['name']}** - "
+                    f"{info['description']}"
+                )
+                text_parts.append(planet_text)
+            
+            if total_available > 0:
+                text_parts.extend([
+                    f"\n📋 **Доступно для покупки:** {total_available} разборов",
+                    "💰 **Цена за планету:** 500₽"
+                ])
+            
+            text_parts.append(
+                "\n🔋 - разбор есть  🪫 - разбор доступен для покупки"
+            )
+            text_parts.append("\nВыберите планету для покупки:")
+            
             await callback.message.answer(
-                f"💳 **Покупка разборов для {profile.full_name}**\n\n"
-                f"{gender_emoji} Выберите планету для покупки разбора:\n\n"
-                f"📋 **Доступно планет:** {total_available}\n"
-                f"💰 **Цена за планету:** 500₽\n\n"
-                f"Все разборы сохраняются в личном кабинете!",
+                "\n".join(text_parts),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=available_buttons),
                 parse_mode="Markdown"
             )
@@ -525,13 +550,13 @@ async def handle_buy_analysis_self(callback: CallbackQuery, state: FSMContext):
             
             for planet_info in planets_info:
                 if planet_info["planet"] in owned_planets:
-                    status = "✅ Уже есть"
+                    battery = "🔋"  # Зеленая батарейка - есть разбор
                 else:
-                    status = f"💰 {planet_info['price']}₽"
+                    battery = "🪫"  # Красная батарейка - нет разбора
                 
                 planet_text = (
-                    f"{planet_info['emoji']} **{planet_info['name']}** - "
-                    f"{planet_info['description']} ({status})"
+                    f"{battery} {planet_info['emoji']} "
+                    f"**{planet_info['name']}** - {planet_info['description']}"
                 )
                 text_parts.append(planet_text)
             
@@ -552,6 +577,10 @@ async def handle_buy_analysis_self(callback: CallbackQuery, state: FSMContext):
             )
             text_parts.append("• Практические рекомендации")
             text_parts.append("• Ответы на твои вопросы")
+            
+            text_parts.append(
+                "\n🔋 - разбор есть  🪫 - разбор доступен для покупки"
+            )
             
             await message.answer(
                 "\n".join(text_parts),
