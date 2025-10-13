@@ -110,7 +110,7 @@ class OpenRouterClient:
         logger.info(f"♂️ LLM Input - Full prompt length: {len(prompt)} characters")
         
         payload = {
-            "model": "deepseek/deepseek-chat-v3.1:free",
+            "model": "deepseek/deepseek-chat-v3.1",
             "messages": [
                 {
                     "role": "user",
