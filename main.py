@@ -232,14 +232,15 @@ async def cmd_start(message: Message, state: FSMContext):
         )
 
         # Второе сообщение с кнопками
+        # Кнопка политики конфиденциальности временно отключена
+        # [
+        #     InlineKeyboardButton(
+        #         text="Политика конфиденциальности",
+        #         url="https://disk.yandex.ru/i/DwatWs4N5h5HFA"
+        #     )
+        # ],
         kb = InlineKeyboardMarkup(
             inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="Политика конфиденциальности",
-                        url="https://disk.yandex.ru/i/DwatWs4N5h5HFA"
-                    )
-                ],
                 [
                     InlineKeyboardButton(
                         text="Вперед 👌🏼",
