@@ -263,8 +263,9 @@ async def cmd_start(message: Message, state: FSMContext):
 
 
 @dp.callback_query(F.data == "ok")
-async def on_ok(callback: CallbackQuery):
+async def on_ok(callback: CallbackQuery, state: FSMContext):
     """После нажатия на "Вперед" — старт анкеты, спрашиваем пол"""
+    logger.info(f"on_ok callback triggered for user {callback.from_user.id}")
     await callback.answer()
     kb = build_gender_kb(selected=None)
     cb_msg = cast(Message, callback.message)
@@ -272,6 +273,7 @@ async def on_ok(callback: CallbackQuery):
         "Для начала укажи свой пол 👇🏼",
         reply_markup=kb,
     )
+    logger.info(f"Gender keyboard sent to user {callback.from_user.id}")
 
 
 @dp.callback_query(F.data == "start_new_analysis")
@@ -1481,6 +1483,7 @@ async def on_birth_time_unknown_specify(
 @dp.callback_query(F.data == "start_moon_analysis")
 async def on_start_moon_analysis(callback: CallbackQuery, state: FSMContext):
     """Обработчик кнопки 'Начнем' - запуск анализа Луны"""
+    logger.info(f"on_start_moon_analysis triggered for user {callback.from_user.id}")
     await start_moon_analysis(callback, state)
 
 
