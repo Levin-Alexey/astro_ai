@@ -312,9 +312,22 @@ async def handle_buy_for_profile(callback: CallbackQuery, state: FSMContext):
             
             for planet, info in planets_info.items():
                 if planet not in existing_planets:
+                    # Новые тексты кнопок с ценой и эмодзи
+                    if planet == Planet.sun:
+                        btn_text = "☀️ Солнце 77₽"
+                    elif planet == Planet.mercury:
+                        btn_text = "🧠 Меркурий 77₽"
+                    elif planet == Planet.venus:
+                        btn_text = "💰💍 Венера 77₽"
+                    elif planet == Planet.mars:
+                        btn_text = "🔥 Марс 77₽"
+                    elif planet == Planet.moon:
+                        btn_text = "🌙 Луна 77₽"
+                    else:
+                        btn_text = f"{info['emoji']} {info['name']} 77₽"
                     available_buttons.append([
                         InlineKeyboardButton(
-                            text=f"{info['emoji']} {info['name']} - {info['price']}₽",
+                            text=btn_text,
                             callback_data=f"buy_planet:{profile_id}:{planet.value}"
                         )
                     ])
@@ -343,12 +356,10 @@ async def handle_buy_for_profile(callback: CallbackQuery, state: FSMContext):
             
             # Добавляем кнопку "Купить все планеты со скидкой" если доступно больше 1
             if total_available > 1:
-                total_price = total_available * 500
-                discounted_price = int(total_price * 0.75)  # 25% скидка
-                
+                # Новая кнопка "Все планеты"
                 available_buttons.append([
                     InlineKeyboardButton(
-                        text=f"🎁 Купить все ({total_available} планет) - {discounted_price}₽",
+                        text="😎 Все планеты 222₽",
                         callback_data=f"buy_all_planets:{profile_id}"
                     )
                 ])
@@ -515,9 +526,22 @@ async def handle_buy_analysis_self(callback: CallbackQuery, state: FSMContext):
             
             for planet_info in planets_info:
                 if planet_info["planet"] not in owned_planets:
+                    # Новые тексты кнопок с ценой и эмодзи
+                    if planet_info["planet"].name.lower() == "sun":
+                        btn_text = "☀️ Солнце 77₽"
+                    elif planet_info["planet"].name.lower() == "mercury":
+                        btn_text = "🧠 Меркурий 77₽"
+                    elif planet_info["planet"].name.lower() == "venus":
+                        btn_text = "💰💍 Венера 77₽"
+                    elif planet_info["planet"].name.lower() == "mars":
+                        btn_text = "🔥 Марс 77₽"
+                    elif planet_info["planet"].name.lower() == "moon":
+                        btn_text = "🌙 Луна 77₽"
+                    else:
+                        btn_text = f"{planet_info['emoji']} {planet_info['name']} 77₽"
                     keyboard_buttons.append([
                         InlineKeyboardButton(
-                            text=f"{planet_info['emoji']} {planet_info['name']} - {planet_info['price']}₽",
+                            text=btn_text,
                             callback_data=planet_info['callback']
                         )
                     ])
@@ -527,7 +551,7 @@ async def handle_buy_analysis_self(callback: CallbackQuery, state: FSMContext):
             if available_count > 1:
                 keyboard_buttons.append([
                     InlineKeyboardButton(
-                        text="🪐 Все планеты - 1500₽ (скидка 25%)",
+                        text="😎 Все планеты 222₽",
                         callback_data="pay_all_planets"
                     )
                 ])
