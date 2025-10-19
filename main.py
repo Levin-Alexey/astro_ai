@@ -2136,13 +2136,18 @@ async def cmd_pay(message: Message, state: FSMContext):
     await show_buy_analysis_menu(message)
 
 
-@dp.callback_query(F.data == "faq")
-async def on_faq(callback: CallbackQuery):
-    """Обработчик кнопки 'FAQ'"""
-    await callback.answer()
-    cb_msg = cast(Message, callback.message)
-    
-    # Создаем клавиатуру с кнопкой возврата в меню
+async def send_faq(message_or_callback):
+    """Отправляет раздел FAQ для сообщения или callback-а."""
+    # Определяем метод ответа
+    if hasattr(message_or_callback, 'message'):
+        # Это callback
+        cb_msg = cast(Message, message_or_callback.message)
+        answer_method = cb_msg.answer
+    else:
+        # Это обычное сообщение
+        answer_method = message_or_callback.answer
+
+    # Клавиатура возврата в меню
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -2153,7 +2158,7 @@ async def on_faq(callback: CallbackQuery):
             ]
         ]
     )
-    
+
     faq_text = (
         "⁉️ FAQ\n\n"
         "❔ Откуда берётся информация? Это не копия из интернета?\n"
@@ -2184,11 +2189,21 @@ async def on_faq(callback: CallbackQuery):
         "❔ Как посмотреть совместимость и прогноз на год?\n"
         "😼: Разбор совместимости, прогнозы на день/месяц/год, разбор детских карт и не только — это все мы добавим в ближайшее время! Следи за новостями!"
     )
-    
-    await cb_msg.answer(
-        faq_text,
-        reply_markup=kb
-    )
+
+    await answer_method(faq_text, reply_markup=kb)
+
+
+@dp.message(Command("faq"))
+async def cmd_faq(message: Message):
+    """Обработчик команды /faq — показывает раздел FAQ, как и кнопка в меню"""
+    await send_faq(message)
+
+
+@dp.callback_query(F.data == "faq")
+async def on_faq(callback: CallbackQuery):
+    """Обработчик кнопки 'FAQ'"""
+    await callback.answer()
+    await send_faq(callback)
 
 
 @dp.callback_query(F.data == "support")
@@ -2215,6 +2230,24 @@ async def on_support(callback: CallbackQuery, state: FSMContext):
                 "📧 Email: support@astro-bot.ru\n"
                 "💬 Telegram: @astro_support"
             )
+
+
+@dp.message(Command("help"))
+async def cmd_help(message: Message, state: FSMContext):
+    """Обработчик команды /help — запускает диалог со службой заботы, как и кнопка"""
+    try:
+        logger.info("/help command received, starting support conversation")
+        from handlers.support_handler import start_support_conversation
+        await start_support_conversation(message, state)
+        logger.info("/help -> start_support_conversation completed")
+    except Exception as e:
+        logger.error(f"ERROR in cmd_help: {e}")
+        await message.answer(
+            "❌ Произошла ошибка при отправке сообщения в службу поддержки.\n\n"
+            "Попробуйте позже или обратитесь напрямую:\n"
+            "📧 Email: support@astro-bot.ru\n"
+            "💬 Telegram: @astro_support"
+        )
 
 
 @dp.callback_query(F.data == "cancel_support")
