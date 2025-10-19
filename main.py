@@ -767,9 +767,10 @@ async def receive_first_name(message: Message, state: FSMContext):
     # Переходим к вопросу о дате рождения
     await state.set_state(ProfileForm.waiting_for_birth_date)
     await message.answer(
-        f"Очень приятно, {name}🙌🏼\n\n"
-        "📆 Теперь напиши свою дату рождения в формате ДД.ММ.ГГГГ\n\n"
-        "пример: 23.04.1987"
+        "Огонь 😼🔥 \n\n"
+        "📆 *Теперь напиши свою дату рождения в формате ДД.ММ.ГГГГ*\n\n"
+        "пример: 23.04.1987",
+        parse_mode="Markdown"
     )
 
 
@@ -1273,7 +1274,7 @@ async def on_birth_time_redo(callback: CallbackQuery, state: FSMContext):
 
 
 @dp.callback_query(F.data.startswith("btime_unknown:"))
-async def on_birth_time_unknown(callback: CallbackQuery):
+async def on_birth_time_unknown(callback: CallbackQuery, state: FSMContext):
     """Обработчик кнопки для подтверждения работы без времени рождения"""
     await callback.answer()
     cb_msg = cast(Message, callback.message)
