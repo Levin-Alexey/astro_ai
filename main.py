@@ -1051,9 +1051,75 @@ async def on_birth_city_redo(callback: CallbackQuery, state: FSMContext):
 async def set_birth_time_accuracy(callback: CallbackQuery, state: FSMContext):
     cb_data = cast(str, callback.data)
     _, value = cb_data.split(":", 1)
-    if value not in {"exact", "approx", "unknown"}:
+    if value not in {"exact", "unknown"}:
         await callback.answer("Некорректный выбор", show_alert=True)
         return
+
+    # Для сценария "unknown" ничего не пишем в БД — только отправляем сообщение
+    if value != "unknown":
+        async with get_session() as session:
+            cb_user = cast(TgUser, callback.from_user)
+            res = await session.execute(
+                select(DbUser).where(
+                    DbUser.telegram_id == cb_user.id
+                )
+            )
+            user = res.scalar_one_or_none()
+            if user is None:
+                await callback.answer(
+                    "Похоже, анкета ещё не начата. Нажми /start 💫",
+                    show_alert=True,
+                )
+                await state.clear()
+                return
+            user.birth_time_accuracy = value
+
+    # Убираем клавиатуру под сообщением
+    try:
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+    # Дальнейшие шаги в зависимости от выбора
+    if value == "exact":
+        # Просим ввести точное время рождения в формате ЧЧ:ММ
+        await state.update_data(time_accuracy_type="exact")
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.answer(
+            "Супер! 🤌🏼  \n\n"
+            + "тогда напиши время своего рождения по бирке/справке "
+            + "в формате ЧЧ:ММ\n\n"
+            + "пример: 10:38"
+        )
+        await state.set_state(ProfileForm.waiting_for_birth_time_local)
+    else:  # unknown
+        # Показываем подтверждение для работы без времени
+        display_text = "Работаем без времени рождения\nВерно? Нажми кнопку 👇🏼"
+
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="✅ Верно", callback_data="btime_unknown:confirm"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🔄 Указать время",
+                        callback_data="btime_unknown:specify"
+                    )
+                ],
+            ]
+        )
+
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.answer(display_text, reply_markup=kb)
+        await state.set_state(
+            ProfileForm.waiting_for_birth_time_unknown_confirm
+        )
+
+    await callback.answer()
 
     # Для сценария "unknown" ничего не пишем в БД — только отправляем сообщение
     if value != "unknown":

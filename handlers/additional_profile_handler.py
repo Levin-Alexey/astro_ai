@@ -956,12 +956,6 @@ async def handle_additional_birth_city_callback(callback: CallbackQuery, state: 
                 ],
                 [
                     InlineKeyboardButton(
-                        text="🤏🏼 Знаю примерное время",
-                        callback_data="additional_timeacc:approx"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
                         text="👎🏼 Не знаю время вообще",
                         callback_data="additional_timeacc:unknown"
                     )
