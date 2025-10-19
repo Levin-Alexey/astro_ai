@@ -3487,7 +3487,7 @@ async def on_pay_mars(callback: CallbackQuery):
                 payment_type=PaymentType.single_planet,
                 planet=Planet.mars,
                 status=PaymentStatus.pending,
-                amount_kopecks=1000,  # 10 рублей в копейках
+                amount_kopecks=7700,  # 77 рублей в копейках
                 external_payment_id=external_payment_id,
                 payment_url=payment_url,
                 profile_id=profile_id,  # Добавляем поддержку дополнительных профилей
@@ -3504,7 +3504,7 @@ async def on_pay_mars(callback: CallbackQuery):
         # Отправляем сообщение с кнопкой оплаты
         await cb_msg.answer(
             "♂️ Оплата за разбор Марса\n\n"
-            "💰 Стоимость: 10₽\n\n"
+            "💰 Стоимость: 77₽\n\n"
             "🎯 Что вы получите:\n"
             "• Рост мотивации и силы воли\n"
             "• Решительность в действиях\n"
@@ -3515,7 +3515,7 @@ async def on_pay_mars(callback: CallbackQuery):
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="💳 Оплатить 10₽",
+                            text="💳 Оплатить 77₽",
                             url=payment_url
                         )
                     ],
@@ -3624,7 +3624,7 @@ async def on_pay_mercury(callback: CallbackQuery):
                 payment_type=PaymentType.single_planet,
                 planet=Planet.mercury,
                 status=PaymentStatus.pending,
-                amount_kopecks=1000,  # 10 рублей в копейках
+                amount_kopecks=7700,  # 77 рублей в копейках
                 external_payment_id=external_payment_id,
                 payment_url=payment_url,
                 profile_id=profile_id,  # Добавляем поддержку дополнительных профилей
@@ -3641,7 +3641,7 @@ async def on_pay_mercury(callback: CallbackQuery):
         # Отправляем сообщение с кнопкой оплаты
         await cb_msg.answer(
             "☿️ Оплата за разбор Меркурия\n\n"
-            "💰 Стоимость: 10₽\n\n"
+            "💰 Стоимость: 77₽\n\n"
             "🎯 Что вы получите:\n"
             "• Развитие речи и мышления\n"
             "• Умение убеждать и договариваться\n"
@@ -3651,7 +3651,7 @@ async def on_pay_mercury(callback: CallbackQuery):
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="💳 Оплатить 10₽",
+                            text="💳 Оплатить 77₽",
                             url=payment_url
                         )
                     ],
@@ -3760,7 +3760,7 @@ async def on_pay_venus(callback: CallbackQuery):
                 payment_type=PaymentType.single_planet,
                 planet=Planet.venus,
                 status=PaymentStatus.pending,
-                amount_kopecks=1000,  # 10 рублей в копейках
+                amount_kopecks=7700,  # 77 рублей в копейках
                 external_payment_id=external_payment_id,
                 payment_url=payment_url,
                 profile_id=profile_id,  # Добавляем поддержку дополнительных профилей
@@ -3777,7 +3777,7 @@ async def on_pay_venus(callback: CallbackQuery):
         # Отправляем сообщение с кнопкой оплаты
         await cb_msg.answer(
             "♀️ Оплата за разбор Венеры\n\n"
-            "💰 Стоимость: 10₽\n\n"
+            "💰 Стоимость: 77₽\n\n"
             "🎯 Что вы получите:\n"
             "• Разбор блоков в отношениях и финансах\n"
             "• Женственность и притягательность\n"
@@ -3787,7 +3787,7 @@ async def on_pay_venus(callback: CallbackQuery):
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="💳 Оплатить 10₽",
+                            text="💳 Оплатить 77₽",
                             url=payment_url
                         )
                     ],

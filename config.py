@@ -30,7 +30,7 @@ PAYMENT_SECRET_KEY = os.getenv(
     "PAYMENT_SECRET_KEY", 
     "live_3l8CSTav7iq2-3IO4YyLNnIQN6Fe7Nw8j4wOnzAlxm8"
 )
-PAYMENT_TEST_AMOUNT = 1000  # 10 рублей в копейках Првить
+PAYMENT_TEST_AMOUNT = 7700  # 77 рублей в копейках
 PAYMENT_CURRENCY = "RUB"
 
 # Настройки AstrologyAPI
