@@ -59,8 +59,6 @@ def format_time_accuracy_message(accuracy: str, time_obj: time | None) -> str:
     """Форматирует сообщение о точности времени рождения."""
     if accuracy == "exact" and time_obj:
         return f"точно {time_obj.strftime('%H:%M')}"
-    elif accuracy == "approx" and time_obj:
-        return f"примерно {time_obj.strftime('%H:%M')}"
     elif accuracy == "unknown":
         return "неизвестно"
     else:
@@ -76,7 +74,6 @@ class AdditionalProfileForm(StatesGroup):
     waiting_for_additional_birth_time_accuracy = State()
     waiting_for_additional_birth_time_local = State()
     waiting_for_additional_birth_time_confirm = State()
-    waiting_for_additional_birth_time_approx_confirm = State()
     waiting_for_additional_birth_time_unknown_confirm = State()
 
 
@@ -311,21 +308,6 @@ async def handle_additional_birth_time_accuracy_callback(callback: CallbackQuery
             )
         except Exception:
             pass
-    elif action == "approx":
-        # Примерное время
-        await state.update_data(additional_birth_time_accuracy="approx")
-        logger.info("✅ Set time accuracy to 'approx'")
-        await state.set_state(
-            AdditionalProfileForm.waiting_for_additional_birth_time_local
-        )
-        try:
-            await callback.message.edit_text(
-                "⏰ Примерное время тоже хорошо!\n\n"
-                "Напиши примерное время в формате ЧЧ:ММ\n"
-                "Например: 14:30 или 09:15"
-            )
-        except Exception:
-            pass
     elif action == "unknown":
         # Время неизвестно
         await state.update_data(additional_birth_time_accuracy="unknown")
@@ -403,11 +385,6 @@ async def handle_additional_birth_time_local(message: Message, state: FSMContext
     text = (message.text or "").strip()
     logger.info(f"handle_additional_birth_time_local called with text='{text}'")
 
-    # Получаем данные из состояния
-    state_data = await state.get_data()
-    accuracy = state_data.get("additional_birth_time_accuracy", "exact")
-    logger.info(f"Current accuracy: {accuracy}")
-
     try:
         # Парсим время
         time_obj = datetime.strptime(text, "%H:%M").time()
@@ -442,9 +419,8 @@ async def handle_additional_birth_time_local(message: Message, state: FSMContext
             ]
         )
 
-        accuracy_text = "точное" if accuracy == "exact" else "примерное"
         await message.answer(
-            f"⏰ Проверь {accuracy_text} время рождения: {time_str}\n\n"
+            f"⏰ Точное время рождения: {time_str}\n\n"
             "Всё правильно?",
             reply_markup=kb
         )
@@ -518,8 +494,8 @@ async def complete_additional_profile_creation(
             birth_time_local = time.fromisoformat(birth_time_str)
             logger.info(f"✅ Parsed birth time: {birth_time_local}")
         
-        # Валидация: если выбрано точное/примерное время, оно должно быть введено
-        if birth_time_accuracy in ["exact", "approx"] and not birth_time_local:
+        # Валидация: если выбрано точное время, оно должно быть введено
+        if birth_time_accuracy == "exact" and not birth_time_local:
             logger.error(f"❌ Missing birth time for accuracy={birth_time_accuracy}")
             logger.error(f"❌ Full state data: {state_data}")
             await message.answer(
@@ -951,12 +927,6 @@ async def handle_additional_birth_city_callback(callback: CallbackQuery, state: 
                 ],
                 [
                     InlineKeyboardButton(
-                        text="🤏🏼 Знаю примерное время",
-                        callback_data="additional_timeacc:approx"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
                         text="👎🏼 Не знаю время вообще",
                         callback_data="additional_timeacc:unknown"
                     )
@@ -1064,12 +1034,6 @@ async def handle_additional_time_unknown_callback(callback: CallbackQuery, state
                 ],
                 [
                     InlineKeyboardButton(
-                        text="🤏🏼 Знаю примерное время",
-                        callback_data="additional_timeacc:approx"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
                         text="👎🏼 Не знаю время вообще",
                         callback_data="additional_timeacc:unknown"
                     )
@@ -1082,7 +1046,6 @@ async def handle_additional_time_unknown_callback(callback: CallbackQuery, state
                 "⏰ Хорошо! Тогда ответь на вопрос:\n\n"
                 "Знаешь ли ты время рождения?\n\n"
                 "• Напиши 'Точно знаю' - если знаешь точное время\n"
-                "• Напиши 'Примерно' - если знаешь приблизительное время\n"
                 "• Напиши 'Не знаю' - если время неизвестно"
             )
         except Exception:
