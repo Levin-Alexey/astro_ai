@@ -72,12 +72,9 @@ async def handle_ask_question(callback: CallbackQuery, state: FSMContext):
                 )
             return
         
-        # Проверяем, есть ли готовый анализ (в любом поле)
-        has_analysis = (
-            prediction.moon_analysis or 
-            prediction.content or 
-            prediction.qa_responses
-        )
+        # Проверяем, есть ли готовый анализ Луны
+        # moon_analysis - это основной анализ, который генерируется воркером
+        has_analysis = bool(prediction.moon_analysis)
         
         if not has_analysis:
             if callback.message:
