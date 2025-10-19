@@ -245,8 +245,7 @@ async def cmd_start(message: Message, state: FSMContext):
         await message.answer(
             (
                 "Чтобы начать трансформации, мне понадобятся только твои "
-                "<b>дата, время и место рождения</b> "
-                "(время можно будет указать примерное) 🤗🧬"
+                "<b>дата, время и место рождения</b> 🤗🧬"
             ),
             reply_markup=kb,
             parse_mode="HTML",
@@ -288,7 +287,6 @@ class ProfileForm(StatesGroup):
     waiting_for_birth_time_accuracy = State()
     waiting_for_birth_time_local = State()
     waiting_for_birth_time_confirm = State()
-    waiting_for_birth_time_approx_confirm = State()
     waiting_for_birth_time_unknown_confirm = State()
 
 
@@ -1005,12 +1003,6 @@ async def on_birth_city_confirm(callback: CallbackQuery, state: FSMContext):
             ],
             [
                 InlineKeyboardButton(
-                    text="🤏🏼 Знаю примерное время",
-                    callback_data="timeacc:approx",
-                )
-            ],
-            [
-                InlineKeyboardButton(
                     text="👎🏼 Не знаю время вообще",
                     callback_data="timeacc:unknown",
                 )
@@ -1121,81 +1113,6 @@ async def set_birth_time_accuracy(callback: CallbackQuery, state: FSMContext):
 
     await callback.answer()
 
-    # Для сценария "unknown" ничего не пишем в БД — только отправляем сообщение
-    if value != "unknown":
-        async with get_session() as session:
-            cb_user = cast(TgUser, callback.from_user)
-            res = await session.execute(
-                select(DbUser).where(
-                    DbUser.telegram_id == cb_user.id
-                )
-            )
-            user = res.scalar_one_or_none()
-            if user is None:
-                await callback.answer(
-                    "Похоже, анкета ещё не начата. Нажми /start 💫",
-                    show_alert=True,
-                )
-                await state.clear()
-                return
-            user.birth_time_accuracy = value
-
-    # Убираем клавиатуру под сообщением
-    try:
-        cb_msg = cast(Message, callback.message)
-        await cb_msg.edit_reply_markup(reply_markup=None)
-    except Exception:
-        pass
-
-    # Дальнейшие шаги в зависимости от выбора
-    if value == "exact":
-        # Просим ввести точное время рождения в формате ЧЧ:ММ
-        await state.update_data(time_accuracy_type="exact")
-        cb_msg = cast(Message, callback.message)
-        await cb_msg.answer(
-            "Супер! 🤌🏼  \n\n"
-            + "тогда напиши время своего рождения по бирке/справке "
-            + "в формате ЧЧ:ММ\n\n"
-            + "пример: 10:38"
-        )
-        await state.set_state(ProfileForm.waiting_for_birth_time_local)
-    elif value == "approx":
-        await state.update_data(time_accuracy_type="approx")
-        cb_msg = cast(Message, callback.message)
-        await cb_msg.answer(
-            "Принято! ✌🏼  \n\n"
-            "🕰 Напиши примерное время своего рождения в формате ЧЧ:ММ\n\n"
-            "пример: 11:00"
-        )
-        await state.set_state(ProfileForm.waiting_for_birth_time_local)
-    else:  # unknown
-        # Показываем подтверждение для работы без времени
-        display_text = "Работаем без времени рождения\nВерно? Нажми кнопку 👇🏼"
-
-        kb = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="✅ Верно", callback_data="btime_unknown:confirm"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text="🔄 Указать время",
-                        callback_data="btime_unknown:specify"
-                    )
-                ],
-            ]
-        )
-
-        cb_msg = cast(Message, callback.message)
-        await cb_msg.answer(display_text, reply_markup=kb)
-        await state.set_state(
-            ProfileForm.waiting_for_birth_time_unknown_confirm
-        )
-
-    await callback.answer()
-
 
 @dp.message(ProfileForm.waiting_for_birth_time_local)
 async def receive_birth_time_local(message: Message, state: FSMContext):
@@ -1211,46 +1128,31 @@ async def receive_birth_time_local(message: Message, state: FSMContext):
         )
         return
 
-    # Получаем тип точности времени
-    data = await state.get_data()
-    time_accuracy_type = data.get("time_accuracy_type", "exact")
-
     # Сохраняем время временно для подтверждения
     await state.update_data(pending_birth_time=t.isoformat())
 
-    # Показываем подтверждение в зависимости от типа
+    # Показываем подтверждение
     time_str = t.strftime("%H:%M")
-    if time_accuracy_type == "exact":
-        display_text = (
-            f"Точное время рождения: {time_str}\nВерно? Нажми кнопку 👇🏼"
-        )
-        next_state = ProfileForm.waiting_for_birth_time_confirm
-        callback_data = "btime:confirm"
-        redo_callback_data = "btime:redo"
-    else:  # approx
-        display_text = (
-            f"Примерное время рождения: {time_str}\nВерно? Нажми кнопку 👇🏼"
-        )
-        next_state = ProfileForm.waiting_for_birth_time_approx_confirm
-        callback_data = "btime_approx:confirm"
-        redo_callback_data = "btime_approx:redo"
+    display_text = (
+        f"Точное время рождения: {time_str}\nВерно? Нажми кнопку 👇🏼"
+    )
 
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="✅ Верно", callback_data=callback_data
+                    text="✅ Верно", callback_data="btime:confirm"
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="🔄 Ввести заново", callback_data=redo_callback_data
+                    text="🔄 Ввести заново", callback_data="btime:redo"
                 )
             ],
         ]
     )
     await message.answer(display_text, reply_markup=kb)
-    await state.set_state(next_state)
+    await state.set_state(ProfileForm.waiting_for_birth_time_confirm)
 
 
 @dp.callback_query(F.data == "btime:confirm")
@@ -1370,109 +1272,6 @@ async def on_birth_time_redo(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-@dp.callback_query(F.data.startswith("btime_approx:confirm"))
-async def on_birth_time_approx_confirm(
-    callback: CallbackQuery, state: FSMContext
-):
-    """Подтверждение примерного времени рождения:
-    сохраняем данные и завершаем анкету"""
-    data = await state.get_data()
-    time_iso = data.get("pending_birth_time")
-    if not time_iso:
-        await callback.answer(
-            "Не нашла время. Пожалуйста, введите время снова.",
-            show_alert=True,
-        )
-        return
-
-    from datetime import time as _time
-    try:
-        t = _time.fromisoformat(time_iso)
-    except Exception:
-        await callback.answer(
-            "Формат времени потерялся, введите время ещё раз.",
-            show_alert=True,
-        )
-        return
-
-    cb_user = cast(TgUser, callback.from_user)
-    async with get_session() as session:
-        res = await session.execute(
-            select(DbUser).where(DbUser.telegram_id == cb_user.id)
-        )
-        user = res.scalar_one_or_none()
-        if user is None:
-            await callback.answer(
-                "Похоже, анкета ещё не начата. Нажми /start 💫",
-                show_alert=True,
-            )
-            await state.clear()
-            return
-
-        # Сохраняем время в БД
-        user.birth_time_local = t
-
-        # Пытаемся определить часовой пояс и UTC-смещение, если есть
-        # координаты и дата
-        try:
-            if (
-                user.birth_date
-                and user.birth_lat is not None
-                and user.birth_lon is not None
-            ):
-                tzres = resolve_timezone(
-                    user.birth_lat, user.birth_lon, user.birth_date, t
-                )
-                if tzres:
-                    user.tzid = tzres.tzid
-                    user.tz_offset_minutes = tzres.offset_minutes
-                    user.birth_datetime_utc = tzres.birth_datetime_utc
-                    tz_label = (
-                        f"{tzres.tzid} "
-                        f"({format_utc_offset(tzres.offset_minutes)})"
-                    )
-                    cb_msg = cast(Message, callback.message)
-                    await cb_msg.answer(
-                        "Отлично, сохранила твоё примерное время рождения ⏱✅\n"
-                        f"Часовой пояс: {tz_label}"
-                    )
-                else:
-                    cb_msg = cast(Message, callback.message)
-                    await cb_msg.answer(
-                        "Отлично, сохранила твоё примерное время рождения ⏱✅\n"
-                        "Не удалось автоматически определить часовой пояс "
-                        "по координатам."
-                    )
-            else:
-                cb_msg = cast(Message, callback.message)
-                await cb_msg.answer(
-                    "Отлично, сохранила твоё примерное время рождения ⏱✅\n"
-                    "Для определения часового пояса нужны дата и координаты "
-                    "места рождения."
-                )
-        except Exception as e:
-            logger.warning(f"Timezone resolve failed: {e}")
-            cb_msg = cast(Message, callback.message)
-            await cb_msg.answer(
-                "Отлично, сохранила твоё примерное время рождения ⏱✅\n"
-                "Но не удалось определить часовой пояс автоматически."
-            )
-
-    # Очищаем временные данные
-    await state.update_data(pending_birth_time=None)
-
-    # Убираем клавиатуру
-    try:
-        cb_msg = cast(Message, callback.message)
-        await cb_msg.edit_reply_markup(reply_markup=None)
-    except Exception:
-        pass
-
-    await state.clear()
-    await show_profile_completion_message(callback)
-    await callback.answer()
-
-
 @dp.callback_query(F.data.startswith("btime_unknown:"))
 async def on_birth_time_unknown(callback: CallbackQuery):
     """Обработчик кнопки для подтверждения работы без времени рождения"""
@@ -1517,12 +1316,6 @@ async def on_birth_time_unknown_specify(
                 InlineKeyboardButton(
                     text="👍🏼 Знаю точное время",
                     callback_data="timeacc:exact",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="🤏🏼 Знаю примерное время",
-                    callback_data="timeacc:approx",
                 )
             ],
         ]
@@ -2370,10 +2163,8 @@ async def on_faq(callback: CallbackQuery):
         "❔ Что делать, если я не знаю время рождения / знаю неточно?\n"
         "😼: Если ты не знаешь время рождения — не переживай, всё равно получится сделать ценный разбор! При заполнении анкеты можно указать:\n"
         "▪️ точное время (лучший вариант),\n"
-        "▪️ или примерное время (например: «утро» → 07:00, «около 12» → 12:00),\n"
         "▪️ или совсем без времени.\n"
-        "Что даёт время? Оно влияет на положение планет в домах. С ним разбор получается более полный и детальный. Без него ты всё равно получишь точный анализ планет, просто без домов.\n"
-        "Совет от меня: если сомневаешься, пиши хотя бы примерное время — это всегда лучше, чем ничего!\n\n"
+        "Что даёт время? Оно влияет на положение планет в домах. С ним разбор получается более полный и детальный. Без него ты всё равно получишь точный анализ планет, просто без домов.\n\n"
         "❔ Как ввести или изменить дату/время/место рождения?\n"
         "😼: В твоем Личном кабинете (введи в боте /lk) есть раздел «Мои даты» — там можно добавить новые данные.\n\n"
         "❔ Можно ли добавить несколько дат (для друзей/детей/партнёра)?\n"
@@ -3305,7 +3096,6 @@ async def echo_message(message: Message, state: FSMContext):
         ProfileForm.waiting_for_birth_time_accuracy,
         ProfileForm.waiting_for_birth_time_local,
         ProfileForm.waiting_for_birth_time_confirm,
-        ProfileForm.waiting_for_birth_time_approx_confirm,
         ProfileForm.waiting_for_birth_time_unknown_confirm
     ]:
         # Если пользователь в состоянии анкеты, не обрабатываем сообщение здесь
@@ -3321,7 +3111,6 @@ async def echo_message(message: Message, state: FSMContext):
         AdditionalProfileForm.waiting_for_additional_birth_time_accuracy,
         AdditionalProfileForm.waiting_for_additional_birth_time_local,
         AdditionalProfileForm.waiting_for_additional_birth_time_confirm,
-        AdditionalProfileForm.waiting_for_additional_birth_time_approx_confirm,
         AdditionalProfileForm.waiting_for_additional_birth_time_unknown_confirm
     ]:
         # Если пользователь в состоянии создания дополнительного профиля, не обрабатываем сообщение здесь
