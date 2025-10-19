@@ -737,7 +737,7 @@ async def confirm_gender(callback: CallbackQuery, state: FSMContext):
 
     # Следующий шаг анкеты — спросить имя
     cb_msg = cast(Message, callback.message)
-    await cb_msg.answer("Как тебя зовут? 💫")
+    await cb_msg.answer("*Как тебя зовут?* 💫", parse_mode="Markdown")
     await state.set_state(ProfileForm.waiting_for_first_name)
     await callback.answer("Сохранено")
 
