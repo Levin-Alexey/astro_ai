@@ -59,24 +59,13 @@ async def handle_ask_question(callback: CallbackQuery, state: FSMContext):
                 Prediction.planet == Planet.moon,
                 Prediction.prediction_type == PredictionType.free,
                 Prediction.is_active.is_(True),
-                Prediction.is_deleted.is_(False)
+                Prediction.is_deleted.is_(False),
+                Prediction.moon_analysis.is_not(None)
             ).limit(1)
         )
         prediction = prediction_result.scalar_one_or_none()
         
         if not prediction:
-            if callback.message:
-                await callback.message.answer(
-                    "❌ Астрологический разбор не найден.\n\n"
-                    "Сначала получите бесплатный разбор Луны, а затем задайте вопрос."
-                )
-            return
-        
-        # Проверяем, есть ли готовый анализ Луны
-        # moon_analysis - это основной анализ, который генерируется воркером
-        has_analysis = bool(prediction.moon_analysis)
-        
-        if not has_analysis:
             if callback.message:
                 await callback.message.answer(
                     "❌ Астрологический разбор еще не готов.\n\n"
