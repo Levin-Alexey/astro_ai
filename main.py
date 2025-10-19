@@ -2152,6 +2152,12 @@ async def send_faq(message_or_callback):
         inline_keyboard=[
             [
                 InlineKeyboardButton(
+                    text="💳 Купить разбор",
+                    callback_data="buy_analysis"
+                )
+            ],
+            [
+                InlineKeyboardButton(
                     text="🏠 Главное меню",
                     callback_data="back_to_menu"
                 )
