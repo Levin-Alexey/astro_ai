@@ -2599,27 +2599,27 @@ async def on_explore_other_areas(callback: CallbackQuery):
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text="🌌 Все планеты",
+                        text="😎 Все планеты 222₽",
                         callback_data=create_callback_data("explore_all_planets")
                     )
                 ],
                 [
                     InlineKeyboardButton(
-                        text="☀️ Солнце",
+                        text="☀️ Солнце 77₽",
                         callback_data=create_callback_data("explore_sun")
                     ),
                     InlineKeyboardButton(
-                        text="☿️ Меркурий",
+                        text="🧠 Меркурий 77₽",
                         callback_data=create_callback_data("explore_mercury")
                     )
                 ],
                 [
                     InlineKeyboardButton(
-                        text="♀️ Венера",
+                        text="💰💍 Венера 77₽",
                         callback_data=create_callback_data("explore_venus")
                     ),
                     InlineKeyboardButton(
-                        text="♂️ Марс",
+                        text="🔥 Марс 77₽",
                         callback_data=create_callback_data("explore_mars")
                     )
                 ],
