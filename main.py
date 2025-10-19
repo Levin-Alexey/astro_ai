@@ -55,7 +55,7 @@ from handlers.venus_recommendations_handler import (
 from handlers.mars_recommendations_handler import (
     handle_get_mars_recommendations
 )
-from handlers.ask_question_handler import handle_ask_question
+from handlers.ask_question_handler import handle_ask_question, QuestionForm
 from handlers.support_handler import SupportForm
 from handlers.additional_profile_handler import (
     AdditionalProfileForm,
@@ -288,10 +288,6 @@ class ProfileForm(StatesGroup):
     waiting_for_birth_time_local = State()
     waiting_for_birth_time_confirm = State()
     waiting_for_birth_time_unknown_confirm = State()
-
-
-class QuestionForm(StatesGroup):
-    waiting_for_question = State()
 
 
 def build_gender_kb(selected: str | None) -> InlineKeyboardMarkup:

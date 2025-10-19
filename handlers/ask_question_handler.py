@@ -10,12 +10,18 @@ from aiogram.types import (
     InlineKeyboardButton
 )
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy import select
 
 from db import get_session
 from models import User, Prediction, Planet, PredictionType
 
 logger = logging.getLogger(__name__)
+
+
+class QuestionForm(StatesGroup):
+    """FSM состояния для обработки вопросов"""
+    waiting_for_question = State()
 
 
 async def handle_ask_question(callback: CallbackQuery, state: FSMContext):
@@ -96,24 +102,11 @@ async def handle_ask_question(callback: CallbackQuery, state: FSMContext):
     # Отправляем сообщение с предложением задать вопрос
     if callback.message:
         await callback.message.answer(
-            f"❓ Задай свой вопрос\n\n"
+            "❓ Задай свой вопрос\n\n"
             "Напиши любой вопрос, и я отвечу на основе твоей "
             "астрологической карты! 🔮",
             reply_markup=keyboard
         )
         
         # Устанавливаем состояние ожидания вопроса
-        # Импортируем QuestionForm из main.py
-        import sys
-        main_module = sys.modules.get('__main__')
-        if main_module and hasattr(main_module, 'QuestionForm'):
-            QuestionForm = main_module.QuestionForm
-            await state.set_state(QuestionForm.waiting_for_question)
-        else:
-            # Fallback - создаем локальный класс
-            from aiogram.fsm.state import State, StatesGroup
-            
-            class QuestionForm(StatesGroup):
-                waiting_for_question = State()
-                
-            await state.set_state(QuestionForm.waiting_for_question)
+        await state.set_state(QuestionForm.waiting_for_question)
