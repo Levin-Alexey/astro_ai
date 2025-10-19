@@ -1080,10 +1080,10 @@ async def set_birth_time_accuracy(callback: CallbackQuery, state: FSMContext):
         await state.update_data(time_accuracy_type="exact")
         cb_msg = cast(Message, callback.message)
         await cb_msg.answer(
-            "Супер! 🤌🏼  \n\n"
-            + "тогда напиши время своего рождения по бирке/справке "
-            + "в формате ЧЧ:ММ\n\n"
-            + "пример: 10:38"
+            "Супер! 🤌🏼\n\n"
+            "🕰 <b>Напиши время своего рождения по бирке/справке/примерное в формате ЧЧ:ММ</b>\n\n"
+            "примеры: 12:45 / «родился утром» → укажи 07:00 / «родился около 12» → укажи 12:00",
+            parse_mode="HTML"
         )
         await state.set_state(ProfileForm.waiting_for_birth_time_local)
     else:  # unknown
