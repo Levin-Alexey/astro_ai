@@ -526,13 +526,14 @@ async def show_main_menu(message_or_callback):
             ],
             [
                 InlineKeyboardButton(
-                    text="🔮 Общение с Лилит",
-                    callback_data="ask_question"
+                    text="💵 Купить разбор",
+                    callback_data="buy_analysis"
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="💳 Купить разбор", callback_data="buy_analysis"
+                    text="🔮 Общение с Лилит",
+                    callback_data="ask_question"
                 )
             ],
             [
@@ -543,18 +544,14 @@ async def show_main_menu(message_or_callback):
             ],
             [
                 InlineKeyboardButton(
-                    text="❓ FAQ", callback_data="faq"
+                    text="❔ Частые вопросы",
+                    callback_data="faq"
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="🆘 Служба заботы", callback_data="support"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="🗑️ Удалить разборы", 
-                    callback_data="delete_predictions"
+                    text="❤️‍🩹 Служба заботы",
+                    callback_data="support"
                 )
             ]
         ]
