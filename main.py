@@ -530,10 +530,10 @@ async def show_main_menu(message_or_callback):
     if hasattr(message_or_callback, 'message'):
         # Это callback
         cb_msg = cast(Message, message_or_callback.message)
-        await cb_msg.answer(text, reply_markup=kb)
+        await cb_msg.answer(text, reply_markup=kb, parse_mode="HTML")
     else:
         # Это message
-        await message_or_callback.answer(text, reply_markup=kb)
+        await message_or_callback.answer(text, reply_markup=kb, parse_mode="HTML")
 
 
 async def show_profile_completion_message(message_or_callback):
