@@ -4,7 +4,12 @@
 
 import logging
 
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.types import (
+    Message,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    CallbackQuery,
+)
 from aiogram.fsm.context import FSMContext
 
 logger = logging.getLogger(__name__)
@@ -15,7 +20,7 @@ async def show_buy_analysis_menu(message: Message):
     Показывает меню покупки разборов с четырьмя опциями:
     1. Купить разбор для себя
     2. Купить разбор для дополнительных дат
-    3. Добавить новую дату  
+    3. Добавить новую дату
     4. Главное меню
     """
     
@@ -24,13 +29,13 @@ async def show_buy_analysis_menu(message: Message):
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="💳 Купить разбор для себя",
+                    text="👑 Купить для себя",
                     callback_data="buy_analysis_self"
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="👥 Купить разбор для дополнительных дат",
+                    text="👥 Купить для других дат",
                     callback_data="buy_analysis_additional"
                 )
             ],
@@ -42,7 +47,7 @@ async def show_buy_analysis_menu(message: Message):
             ],
             [
                 InlineKeyboardButton(
-                    text="🏠 Главное меню",
+                    text="↩️ Перейти в главное меню",
                     callback_data="back_to_menu"
                 )
             ]
@@ -50,19 +55,19 @@ async def show_buy_analysis_menu(message: Message):
     )
 
     menu_text = (
-        "💳 **Купить разбор**\n\n"
-        "Выберите действие:\n\n"
-        "💳 **Купить разбор для себя**\n"
-        "Персональный астрологический разбор на основе ваших данных рождения\n\n"
-        "📅 **Добавить новую дату**\n"
-        "Создать разбор для другого человека (друг, ребенок, партнер)\n\n"
-        "Все разборы сохраняются в вашем личном кабинете и доступны в любое время!"
+        "<b>💵 Купить разбор</b>\n\n"
+        "Краткая инструкция:\n"
+        "👑 Купить для себя → переходи сюда, если хочешь купить разбор "
+        "по своей дате \n"
+        "👥 Купить для других → переходи сюда, если хочешь купить разбор "
+        "по другим введенным датам \n\n"
+        "<b>Выбирай нужное действие</b>👇🏼"
     )
     
     await message.answer(
         menu_text,
         reply_markup=kb,
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
 
 
@@ -76,7 +81,7 @@ async def show_additional_profiles_for_purchase(callback: CallbackQuery):
     
     try:
         user_id = callback.from_user.id if callback.from_user else 0
-        logger.info(f"User {user_id} selecting additional profile for purchase")
+        logger.info("User %s: select profile for purchase", user_id)
         
         # Получаем список дополнительных профилей пользователя
         from db import get_session
@@ -153,9 +158,12 @@ async def show_additional_profiles_for_purchase(callback: CallbackQuery):
             for profile in profiles:
                 gender_emoji = {
                     "male": "👨",
-                    "female": "👩", 
+                    "female": "👩",
                     "other": "🧑"
-                }.get(profile.gender.value if profile.gender else "unknown", "👤")
+                }.get(
+                    profile.gender.value if profile.gender else "unknown",
+                    "👤",
+                )
                 
                 profile_button = InlineKeyboardButton(
                     text=f"{gender_emoji} {profile.full_name}",
