@@ -400,7 +400,7 @@ async def show_personal_cabinet(message_or_callback):
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="� Мои разборы",
+                            text="📅 Мои разборы",
                             callback_data="my_analyses"
                         )
                     ],
