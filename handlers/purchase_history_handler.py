@@ -64,13 +64,34 @@ async def purchase_history_handler(callback: CallbackQuery):
             select(PlanetPayment).where(PlanetPayment.user_id == user.user_id).order_by(PlanetPayment.created_at.desc())
         )
         payments = result.scalars().all()
+
     if not payments:
-        text = "У вас пока нет покупок.\n\nВы можете приобрести разбор планет в этом меню."
+        text = "Покупок пока нет.\n\nВы можете приобрести разбор планет в этом меню."
     else:
-        text = "<b>История покупок:</b>\n\n" + "\n---------------------\n".join(format_payment(p) for p in payments)
+        text = "Вот список твоих покупок 🛍👇🏼\n\n" + "\n".join(
+            [f"⭐️ {p.created_at.strftime('%d.%m.%Y %H:%M') if p.created_at else '-'}\nТип: {'Одна планета (' + {Planet.moon: 'Луна', Planet.sun: 'Солнце', Planet.mercury: 'Меркурий', Planet.venus: 'Венера', Planet.mars: 'Марс'}.get(p.planet, str(p.planet)) + ')' if p.payment_type == PaymentType.single_planet else 'Все планеты'}\nСумма: {p.amount_kopecks // 100} руб. {p.amount_kopecks % 100:02d} коп.\nСтатус: {'🕒 В ожидании' if p.status == PaymentStatus.pending else '✅ Оплачен' if p.status == PaymentStatus.completed else '❌ Ошибка' if p.status == PaymentStatus.failed else '↩️ Возврат' if p.status == PaymentStatus.refunded else '⚙️ Обработка' if p.status == PaymentStatus.processing else '⚠️ Ошибка разбора' if p.status == PaymentStatus.analysis_failed else '📦 Доставлен' if p.status == PaymentStatus.delivered else str(p.status)}\n" for p in payments]
+        )
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="❤️‍🩹 Служба заботы",
+                    callback_data="support"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="↩️ Вернуться в личный кабинет",
+                    callback_data="personal_cabinet"
+                )
+            ]
+        ]
+    )
+
     await callback.message.edit_text(
         text,
-        reply_markup=get_back_to_profile_keyboard(),
+        reply_markup=kb,
         parse_mode="HTML"
     )
     await callback.answer()
