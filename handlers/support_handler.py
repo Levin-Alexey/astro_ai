@@ -77,8 +77,24 @@ async def handle_support_message(message: Message, state: FSMContext):
         
         # Отвечаем пользователю
         await message.answer(
-            "✅ Сообщение отправлено в службу поддержки!\n\n"
-            "Мы ответим в течение 24 часов."
+            "💫 Принято, спасибо за запрос!\n"
+            "Вернусь с ответом в ближайшее время 🐈‍⬛",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="💵 Купить разбор",
+                            callback_data="buy_analysis"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🏠 Главное меню",
+                            callback_data="back_to_menu"
+                        )
+                    ]
+                ]
+            )
         )
         
         # Сбрасываем состояние
