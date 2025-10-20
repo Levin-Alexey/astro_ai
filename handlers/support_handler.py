@@ -107,19 +107,19 @@ async def start_support_conversation(message: Message, state: FSMContext):
         
         logger.info("Sending support message to user...")
         await message.answer(
-            "🆘 Служба заботы\n\n"
-            "Опишите вашу проблему или задайте вопрос.\n\n"
-            "Ваше сообщение будет отправлено в службу поддержки.",
+            "С удовольствием ответим на любые вопросы 🪄\n"
+            "👇🏼 Опиши ситуацию <b>сообщением прямо в этот чат</b>",
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="❌ Отмена",
-                            callback_data="cancel_support"
+                            text="↩️ Вернуться в главное меню",
+                            callback_data="back_to_menu"
                         )
                     ]
                 ]
-            )
+            ),
+            parse_mode="HTML"
         )
         
         logger.info("Support conversation started successfully!")
