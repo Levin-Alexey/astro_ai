@@ -369,61 +369,31 @@ async def show_personal_cabinet(message_or_callback):
             )
             predictions_stats = predictions_result.fetchall()
             
-            # Формируем информацию о пользователе
-            profile_info = []
-            if user.full_name:
-                profile_info.append(f"📝 Имя: {user.full_name}")
-            if user.gender and user.gender != "unknown":
-                gender_emoji = {"male": "👨", "female": "👩", "other": "🧑"}.get(user.gender.value, "❓")
-                gender_text = {"male": "Мужской", "female": "Женский", "other": "Другой"}.get(user.gender.value, "Не указан")
-                profile_info.append(f"{gender_emoji} Пол: {gender_text}")
-            if user.birth_date:
-                profile_info.append(f"🎂 Дата рождения: {user.birth_date.strftime('%d.%m.%Y')}")
-            if user.birth_place_name:
-                profile_info.append(f"📍 Место рождения: {user.birth_place_name}")
-            if user.zodiac_sign:
-                profile_info.append(f"♈ Знак зодиака: {user.zodiac_sign.value}")
+            # Получаем имя пользователя для персонализации
+            user_name = None
+            if user.first_name:
+                user_name = user.first_name.strip()
             
-            # Формируем статистику разборов
-            analysis_stats = []
-            planet_emojis = {
-                "moon": "🌙", "sun": "☀️", "mercury": "☿️", 
-                "venus": "♀️", "mars": "♂️"
-            }
+            # Фолбэк к имени из Telegram, если в БД пусто
+            if not user_name:
+                tg_user = getattr(message_or_callback, "from_user", None)
+                if tg_user and getattr(tg_user, "first_name", None):
+                    user_name = tg_user.first_name.strip()
             
-            total_analyses = 0
-            for stat in predictions_stats:
-                planet = stat.planet.value
-                prediction_type = stat.prediction_type.value
-                count = stat.count
-                total_analyses += count
-                
-                emoji = planet_emojis.get(planet, "🪐")
-                type_text = "Бесплатный" if prediction_type == "free" else "Платный"
-                analysis_stats.append(f"{emoji} {planet.title()}: {count} ({type_text})")
+            if not user_name:
+                user_name = "друг"
             
             # Формируем текст сообщения
-            text_parts = ["👤 **Личный кабинет**\n"]
-            
-            if profile_info:
-                text_parts.append("**📋 Профиль:**")
-                text_parts.extend(profile_info)
-                text_parts.append("")
-            
-            text_parts.append(f"**📊 Статистика разборов:**")
-            text_parts.append(f"Всего разборов: {total_analyses}")
-            
-            if analysis_stats:
-                text_parts.append("")
-                for stat in analysis_stats:
-                    text_parts.append(f"• {stat}")
-            else:
-                text_parts.append("• Разборов пока нет")
-            
-            text_parts.append("")
-            text_parts.append("**💡 Доступные действия:**")
-            text_parts.append("• Купить новые разборы")
-            text_parts.append("• Начать разбор по новой дате")
+            text = (
+                f"{user_name}, это твой Личный кабинет! 😼\n"
+                "�🏼 Здесь хранятся твои разборы, прогресс по датам и покупки\n\n"
+                "Краткая инструкция:\n"
+                "� Мои разборы → переходи сюда, если хочешь увидеть свой прогресс по датам и перечитать разборы\n"
+                "💵 Купить разбор → переходи сюда, если хочешь приобрести разбор\n"
+                "🆕 Начать разбор по новой дате → переходи сюда, если хочешь перейти к разбору по новым данным\n"
+                "🖇 История покупок → переходи сюда, если тебе хочешь посмотреть список твоих покупок у НейроАстролога\n\n"
+                "Выбирай нужное действие👇🏼"
+            )
             
             # Создаем клавиатуру с действиями
             kb = InlineKeyboardMarkup(
@@ -462,9 +432,8 @@ async def show_personal_cabinet(message_or_callback):
             )
             
             await answer_method(
-                "\n".join(text_parts),
-                reply_markup=kb,
-                parse_mode="Markdown"
+                text,
+                reply_markup=kb
             )
             
     except Exception as e:
