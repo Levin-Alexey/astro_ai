@@ -1486,11 +1486,11 @@ async def on_my_main_analyses(callback: CallbackQuery):
             
             # Определяем планеты и их эмоджи
             planets = [
-                ("moon", "🌙 Луна"),
-                ("sun", "☀️ Солнце"), 
-                ("mercury", "☿️ Меркурий"),
-                ("venus", "♀️ Венера"),
-                ("mars", "♂️ Марс")
+                ("moon", "Луна"),
+                ("sun", "Солнце"), 
+                ("mercury", "Меркурий"),
+                ("venus", "Венера"),
+                ("mars", "Марс")
             ]
             
             # Создаем кнопки для планет с батарейками
@@ -1590,11 +1590,11 @@ async def on_view_planet(callback: CallbackQuery):
             prediction = prediction_result.scalar_one_or_none()
             
             planet_names = {
-                "moon": "🌙 Луна",
-                "sun": "☀️ Солнце",
-                "mercury": "☿️ Меркурий", 
-                "venus": "♀️ Венера",
-                "mars": "♂️ Марс"
+                "moon": "Луна",
+                "sun": "Солнце",
+                "mercury": "Меркурий", 
+                "venus": "Венера",
+                "mars": "Марс"
             }
             planet_name = planet_names.get(planet_code, planet_code)
             
@@ -1732,15 +1732,11 @@ async def on_my_additional_analyses(callback: CallbackQuery):
                 return
             
             # Формируем список профилей с кнопками
-            text = "👥 **Дополнительные разборы**\n\n"
-            text += f"У вас {len(profiles)} "
-            if len(profiles) == 1:
-                text += "дополнительный профиль"
-            elif len(profiles) < 5:
-                text += "дополнительных профиля"
-            else:
-                text += "дополнительных профилей"
-            text += ".\n\nВыберите профиль, чтобы посмотреть разборы:"
+            text = (
+                "👥 <b>Другие профили</b>\n"
+                "Здесь ты можешь увидеть прогресс по своим дополнительным профилям и перечитать их разборы\n\n"
+                "<b>Выбери профиль</b>👇🏼"
+            )
             
             # Создаем кнопки для каждого профиля
             buttons = []
@@ -1774,7 +1770,7 @@ async def on_my_additional_analyses(callback: CallbackQuery):
             await cb_msg.answer(
                 text,
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
             
     except Exception as e:
@@ -1967,11 +1963,11 @@ async def on_view_profile_planet(callback: CallbackQuery):
             prediction = prediction_result.scalar_one_or_none()
             
             planet_names = {
-                "moon": "🌙 Луна",
-                "sun": "☀️ Солнце",
-                "mercury": "☿️ Меркурий",
-                "venus": "♀️ Венера",
-                "mars": "♂️ Марс"
+                "moon": "Луна",
+                "sun": "Солнце",
+                "mercury": "Меркурий",
+                "venus": "Венера",
+                "mars": "Марс"
             }
             planet_name = planet_names.get(planet_code, planet_code)
             
