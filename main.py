@@ -400,31 +400,31 @@ async def show_personal_cabinet(message_or_callback):
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="💳 Купить разбор",
-                            callback_data="buy_analysis"
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text="🆕 Новый разбор",
-                            callback_data="new_analysis"
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text="📚 Мои разборы",
+                            text="� Мои разборы",
                             callback_data="my_analyses"
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text="🧾 История покупок",
+                            text="💵 Купить разбор",
+                            callback_data="buy_analysis"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🆕 Начать разбор по новой дате",
+                            callback_data="new_analysis"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🖇 История покупок",
                             callback_data="purchase_history"
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text="🏠 Главное меню",
+                            text="🏠 Перейти в главное меню",
                             callback_data="back_to_menu"
                         )
                     ]
