@@ -295,12 +295,12 @@ class RecommendationsWorker:
                         "callback_data": "explore_other_areas"
                     }
                 ],
-                [
-                    {
-                        "text": "🏠 Главное меню",
-                        "callback_data": "back_to_menu"
-                    }
-                ]
+                # [
+                #     {
+                #         "text": "🏠 Главное меню",
+                #         "callback_data": "back_to_menu"
+                #     }
+                # ]
             ]
         }
         

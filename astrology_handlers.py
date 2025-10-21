@@ -1133,67 +1133,7 @@ async def start_moon_analysis(callback: CallbackQuery, state: FSMContext):
 
         # Отправляем результат пользователю
         if callback.message:
-            # Формируем красивое сообщение с данными Луны
-            moon_info = moon_data["moon"]
-            if moon_info:
-                moon_message = f"""✅ Астрологические данные получены!
-
-🌙 Твоя Луна:
-• Знак: {moon_info['sign']}
-• Дом: {moon_info['house']}
-• Степень: {moon_info['norm_degree']:.2f}°
-• Скорость: {moon_info['speed']:.2f}°/день
-• Ретроградность: {'Да' if moon_info['is_retro'] == 'true' else 'Нет'}
-
-🔗 Аспекты Луны:"""
-
-                # Добавляем аспекты (сумма орбов не более 4 градусов)
-                # Сортируем по орбу по возрастанию
-                sorted_aspects = sorted(
-                    moon_data["moon_aspects"], 
-                    key=lambda x: x['orb']
-                )
-                filtered_aspects = []
-                total_orb = 0.0
-                
-                # Логируем исходные аспекты
-                logger.info(f"Moon analysis - Original aspects count: {len(moon_data['moon_aspects'])}")
-                for i, aspect in enumerate(sorted_aspects):
-                    logger.info(f"Moon analysis - Aspect {i+1}: {aspect['aspecting_planet']} {aspect['type']} {aspect['aspected_planet']} (орб: {aspect['orb']:.2f}°)")
-                
-                for aspect in sorted_aspects:
-                    if total_orb + aspect['orb'] <= 4.0:
-                        filtered_aspects.append(aspect)
-                        total_orb += aspect['orb']
-                        logger.info(f"Moon analysis - Added aspect: {aspect['aspecting_planet']} {aspect['type']} {aspect['aspected_planet']} (орб: {aspect['orb']:.2f}°), total_orb: {total_orb:.2f}°")
-                    else:
-                        logger.info(f"Moon analysis - Skipped aspect: {aspect['aspecting_planet']} {aspect['type']} {aspect['aspected_planet']} (орб: {aspect['orb']:.2f}°) - would exceed 4° limit")
-                        break
-                
-                logger.info(f"Moon analysis - Final filtered aspects count: {len(filtered_aspects)}, total_orb: {total_orb:.2f}°")
-                
-                for aspect in filtered_aspects:
-                    moon_message += (
-                        f"\n• {aspect['aspecting_planet']} {aspect['type']} "
-                        f"{aspect['aspected_planet']} "
-                        f"(орб: {aspect['orb']:.2f}°)"
-                    )
-
-                moon_message += f"""
-
-🔮 Сейчас готовлю твой персональный разбор...
-Это займет несколько минут ⏳
-
-ID предсказания: {prediction_id}"""
-            else:
-                moon_message = (
-                    f"✅ Данные получены!\n\n"
-                    f"🔮 Сейчас готовлю твой персональный разбор...\n"
-                    f"Это займет несколько минут ⏳\n\n"
-                    f"ID предсказания: {prediction_id}"
-                )
-
-            await callback.message.answer(moon_message)
+            await callback.message.answer("✅ Астрологические данные получены!")
 
     except Exception as e:
         logger.error(f"Moon analysis failed for user {user_id}: {e}")
