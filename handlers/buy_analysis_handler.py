@@ -336,7 +336,7 @@ async def handle_buy_for_profile(callback: CallbackQuery, state: FSMContext):
                     available_buttons.append([
                         InlineKeyboardButton(
                             text=btn_text,
-                            callback_data=f"buy_planet:{profile_id}:{planet.value}"
+                            callback_data=f"buy_profile_planet:{profile_id}:{planet.value}"
                         )
                     ])
                     total_available += 1
@@ -409,7 +409,7 @@ async def handle_buy_for_profile(callback: CallbackQuery, state: FSMContext):
             if total_available > 0:
                 text_parts.extend([
                     f"\n📋 **Доступно для покупки:** {total_available} разборов",
-                    "💰 **Цена за планету:** 500₽"
+                    "💰 **Цена за планету:** 77₽"
                 ])
             
             text_parts.append(
