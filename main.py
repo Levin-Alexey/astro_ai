@@ -3165,7 +3165,7 @@ async def echo_message(message: Message, state: FSMContext):
             user.last_seen_at = datetime.now(timezone.utc)
 
     await message.answer(
-        "Привет! Я бот астролог. Используйте /help для списка команд."
+        "😿 Ой, что-то пошло не так... введи, пожалуйста, еще раз 👇🏼"
     )
 
 
