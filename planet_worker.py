@@ -408,7 +408,7 @@ class PlanetWorker:
         
         # Добавляем имя пользователя если есть
         if user.first_name:
-            message = f"Привет, {user.first_name}! {message}"
+            message = f"{user.first_name}! {message}"
         
         # Добавляем содержимое предсказания из соответствующего столбца
         content = None

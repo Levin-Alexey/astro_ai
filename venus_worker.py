@@ -271,7 +271,7 @@ async def process_venus_prediction(
                 logger.warning("♀️ OpenRouter not available, creating test analysis")
                 analysis_content = f"""♀️ Тестовый разбор Венеры для {llm_user_name}
 
-Привет, {llm_user_name}! 
+ {llm_user_name}! 
 
 Твоя Венера раскрывает особенности твоих отношений и финансов:
 

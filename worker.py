@@ -358,7 +358,7 @@ class PredictionWorker:
         
         # Добавляем приветствие только для основного профиля
         if not profile_name and user.first_name:
-            message = f"Привет, {user.first_name}! {message}"
+            message = f"{user.first_name}! {message}"
         
         # Добавляем содержимое предсказания из соответствующего столбца
         content = None
