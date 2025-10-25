@@ -93,7 +93,8 @@ class AllPlanetsHandler:
                 user_id=user_id,
                 planet="all_planets",
                 description="Астрологические разборы всех планет",
-                profile_id=profile_id
+                profile_id=profile_id,
+                amount_kopecks=22200  # 222₽
             )
 
             # Создаем платеж

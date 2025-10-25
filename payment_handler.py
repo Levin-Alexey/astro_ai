@@ -27,7 +27,7 @@ class PaymentHandler:
         self.test_amount = PAYMENT_TEST_AMOUNT
         self.currency = PAYMENT_CURRENCY
     
-    def create_payment_data(self, user_id: int, planet: str, description: str, profile_id: int = None) -> Dict[str, Any]:
+    def create_payment_data(self, user_id: int, planet: str, description: str, profile_id: int = None, amount_kopecks: int = None) -> Dict[str, Any]:
         """Создает данные для платежа"""
         metadata = {
             "user_id": str(user_id),
@@ -38,9 +38,12 @@ class PaymentHandler:
         if profile_id:
             metadata["profile_id"] = str(profile_id)
         
+        # Используем переданную сумму или тестовую по умолчанию
+        payment_amount = amount_kopecks if amount_kopecks is not None else self.test_amount
+        
         return {
             "amount": {
-                "value": f"{self.test_amount / 100:.2f}",
+                "value": f"{payment_amount / 100:.2f}",
                 "currency": self.currency
             },
             "confirmation": {
