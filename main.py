@@ -261,8 +261,9 @@ async def on_ok(callback: CallbackQuery, state: FSMContext):
     kb = build_gender_kb(selected=None)
     cb_msg = cast(Message, callback.message)
     await cb_msg.answer(
-        "Для начала укажи свой пол 👇🏼",
+        "<b>Для начала укажи свой пол 👇🏼</b>",
         reply_markup=kb,
+        parse_mode="HTML"
     )
     logger.info(f"Gender keyboard sent to user {callback.from_user.id}")
 
@@ -274,8 +275,9 @@ async def on_start_new_analysis(callback: CallbackQuery):
     cb_msg = cast(Message, callback.message)
     await cb_msg.answer(
         "🆕 Начинаем новый разбор!\n\n"
-        "Для начала укажи свой пол 👇🏼",
-        reply_markup=build_gender_kb(selected=None)
+        "<b>Для начала укажи свой пол 👇🏼</b>",
+        reply_markup=build_gender_kb(selected=None),
+        parse_mode="HTML"
     )
 
 
