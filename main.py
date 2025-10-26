@@ -553,7 +553,7 @@ async def show_profile_completion_message(message_or_callback):
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="Начнем", callback_data="start_moon_analysis"
+                    text="Начнем 🙌🏼", callback_data="start_moon_analysis"
                 )
             ]
         ]

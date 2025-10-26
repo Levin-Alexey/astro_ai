@@ -382,14 +382,16 @@ class SunWorker:
         Returns:
             Словарь с клавиатурой для Telegram API
         """
-        buttons = [
-            [
+        buttons = []
+        
+        # Показываем "Получить рекомендации" ТОЛЬКО если это НЕ покупка всех планет
+        if not is_all_planets:
+            buttons.append([
                 {
                     "text": "💡 Получить рекомендации",
                     "callback_data": "get_sun_recommendations"
                 }
-            ]
-        ]
+            ])
         
         if is_all_planets:
             next_planet_callback = f"next_planet:{profile_id}" if profile_id else "next_planet"
