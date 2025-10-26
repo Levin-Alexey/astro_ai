@@ -16,8 +16,9 @@ from config import BOT_TOKEN
 
 logger = logging.getLogger(__name__)
 
-# ID личного чата для поддержки
-SUPPORT_CHAT_ID = 6310922392  # ID личного чата администратора
+# ID группы поддержки и темы
+SUPPORT_GROUP_ID = -1003100527167  # ID группы (отрицательный для супергрупп)
+SUPPORT_TOPIC_ID = 8  # ID темы в группе
 
 # Создаем бота для отправки сообщений
 bot = Bot(token=BOT_TOKEN)
@@ -56,18 +57,20 @@ async def handle_support_message(message: Message, state: FSMContext):
         if message.text:
             support_text += f"\nСООБЩЕНИЕ:\n{message.text}"
         
-        # Отправляем в личный чат БЕЗ parse_mode
-        logger.info(f"Sending message to support chat {SUPPORT_CHAT_ID}")
+        # Отправляем в группу БЕЗ parse_mode
+        logger.info(f"Sending message to group {SUPPORT_GROUP_ID}")
         await bot.send_message(
-            chat_id=SUPPORT_CHAT_ID,
+            chat_id=SUPPORT_GROUP_ID,
+            message_thread_id=SUPPORT_TOPIC_ID,
             text=support_text
         )
-        logger.info("Message sent to support chat successfully")
+        logger.info("Message sent to support group successfully")
         
         # Если есть медиа - отправляем отдельно
         if message.photo:
             await bot.send_photo(
-                chat_id=SUPPORT_CHAT_ID,
+                chat_id=SUPPORT_GROUP_ID,
+                message_thread_id=SUPPORT_TOPIC_ID,
                 photo=message.photo[-1].file_id,
                 caption=f"Фото от пользователя {user.id}"
             )
