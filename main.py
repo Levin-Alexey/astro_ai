@@ -3109,65 +3109,6 @@ async def cmd_help(message: Message, state: FSMContext):
     await message.answer(help_text)
 
 
-@dp.message()
-async def echo_message(message: Message, state: FSMContext):
-    """Обработчик всех остальных сообщений"""
-    # Проверяем, находится ли пользователь в состоянии анкеты
-    current_state = await state.get_state()
-    if current_state in [
-        ProfileForm.waiting_for_first_name,
-        ProfileForm.waiting_for_birth_date,
-        ProfileForm.waiting_for_birth_city,
-        ProfileForm.waiting_for_birth_city_confirm,
-        ProfileForm.waiting_for_birth_time_accuracy,
-        ProfileForm.waiting_for_birth_time_local,
-        ProfileForm.waiting_for_birth_time_confirm,
-        ProfileForm.waiting_for_birth_time_unknown_confirm
-    ]:
-        # Если пользователь в состоянии анкеты, не обрабатываем сообщение здесь
-        # Пусть его обработает соответствующий обработчик состояния
-        return
-    
-    # Проверяем, находится ли пользователь в состоянии создания дополнительного профиля
-    if current_state in [
-        AdditionalProfileForm.waiting_for_additional_name,
-        AdditionalProfileForm.waiting_for_additional_birth_date,
-        AdditionalProfileForm.waiting_for_additional_birth_city,
-        AdditionalProfileForm.waiting_for_additional_birth_city_confirm,
-        AdditionalProfileForm.waiting_for_additional_birth_time_accuracy,
-        AdditionalProfileForm.waiting_for_additional_birth_time_local,
-        AdditionalProfileForm.waiting_for_additional_birth_time_confirm,
-        AdditionalProfileForm.waiting_for_additional_birth_time_unknown_confirm
-    ]:
-        # Если пользователь в состоянии создания дополнительного профиля, не обрабатываем сообщение здесь
-        # Пусть его обработает соответствующий обработчик состояния
-        return
-    
-    # Проверяем, находится ли пользователь в состоянии ожидания вопроса
-    if current_state == QuestionForm.waiting_for_question:
-        # Если пользователь в состоянии ожидания вопроса, не обрабатываем сообщение здесь
-        # Пусть его обработает соответствующий обработчик состояния
-        return
-    
-    # Проверяем, находится ли пользователь в состоянии общения со службой заботы
-    if current_state == SupportForm.waiting_for_message:
-        # Если пользователь пишет в службу заботы, не обрабатываем сообщение здесь
-        # Пусть его обработает соответствующий обработчик состояния
-        return
-    
-    # Обновляем последнюю активность пользователя
-    async with get_session() as session:
-        uid = cast(TgUser, message.from_user).id
-        res = await session.execute(
-            select(DbUser).where(DbUser.telegram_id == uid)
-        )
-        user = res.scalar_one_or_none()
-        if user is not None:
-            user.last_seen_at = datetime.now(timezone.utc)
-
-    await message.answer(
-        "😿 Ой, что-то пошло не так... введи, пожалуйста, еще раз 👇🏼"
-    )
 
 
 async def send_existing_analysis(user_id: int, planet: str, message_obj, profile_id: Optional[int] = None):
@@ -3940,6 +3881,68 @@ async def check_user_payment_access(user_id: int, planet: str) -> bool:
                 return False
         else:
             return False
+
+
+# Обработчик всех остальных сообщений (должен быть последним!)
+@dp.message()
+async def echo_message(message: Message, state: FSMContext):
+    """Обработчик всех остальных сообщений"""
+    # Проверяем, находится ли пользователь в состоянии анкеты
+    current_state = await state.get_state()
+    if current_state in [
+        ProfileForm.waiting_for_first_name,
+        ProfileForm.waiting_for_birth_date,
+        ProfileForm.waiting_for_birth_city,
+        ProfileForm.waiting_for_birth_city_confirm,
+        ProfileForm.waiting_for_birth_time_accuracy,
+        ProfileForm.waiting_for_birth_time_local,
+        ProfileForm.waiting_for_birth_time_confirm,
+        ProfileForm.waiting_for_birth_time_unknown_confirm
+    ]:
+        # Если пользователь в состоянии анкеты, не обрабатываем сообщение здесь
+        # Пусть его обработает соответствующий обработчик состояния
+        return
+    
+    # Проверяем, находится ли пользователь в состоянии создания дополнительного профиля
+    if current_state in [
+        AdditionalProfileForm.waiting_for_additional_name,
+        AdditionalProfileForm.waiting_for_additional_birth_date,
+        AdditionalProfileForm.waiting_for_additional_birth_city,
+        AdditionalProfileForm.waiting_for_additional_birth_city_confirm,
+        AdditionalProfileForm.waiting_for_additional_birth_time_accuracy,
+        AdditionalProfileForm.waiting_for_additional_birth_time_local,
+        AdditionalProfileForm.waiting_for_additional_birth_time_confirm,
+        AdditionalProfileForm.waiting_for_additional_birth_time_unknown_confirm
+    ]:
+        # Если пользователь в состоянии создания дополнительного профиля, не обрабатываем сообщение здесь
+        # Пусть его обработает соответствующий обработчик состояния
+        return
+    
+    # Проверяем, находится ли пользователь в состоянии ожидания вопроса
+    if current_state == QuestionForm.waiting_for_question:
+        # Если пользователь в состоянии ожидания вопроса, не обрабатываем сообщение здесь
+        # Пусть его обработает соответствующий обработчик состояния
+        return
+    
+    # Проверяем, находится ли пользователь в состоянии общения со службой заботы
+    if current_state == SupportForm.waiting_for_message:
+        # Если пользователь пишет в службу заботы, не обрабатываем сообщение здесь
+        # Пусть его обработает соответствующий обработчик состояния
+        return
+    
+    # Обновляем последнюю активность пользователя
+    async with get_session() as session:
+        uid = cast(TgUser, message.from_user).id
+        res = await session.execute(
+            select(DbUser).where(DbUser.telegram_id == uid)
+        )
+        user = res.scalar_one_or_none()
+        if user is not None:
+            user.last_seen_at = datetime.now(timezone.utc)
+
+    await message.answer(
+        "😿 Ой, что-то пошло не так... введи, пожалуйста, еще раз 👇🏼"
+    )
 
 
 async def main():
