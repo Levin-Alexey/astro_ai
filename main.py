@@ -991,7 +991,7 @@ async def on_birth_city_confirm(callback: CallbackQuery, state: FSMContext):
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="👍🏼 Знаю точное время",
+                    text="👍🏼 Ввести время рождения",
                     callback_data="timeacc:exact",
                 )
             ],
@@ -1310,7 +1310,7 @@ async def on_birth_time_unknown_specify(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="👍🏼 Знаю точное время",
+                    text="👍🏼 Ввести время рождения",
                     callback_data="timeacc:exact",
                 )
             ],
