@@ -294,8 +294,7 @@ class ProfileForm(StatesGroup):
 
 def build_gender_kb(selected: str | None) -> InlineKeyboardMarkup:
     """
-    Строит клавиатуру выбора пола. Если selected задан — добавляет чек и
-    кнопку 'Подтвердить'.
+    Строит клавиатуру выбора пола. Если selected задан — добавляет чек.
     """
     female_text = ("✅ " if selected == "female" else "") + "👩🏻 Женский"
     male_text = ("✅ " if selected == "male" else "") + "👨🏼 Мужской"
@@ -312,14 +311,6 @@ def build_gender_kb(selected: str | None) -> InlineKeyboardMarkup:
             )
         ],
     ]
-    if selected in {"male", "female"}:
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text="Подтвердить", callback_data="gender_confirm"
-                )
-            ]
-        )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -633,19 +624,36 @@ async def set_gender(callback: CallbackQuery, state: FSMContext):
         await callback.answer("Некорректное значение", show_alert=True)
         return
 
-    # Запоминаем выбор пола во временном состоянии, не сохраняем в БД сразу
-    await state.update_data(pending_gender=value)
+    cb_user = cast(TgUser, callback.from_user)
+    tg_id = cb_user.id
 
-    # Оставляем кнопки пола и помечаем выбранный чек‑маркой + добавляем
-    # кнопку "Подтвердить"
-    kb = build_gender_kb(selected=value)
+    # Сохраняем выбор сразу в БД
+    async with get_session() as session:
+        res = await session.execute(
+            select(DbUser).where(DbUser.telegram_id == tg_id)
+        )
+        user = res.scalar_one_or_none()
+        if user is None:
+            await callback.answer(
+                "Сначала запусти анкету: /start", show_alert=True
+            )
+            await state.clear()
+            return
+        user.gender = Gender(value)
+        await session.commit()
+
+    # Убираем клавиатуру
     try:
         cb_msg = cast(Message, callback.message)
-        await cb_msg.edit_reply_markup(reply_markup=kb)
+        await cb_msg.edit_reply_markup(reply_markup=None)
     except Exception:
-        cb_msg = cast(Message, callback.message)
-        await cb_msg.answer("Подтверди выбор пола", reply_markup=kb)
-    await callback.answer()
+        pass
+
+    # Следующий шаг анкеты — спросить имя
+    cb_msg = cast(Message, callback.message)
+    await cb_msg.answer("*Как тебя зовут?* 💫", parse_mode="Markdown")
+    await state.set_state(ProfileForm.waiting_for_first_name)
+    await callback.answer("Сохранено")
 
 
 # Callback обработчики для дополнительного профиля
@@ -689,47 +697,6 @@ async def handle_additional_profile_cancel_wrapper(callback: CallbackQuery, stat
 async def handle_additional_birth_time_accuracy_callback_wrapper(callback: CallbackQuery, state: FSMContext):
     """Обертка для обработчика выбора точности времени рождения дополнительного профиля"""
     await handle_additional_birth_time_accuracy_callback(callback, state)
-
-
-@dp.callback_query(F.data == "gender_confirm")
-async def confirm_gender(callback: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    value = data.get("pending_gender")
-    if value not in {"male", "female"}:
-        await callback.answer("Сначала выбери пол", show_alert=True)
-        return
-    cb_user = cast(TgUser, callback.from_user)
-    tg_id = cb_user.id
-
-    # Сохраняем выбор в БД
-    async with get_session() as session:
-        res = await session.execute(
-            select(DbUser).where(DbUser.telegram_id == tg_id)
-        )
-        user = res.scalar_one_or_none()
-        if user is None:
-            await callback.answer(
-                "Сначала запусти анкету: /start", show_alert=True
-            )
-            await state.clear()
-            return
-        user.gender = Gender(value)
-
-    # Очищаем временные данные о поле
-    await state.update_data(pending_gender=None)
-
-    # Убираем клавиатуру подтверждения
-    try:
-        cb_msg = cast(Message, callback.message)
-        await cb_msg.edit_reply_markup(reply_markup=None)
-    except Exception:
-        pass
-
-    # Следующий шаг анкеты — спросить имя
-    cb_msg = cast(Message, callback.message)
-    await cb_msg.answer("*Как тебя зовут?* 💫", parse_mode="Markdown")
-    await state.set_state(ProfileForm.waiting_for_first_name)
-    await callback.answer("Сохранено")
 
 
 @dp.message(ProfileForm.waiting_for_first_name)

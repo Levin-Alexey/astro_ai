@@ -80,7 +80,7 @@ class AdditionalProfileForm(StatesGroup):
 def build_additional_gender_kb(selected: str | None) -> InlineKeyboardMarkup:
     """
     Строит клавиатуру выбора пола для дополнительного профиля.
-    Если selected задан — добавляет чек и кнопку 'Подтвердить'.
+    Если selected задан — добавляет чек.
     """
     female_text = ("✅ " if selected == "female" else "") + "👩🏻 Женский"
     male_text = ("✅ " if selected == "male" else "") + "👨🏼 Мужской"
@@ -97,14 +97,6 @@ def build_additional_gender_kb(selected: str | None) -> InlineKeyboardMarkup:
             )
         ],
     ]
-
-    if selected:
-        rows.append([
-            InlineKeyboardButton(
-                text="✅ Подтвердить",
-                callback_data="additional_gender:confirm"
-            )
-        ])
 
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -862,43 +854,25 @@ async def handle_additional_gender_callback(callback: CallbackQuery, state: FSMC
     action = data[1]
 
     if action in ["female", "male"]:
-        # Сохраняем выбранный пол во временных данных
-        await state.update_data(additional_gender_temp=action)
-        
-        # Показываем клавиатуру с выбранным полом
-        try:
-            await callback.message.edit_text(
-                "👤 Выбери пол:",
-                reply_markup=build_additional_gender_kb(action)
-            )
-        except Exception:
-            # Игнорируем ошибку если сообщение не изменилось
-            pass
-        await callback.answer()
-        
-    elif action == "confirm":
-        # Получаем выбранный пол из временных данных
-        state_data = await state.get_data()
-        gender = state_data.get("additional_gender_temp")
-        
-        if not gender:
-            await callback.answer("Выбери пол сначала")
-            return
+        # Сохраняем пол в основных данных профиля сразу
+        await state.update_data(additional_gender=action)
 
-        # Сохраняем пол в основных данных профиля
-        await state.update_data(additional_gender=gender)
+        # Убираем клавиатуру
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
 
         # Переходим к вводу даты рождения
         await state.set_state(AdditionalProfileForm.waiting_for_additional_birth_date)
         try:
-            await callback.message.edit_text(
+            await callback.message.answer(
                 "📆 Теперь напиши дату рождения в формате ДД.ММ.ГГГГ\n\n"
                 "например: 23.04.1987"
             )
         except Exception:
-            # Игнорируем ошибку если сообщение не изменилось
             pass
-        await callback.answer()
+        await callback.answer("Сохранено")
 
 
 async def handle_additional_birth_date_callback(callback: CallbackQuery, state: FSMContext):
@@ -956,7 +930,7 @@ async def handle_additional_birth_city_callback(callback: CallbackQuery, state: 
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text="👍🏼 Знаю точное время",
+                        text="👍🏼 Ввести время рождения",
                         callback_data="additional_timeacc:exact"
                     )
                 ],
@@ -1066,7 +1040,7 @@ async def handle_additional_time_unknown_callback(callback: CallbackQuery, state
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text="👍🏼 Знаю точное время",
+                        text="👍🏼 Ввести время рождения",
                         callback_data="additional_timeacc:exact"
                     )
                 ],
