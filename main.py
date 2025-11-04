@@ -857,10 +857,31 @@ async def receive_birth_city(message: Message, state: FSMContext):
         return
 
     # Пробуем геокодировать город (на русском)
+    geo = None
     try:
+        logger.info(f"Attempting to geocode city: '{city}'")
         geo = await geocode_city_ru(city)
+        if geo:
+            logger.info(
+                f"Geocoding successful for '{city}': "
+                f"{geo.get('place_name')}"
+            )
+        else:
+            logger.warning(f"Geocoding returned None for '{city}'")
     except GeocodingError as e:
         logger.warning(f"Geocoding failed for '{city}': {e}")
+        geo = None
+    except asyncio.TimeoutError as e:
+        logger.error(
+            f"Geocoding timeout for '{city}': {e}. "
+            "API не ответил вовремя, продолжаем без геокодирования"
+        )
+        geo = None
+    except Exception as e:
+        logger.error(
+            f"Unexpected error during geocoding for '{city}': {e}",
+            exc_info=True
+        )
         geo = None
 
     # Сохраняем данные временно для подтверждения
@@ -875,7 +896,11 @@ async def receive_birth_city(message: Message, state: FSMContext):
         place = geo["place_name"]
         display_text = f"Место рождения: {place}\nВерно? Нажми кнопку 👇🏼"
     else:
-        display_text = f"Место рождения: {city}\nВерно? Нажми кнопку 👇🏼"
+        display_text = (
+            f"Место рождения: {city}\nВерно? Нажми кнопку 👇🏼\n\n"
+            "⚠️ Не удалось определить координаты автоматически, "
+            "но это не критично для заполнения анкеты."
+        )
 
     kb = InlineKeyboardMarkup(
         inline_keyboard=[

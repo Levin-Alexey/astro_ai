@@ -6,6 +6,7 @@
 алгоритмом опроса, что и основной профиль.
 """
 
+import asyncio
 import logging
 from datetime import datetime, date, time
 
@@ -241,11 +242,20 @@ async def handle_additional_birth_city(message: Message, state: FSMContext):
     # Показываем индикатор загрузки
     loading_msg = await message.answer("🔍 Ищу город...")
 
+    geocode_result = None
     try:
         # Геокодируем город
+        logger.info(
+            f"Attempting to geocode city for additional profile: "
+            f"'{city_input}'"
+        )
         geocode_result = await geocode_city_ru(city_input)
 
         if not geocode_result:
+            logger.warning(
+                f"Geocoding returned None for additional profile city: "
+                f"'{city_input}'"
+            )
             await loading_msg.edit_text(
                 "Ой... я не могу распознать это 😿\n"
                 "👇🏼 Введи место рождения еще раз в формате "
@@ -255,6 +265,10 @@ async def handle_additional_birth_city(message: Message, state: FSMContext):
 
         # Сохраняем результат геокодирования
         await state.update_data(additional_geocode_result=geocode_result)
+        logger.info(
+            f"Geocoding successful for additional profile city: "
+            f"'{city_input}' -> {geocode_result.get('place_name')}"
+        )
 
         # Показываем найденный город для подтверждения
         kb = InlineKeyboardMarkup(
@@ -286,13 +300,94 @@ async def handle_additional_birth_city(message: Message, state: FSMContext):
         )
 
     except GeocodingError as e:
-        logger.error(f"Ошибка геокодирования для дополнительного профиля: {e}")
+        logger.error(
+            f"Geocoding error for additional profile city '{city_input}': {e}"
+        )
         await loading_msg.edit_text(
             "Ой... я не могу распознать это 😿\n"
             "👇🏼 Введи место рождения еще раз в формате "
             "Москва (без пробелов и других знаков)"
         )
         # НЕ сбрасываем состояние - пользователь может попробовать другой город
+    except asyncio.TimeoutError as e:
+        logger.error(
+            f"Geocoding timeout for additional profile city '{city_input}': "
+            f"{e}. API не ответил вовремя"
+        )
+        # Сохраняем введенный город без геокодирования
+        await state.update_data(additional_geocode_result=None)
+        geocode_result = None
+        
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="✅ Продолжить без координат",
+                        callback_data="additional_city:confirm"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🔄 Ввести заново",
+                        callback_data="additional_city:retry"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🚫 Отменить создание",
+                        callback_data="additional_profile:cancel"
+                    )
+                ]
+            ]
+        )
+        
+        await loading_msg.edit_text(
+            f"⚠️ Не удалось определить координаты для '{city_input}' "
+            "(API не ответил вовремя).\n\n"
+            "Можно продолжить без координат - это не критично для "
+            "заполнения анкеты. Продолжить?",
+            reply_markup=kb
+        )
+    except Exception as e:
+        logger.error(
+            f"Unexpected error during geocoding for additional profile city "
+            f"'{city_input}': {e}",
+            exc_info=True
+        )
+        # Сохраняем введенный город без геокодирования
+        await state.update_data(additional_geocode_result=None)
+        geocode_result = None
+        
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="✅ Продолжить без координат",
+                        callback_data="additional_city:confirm"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🔄 Ввести заново",
+                        callback_data="additional_city:retry"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🚫 Отменить создание",
+                        callback_data="additional_profile:cancel"
+                    )
+                ]
+            ]
+        )
+        
+        await loading_msg.edit_text(
+            f"⚠️ Произошла ошибка при определении координат для "
+            f"'{city_input}'.\n\n"
+            "Можно продолжить без координат - это не критично для "
+            "заполнения анкеты. Продолжить?",
+            reply_markup=kb
+        )
 
 
 async def handle_additional_birth_time_accuracy_callback(callback: CallbackQuery, state: FSMContext):
