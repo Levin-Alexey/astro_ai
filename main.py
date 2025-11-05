@@ -1467,17 +1467,34 @@ async def on_my_main_analyses(callback: CallbackQuery):
                 )
                 return
             
-            # Получаем все разборы пользователя
-            predictions_result = await session.execute(
-                select(Prediction.planet)
-                .where(
-                    Prediction.user_id == user.user_id,
-                    Prediction.is_deleted.is_(False),
-                    Prediction.profile_id.is_(None)  # Только основные разборы
+            # Получаем все готовые разборы пользователя
+            # Проверяем наличие готового анализа для каждой планеты
+            from models import Planet
+            
+            existing_planets = set()
+            planets_to_check = [
+                (Planet.moon, Prediction.moon_analysis),
+                (Planet.sun, Prediction.sun_analysis),
+                (Planet.mercury, Prediction.mercury_analysis),
+                (Planet.venus, Prediction.venus_analysis),
+                (Planet.mars, Prediction.mars_analysis),
+            ]
+            
+            for planet_enum, analysis_field in planets_to_check:
+                prediction_result = await session.execute(
+                    select(Prediction)
+                    .where(
+                        Prediction.user_id == user.user_id,
+                        Prediction.planet == planet_enum,
+                        Prediction.is_deleted.is_(False),
+                        Prediction.is_active.is_(True),
+                        Prediction.profile_id.is_(None),  # Только основные разборы
+                        analysis_field.is_not(None)  # Анализ должен быть готов
+                    )
+                    .limit(1)
                 )
-                .distinct()
-            )
-            existing_planets = {row[0] for row in predictions_result.fetchall()}
+                if prediction_result.scalar_one_or_none():
+                    existing_planets.add(planet_enum.value)  # Сохраняем строковое значение
             
             # Определяем планеты и их эмоджи
             planets = [
@@ -1554,7 +1571,7 @@ async def on_view_planet(callback: CallbackQuery):
         
         # Получаем разбор из БД
         from db import get_session
-        from models import User, Prediction
+        from models import User, Prediction, Planet
         from sqlalchemy import select
         
         async with get_session() as session:
@@ -1571,15 +1588,48 @@ async def on_view_planet(callback: CallbackQuery):
                 )
                 return
             
-            # Проверяем наличие разбора для планеты
+            # Конвертируем строку в Planet enum
+            try:
+                planet_enum = Planet(planet_code)
+            except ValueError:
+                logger.error(f"Invalid planet code: {planet_code}")
+                await cb_msg.answer(
+                    "❌ Неверный код планеты.\n"
+                    "Попробуйте выбрать планety из списка."
+                )
+                return
+            
+            # Определяем поле для анализа в зависимости от планеты
+            analysis_fields = {
+                Planet.moon: Prediction.moon_analysis,
+                Planet.sun: Prediction.sun_analysis,
+                Planet.mercury: Prediction.mercury_analysis,
+                Planet.venus: Prediction.venus_analysis,
+                Planet.mars: Prediction.mars_analysis,
+            }
+            analysis_field = analysis_fields.get(planet_enum)
+            
+            if not analysis_field:
+                logger.error(f"No analysis field for planet: {planet_code}")
+                await cb_msg.answer(
+                    "❌ Неизвестная планета.\n"
+                    "Попробуйте выбрать планety из списка."
+                )
+                return
+            
+            # Проверяем наличие готового разбора для планеты
+            # Учитываем is_active и наличие текста анализа
             prediction_result = await session.execute(
                 select(Prediction)
                 .where(
                     Prediction.user_id == user.user_id,
-                    Prediction.planet == planet_code,
+                    Prediction.planet == planet_enum,
                     Prediction.is_deleted.is_(False),
-                    Prediction.profile_id.is_(None)  # Только основные
+                    Prediction.is_active.is_(True),
+                    Prediction.profile_id.is_(None),  # Только основные
+                    analysis_field.is_not(None)  # Анализ должен быть готов
                 )
+                .order_by(Prediction.created_at.desc())
                 .limit(1)
             )
             prediction = prediction_result.scalar_one_or_none()
@@ -1650,7 +1700,7 @@ async def on_view_planet(callback: CallbackQuery):
                 )
                 
     except Exception as e:
-        logger.error(f"Error in view_planet for user {user_id}: {e}")
+        logger.error(f"Error in view_planet for user {user_id}: {e}", exc_info=True)
         await cb_msg.answer(
             "❌ Произошла ошибка при загрузке разбора.\n"
             "Попробуйте позже или обратитесь в службу заботы."
@@ -1825,42 +1875,37 @@ async def on_view_profile(callback: CallbackQuery):
                 return
             
             # Проверяем все планеты для этого профиля
+            from models import Planet
+            
             planets_info = []
-            for planet_code, planet_data in [
-                ("moon", {"name": "Луна", "emoji": "🌙"}),
-                ("sun", {"name": "Солнце", "emoji": "☀️"}),
-                ("mercury", {"name": "Меркурий", "emoji": "☿️"}),
-                ("venus", {"name": "Венера", "emoji": "♀️"}),
-                ("mars", {"name": "Марс", "emoji": "♂️"})
-            ]:
-                # Проверяем наличие разбора
+            planets_to_check = [
+                (Planet.moon, Prediction.moon_analysis, "Луна", "🌙"),
+                (Planet.sun, Prediction.sun_analysis, "Солнце", "☀️"),
+                (Planet.mercury, Prediction.mercury_analysis, "Меркурий", "☿️"),
+                (Planet.venus, Prediction.venus_analysis, "Венера", "♀️"),
+                (Planet.mars, Prediction.mars_analysis, "Марс", "♂️")
+            ]
+            
+            for planet_enum, analysis_field, planet_name, planet_emoji in planets_to_check:
+                # Проверяем наличие готового разбора
                 prediction_result = await session.execute(
                     select(Prediction).where(
                         Prediction.profile_id == profile_id,
-                        Prediction.planet == planet_code,
-                        Prediction.is_deleted.is_(False)
+                        Prediction.planet == planet_enum,
+                        Prediction.is_deleted.is_(False),
+                        Prediction.is_active.is_(True),
+                        analysis_field.is_not(None)  # Анализ должен быть готов
                     ).limit(1)
                 )
                 prediction = prediction_result.scalar_one_or_none()
                 
                 # Проверяем есть ли текст разбора
-                has_analysis = False
-                if prediction:
-                    if planet_code == "moon" and prediction.moon_analysis:
-                        has_analysis = True
-                    elif planet_code == "sun" and prediction.sun_analysis:
-                        has_analysis = True
-                    elif planet_code == "mercury" and prediction.mercury_analysis:
-                        has_analysis = True
-                    elif planet_code == "venus" and prediction.venus_analysis:
-                        has_analysis = True
-                    elif planet_code == "mars" and prediction.mars_analysis:
-                        has_analysis = True
+                has_analysis = prediction is not None
                 
                 planets_info.append({
-                    "code": planet_code,
-                    "name": planet_data["name"],
-                    "emoji": planet_data["emoji"],
+                    "code": planet_enum.value,  # Сохраняем строковое значение enum
+                    "name": planet_name,
+                    "emoji": planet_emoji,
                     "has_analysis": has_analysis
                 })
             
@@ -1930,7 +1975,7 @@ async def on_view_profile_planet(callback: CallbackQuery):
         logger.info(f"User {user_id} viewing planet {planet_code} for profile {profile_id}")
         
         from db import get_session
-        from models import AdditionalProfile, Prediction
+        from models import AdditionalProfile, Prediction, Planet
         from sqlalchemy import select
         
         async with get_session() as session:
@@ -1944,16 +1989,43 @@ async def on_view_profile_planet(callback: CallbackQuery):
 
             if not profile:
                 await cb_msg.answer("❌ Профиль не найден")
-
                 return
             
-            # Получаем разбор планеты
+            # Конвертируем строку в Planet enum
+            try:
+                planet_enum = Planet(planet_code)
+            except ValueError:
+                logger.error(f"Invalid planet code: {planet_code}")
+                await cb_msg.answer("❌ Неверный код планеты.")
+                return
+            
+            # Определяем поле для анализа в зависимости от планеты
+            analysis_fields = {
+                Planet.moon: Prediction.moon_analysis,
+                Planet.sun: Prediction.sun_analysis,
+                Planet.mercury: Prediction.mercury_analysis,
+                Planet.venus: Prediction.venus_analysis,
+                Planet.mars: Prediction.mars_analysis,
+            }
+            analysis_field = analysis_fields.get(planet_enum)
+            
+            if not analysis_field:
+                logger.error(f"No analysis field for planet: {planet_code}")
+                await cb_msg.answer("❌ Неизвестная планета.")
+                return
+            
+            # Получаем готовый разбор планеты
+            # Учитываем is_active и наличие текста анализа
             prediction_result = await session.execute(
                 select(Prediction).where(
                     Prediction.profile_id == profile_id,
-                    Prediction.planet == planet_code,
-                    Prediction.is_deleted.is_(False)
-                ).limit(1)
+                    Prediction.planet == planet_enum,
+                    Prediction.is_deleted.is_(False),
+                    Prediction.is_active.is_(True),
+                    analysis_field.is_not(None)  # Анализ должен быть готов
+                )
+                .order_by(Prediction.created_at.desc())
+                .limit(1)
             )
             prediction = prediction_result.scalar_one_or_none()
             
