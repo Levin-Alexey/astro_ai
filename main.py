@@ -98,6 +98,21 @@ dp.include_router(purchase_history_router)
 payment_handler = None
 
 
+# Кастомный фильтр для исключения определенных состояний
+class NotInStatesFilter:
+    """
+    Фильтр, который пропускает сообщения только если текущее состояние
+    НЕ находится в списке исключенных состояний.
+    """
+    def __init__(self, excluded_states: list):
+        self.excluded_states = excluded_states
+    
+    async def __call__(self, message: Message, state: FSMContext) -> bool:
+        current_state = await state.get_state()
+        # Возвращаем True только если состояние НЕ в списке исключенных
+        return current_state not in self.excluded_states
+
+
 @dp.message(Command("lk"))
 async def cmd_lk(message: Message, state: FSMContext):
     """Обработчик команды /lk - личный кабинет"""
@@ -3948,52 +3963,32 @@ async def check_user_payment_access(user_id: int, planet: str) -> bool:
 
 
 # Обработчик всех остальных сообщений (должен быть последним!)
-@dp.message()
+@dp.message(NotInStatesFilter([
+    # Состояния основной анкеты
+    ProfileForm.waiting_for_first_name,
+    ProfileForm.waiting_for_birth_date,
+    ProfileForm.waiting_for_birth_city,
+    ProfileForm.waiting_for_birth_city_confirm,
+    ProfileForm.waiting_for_birth_time_accuracy,
+    ProfileForm.waiting_for_birth_time_local,
+    ProfileForm.waiting_for_birth_time_confirm,
+    ProfileForm.waiting_for_birth_time_unknown_confirm,
+    # Состояния дополнительного профиля
+    AdditionalProfileForm.waiting_for_additional_name,
+    AdditionalProfileForm.waiting_for_additional_birth_date,
+    AdditionalProfileForm.waiting_for_additional_birth_city,
+    AdditionalProfileForm.waiting_for_additional_birth_city_confirm,
+    AdditionalProfileForm.waiting_for_additional_birth_time_accuracy,
+    AdditionalProfileForm.waiting_for_additional_birth_time_local,
+    AdditionalProfileForm.waiting_for_additional_birth_time_confirm,
+    AdditionalProfileForm.waiting_for_additional_birth_time_unknown_confirm,
+    # Состояние ожидания вопроса
+    QuestionForm.waiting_for_question,
+    # Состояние общения со службой заботы
+    SupportForm.waiting_for_message,
+]))
 async def echo_message(message: Message, state: FSMContext):
-    """Обработчик всех остальных сообщений"""
-    # Проверяем, находится ли пользователь в состоянии анкеты
-    current_state = await state.get_state()
-    if current_state in [
-        ProfileForm.waiting_for_first_name,
-        ProfileForm.waiting_for_birth_date,
-        ProfileForm.waiting_for_birth_city,
-        ProfileForm.waiting_for_birth_city_confirm,
-        ProfileForm.waiting_for_birth_time_accuracy,
-        ProfileForm.waiting_for_birth_time_local,
-        ProfileForm.waiting_for_birth_time_confirm,
-        ProfileForm.waiting_for_birth_time_unknown_confirm
-    ]:
-        # Если пользователь в состоянии анкеты, не обрабатываем сообщение здесь
-        # Пусть его обработает соответствующий обработчик состояния
-        return
-    
-    # Проверяем, находится ли пользователь в состоянии создания дополнительного профиля
-    if current_state in [
-        AdditionalProfileForm.waiting_for_additional_name,
-        AdditionalProfileForm.waiting_for_additional_birth_date,
-        AdditionalProfileForm.waiting_for_additional_birth_city,
-        AdditionalProfileForm.waiting_for_additional_birth_city_confirm,
-        AdditionalProfileForm.waiting_for_additional_birth_time_accuracy,
-        AdditionalProfileForm.waiting_for_additional_birth_time_local,
-        AdditionalProfileForm.waiting_for_additional_birth_time_confirm,
-        AdditionalProfileForm.waiting_for_additional_birth_time_unknown_confirm
-    ]:
-        # Если пользователь в состоянии создания дополнительного профиля, не обрабатываем сообщение здесь
-        # Пусть его обработает соответствующий обработчик состояния
-        return
-    
-    # Проверяем, находится ли пользователь в состоянии ожидания вопроса
-    if current_state == QuestionForm.waiting_for_question:
-        # Если пользователь в состоянии ожидания вопроса, не обрабатываем сообщение здесь
-        # Пусть его обработает соответствующий обработчик состояния
-        return
-    
-    # Проверяем, находится ли пользователь в состоянии общения со службой заботы
-    if current_state == SupportForm.waiting_for_message:
-        # Если пользователь пишет в службу заботы, не обрабатываем сообщение здесь
-        # Пусть его обработает соответствующий обработчик состояния
-        return
-    
+    """Обработчик всех остальных сообщений (только вне активных состояний FSM)"""
     # Обновляем последнюю активность пользователя
     async with get_session() as session:
         uid = cast(TgUser, message.from_user).id
