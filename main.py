@@ -994,6 +994,16 @@ async def on_birth_city_confirm(callback: CallbackQuery, state: FSMContext):
         pass
 
     # Переходим к следующему шагу — спросить про время рождения
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="👍🏼 Ввести время рождения",
+                    callback_data="timeacc:exact",
+                )
+            ],
+        ]
+    )
     cb_msg = cast(Message, callback.message)
     await cb_msg.answer(
         "Приняла! Остался последний шаг 😼🪄\n\n"
@@ -1002,6 +1012,7 @@ async def on_birth_city_confirm(callback: CallbackQuery, state: FSMContext):
         "- точное по бирке/справке из роддома\n\n"
         "- примерное время (допустим, если вы знаете, что родились рано утром → введите 06:00; родились примерно в 12 → укажите 12:00 и т.д.)\n\n"
         "- если вообще НЕ знаете время рождения, даже примерное → укажите 12:00",
+        reply_markup=kb,
         parse_mode="HTML"
     )
     await state.set_state(ProfileForm.waiting_for_birth_time_accuracy)

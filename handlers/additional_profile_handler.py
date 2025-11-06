@@ -1020,6 +1020,24 @@ async def handle_additional_birth_city_callback(callback: CallbackQuery, state: 
             AdditionalProfileForm.waiting_for_additional_birth_time_accuracy
         )
         
+        # Создаем клавиатуру с кнопкой ввода времени
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="👍🏼 Ввести время рождения",
+                        callback_data="additional_timeacc:exact"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🚫 Отменить создание",
+                        callback_data="additional_profile:cancel"
+                    )
+                ]
+            ]
+        )
+        
         try:
             await callback.message.edit_text(
                 "Приняла! Остался последний шаг 😼🪄\n\n"
@@ -1028,6 +1046,7 @@ async def handle_additional_birth_city_callback(callback: CallbackQuery, state: 
                 "- точное по бирке/справке из роддома\n\n"
                 "- примерное время (допустим, если вы знаете, что родились рано утром → введите 06:00; родились примерно в 12 → укажите 12:00 и т.д.)\n\n"
                 "- если вообще НЕ знаете время рождения, даже примерное → укажите 12:00",
+                reply_markup=kb,
                 parse_mode="HTML"
             )
         except Exception:
