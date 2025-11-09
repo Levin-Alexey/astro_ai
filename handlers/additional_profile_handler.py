@@ -1025,7 +1025,7 @@ async def handle_additional_birth_city_callback(callback: CallbackQuery, state: 
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text="👍🏼 Ввести время рождения",
+                        text="🔮 Ввести время рождения",
                         callback_data="additional_timeacc:exact"
                     )
                 ],
@@ -1131,7 +1131,7 @@ async def handle_additional_time_unknown_callback(callback: CallbackQuery, state
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text="👍🏼 Ввести время рождения",
+                        text="🔮 Ввести время рождения",
                         callback_data="additional_timeacc:exact"
                     )
                 ],
