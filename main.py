@@ -2585,11 +2585,16 @@ async def process_additional_birth_city(message: Message, state: FSMContext):
     await handle_additional_birth_city(message, state)
 
 
-# Удалено: теперь используется callback обработчик для выбора времени с кнопками
-# @dp.message(AdditionalProfileForm.waiting_for_additional_birth_time_accuracy)
-# async def process_additional_birth_time_accuracy(message: Message, state: FSMContext):
-#     """Обработчик выбора точности времени для дополнительного профиля"""
-#     await handle_additional_birth_time_accuracy(message, state)
+@dp.message(AdditionalProfileForm.waiting_for_additional_birth_time_accuracy)
+async def process_additional_birth_time_accuracy_message(
+    message: Message, state: FSMContext
+):
+    """Позволяет ввести время рождения текстом до выбора кнопки точности"""
+    from handlers.additional_profile_handler import (
+        handle_additional_birth_time_accuracy_message,
+    )
+
+    await handle_additional_birth_time_accuracy_message(message, state)
 
 
 @dp.message(AdditionalProfileForm.waiting_for_additional_birth_time_local)

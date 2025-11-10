@@ -460,6 +460,26 @@ async def handle_additional_birth_time_accuracy_callback(callback: CallbackQuery
     await callback.answer()
 
 
+async def handle_additional_birth_time_accuracy_message(
+    message: Message,
+    state: FSMContext,
+):
+    """
+    Обрабатывает текстовое сообщение со временем рождения, если пользователь
+    отправил его сразу после вопроса о точности времени.
+    """
+    text = (message.text or "").strip()
+    if not text:
+        await message.answer(
+            "Пожалуйста, укажи время рождения текстом в формате ЧЧ:ММ ✍️",
+        )
+        return
+
+    await state.update_data(additional_birth_time_accuracy="exact")
+    await state.set_state(AdditionalProfileForm.waiting_for_additional_birth_time_local)
+    await handle_additional_birth_time_local(message, state)
+
+
 async def handle_additional_profile_cancel(callback: CallbackQuery, state: FSMContext):
     """Обработчик отмены создания дополнительного профиля"""
     if not callback.message:
