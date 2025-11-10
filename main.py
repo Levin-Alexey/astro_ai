@@ -1114,6 +1114,44 @@ async def set_birth_time_accuracy(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
+@dp.message(ProfileForm.waiting_for_birth_time_accuracy)
+async def receive_birth_time_during_accuracy(message: Message, state: FSMContext):
+    """
+    Позволяет пользователю сразу отправить время рождения текстом,
+    минуя нажатие на кнопку подтверждения точности времени.
+    """
+    text = (message.text or "").strip()
+    if not text:
+        await message.answer(
+            "Пожалуйста, укажи время рождения текстом в формате ЧЧ:ММ ✍️"
+        )
+        return
+
+    tg_user = cast(TgUser, message.from_user)
+    if tg_user is None:
+        await message.answer("Не удалось определить пользователя. Попробуй ещё раз.")
+        return
+
+    # Сохраняем признак того, что время указано точно
+    async with get_session() as session:
+        res = await session.execute(
+            select(DbUser).where(DbUser.telegram_id == tg_user.id)
+        )
+        user = res.scalar_one_or_none()
+        if user is None:
+            await message.answer(
+                "Похоже, анкета ещё не начата. Нажми /start 💫"
+            )
+            await state.clear()
+            return
+        user.birth_time_accuracy = "exact"
+        await session.commit()
+
+    await state.update_data(time_accuracy_type="exact")
+    await state.set_state(ProfileForm.waiting_for_birth_time_local)
+    await receive_birth_time_local(message, state)
+
+
 @dp.message(ProfileForm.waiting_for_birth_time_local)
 async def receive_birth_time_local(message: Message, state: FSMContext):
     text = (message.text or "").strip()
