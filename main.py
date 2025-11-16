@@ -1,7 +1,7 @@
 ﻿import asyncio
 import logging
 from aiogram import Bot, Dispatcher, F
-from aiogram.filters import Command
+from aiogram.filters import Command, BaseFilter
 from aiogram.types import (
     Message,
     InlineKeyboardMarkup,
@@ -99,7 +99,7 @@ payment_handler = None
 
 
 # Кастомный фильтр для исключения определенных состояний
-class NotInStatesFilter:
+class NotInStatesFilter(BaseFilter):
     """
     Фильтр, который пропускает сообщения только если текущее состояние
     НЕ находится в списке исключенных состояний.
