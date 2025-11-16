@@ -105,7 +105,15 @@ class NotInStatesFilter:
     НЕ находится в списке исключенных состояний.
     """
     def __init__(self, excluded_states: list):
-        self.excluded_states = excluded_states
+        # Извлекаем имена состояний из объектов State
+        self.excluded_states = set()
+        for s in excluded_states:
+            # Если это объект State, берем его .state (строка вида "ProfileForm:waiting_for_...")
+            if hasattr(s, 'state'):
+                self.excluded_states.add(s.state)
+            else:
+                # Если это уже строка, добавляем как есть
+                self.excluded_states.add(str(s))
     
     async def __call__(self, message: Message, state: FSMContext) -> bool:
         current_state = await state.get_state()
