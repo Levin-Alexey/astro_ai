@@ -1,7 +1,7 @@
 ﻿import asyncio
 import logging
 from aiogram import Bot, Dispatcher, F
-from aiogram.filters import Command
+from aiogram.filters import Command, BaseFilter
 from aiogram.types import (
     Message,
     InlineKeyboardMarkup,
@@ -99,14 +99,20 @@ payment_handler = None
 
 
 # Кастомный фильтр для исключения определенных состояний
-class NotInStatesFilter:
+class NotInStatesFilter(BaseFilter):
     """
     Фильтр, который пропускает сообщения только если текущее состояние
     НЕ находится в списке исключенных состояний.
     """
     def __init__(self, excluded_states: list):
-        self.excluded_states = excluded_states
-    
+        # Сохраняем имена состояний (строки вида "ProfileForm:waiting_for_...")
+        names: set[str] = set()
+        for s in excluded_states:
+            # Если передали объект State, берем его .state; иначе приводим к строке
+            state_name = getattr(s, "state", None)
+            names.add(state_name if state_name is not None else str(s))
+        self.excluded_states = names
+
     async def __call__(self, message: Message, state: FSMContext) -> bool:
         current_state = await state.get_state()
         # Возвращаем True только если состояние НЕ в списке исключенных
