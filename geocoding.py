@@ -6,7 +6,7 @@ import aiohttp
 from typing import Any, Optional, TypedDict
 from urllib.parse import urlencode
 
-from config import GEOCODER_BASE_URL, GEOCODER_USER_AGENT
+from config import GEOCODER_BASE_URL, TOMTOM_API_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ async def geocode_city_ru(
     max_retries: int = 3,
     timeout_seconds: int = 20
 ) -> Optional[GeoResult]:
-    """Геокодирует название населённого пункта на русском через Nominatim.
+    """Геокодирует населённый пункт через TomTom Geocoding API.
 
     Возвращает первый релевантный результат или None, если ничего не найдено.
     Включает retry-логику с экспоненциальной задержкой.
@@ -46,18 +46,19 @@ async def geocode_city_ru(
     if not q:
         return None
 
+    # TomTom Geocoding API endpoint format:
+    # https://api.tomtom.com/search/2/geocode/{query}.json?key={API_Key}&language=ru
     params = {
-        "q": q,
-        "format": "jsonv2",
-        "addressdetails": 1,
+        "key": TOMTOM_API_KEY,
+        "language": "ru-RU",
         "limit": 1,
-        "accept-language": "ru",
-    }
-    headers = {
-        "User-Agent": GEOCODER_USER_AGENT,
     }
 
-    url = f"{GEOCODER_BASE_URL}?{urlencode(params)}"
+    # URL-encode query and build the full URL
+    from urllib.parse import quote
+    encoded_query = quote(q)
+    url = f"{GEOCODER_BASE_URL}/{encoded_query}.json?{urlencode(params)}"
+    
     timeout = aiohttp.ClientTimeout(total=timeout_seconds)
 
     # Задержки между попытками: 1, 2, 4 секунды
@@ -75,9 +76,7 @@ async def geocode_city_ru(
             else:
                 logger.info(f"Attempting to geocode city: '{q}'")
 
-            async with aiohttp.ClientSession(
-                timeout=timeout, headers=headers
-            ) as session:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(url) as resp:
                     if resp.status != 200:
                         text = await resp.text()
@@ -95,18 +94,37 @@ async def geocode_city_ru(
 
                     data: Any = await resp.json()
 
-            if not data:
+            # TomTom response format: { "results": [...] }
+            results = data.get("results", [])
+            if not results:
                 logger.warning(f"No results found for '{q}'")
                 return None
 
             # Берём первый результат
-            item = data[0]
+            item = results[0]
             try:
-                display_name = item.get("display_name")
-                address = item.get("address", {}) or {}
-                country_code = address.get("country_code")
-                lat = float(item["lat"])  # type: ignore[index]
-                lon = float(item["lon"])  # type: ignore[index]
+                # TomTom response structure
+                address = item.get("address", {})
+                position = item.get("position", {})
+                
+                # Build place name from address components
+                place_parts = []
+                if address.get("municipality"):
+                    place_parts.append(address["municipality"])
+                elif address.get("localName"):
+                    place_parts.append(address["localName"])
+                if address.get("countrySubdivision"):
+                    place_parts.append(address["countrySubdivision"])
+                if address.get("country"):
+                    place_parts.append(address["country"])
+                
+                freeform = address.get("freeformAddress")
+                place_name = freeform or ", ".join(place_parts) or q
+                country_code = (
+                    address.get("countryCode", "").lower() or None
+                )
+                lat = float(position["lat"])
+                lon = float(position["lon"])
             except Exception as e:
                 error_msg = f"Invalid geocoder payload: {e}"
                 if attempt < max_retries - 1:
@@ -117,7 +135,6 @@ async def geocode_city_ru(
                     continue
                 raise GeocodingError(error_msg)
 
-            place_name = display_name or q
             logger.info(
                 f"Geocoding successful for '{q}': {place_name} "
                 f"(attempt {attempt + 1})"
