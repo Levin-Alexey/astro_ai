@@ -8,6 +8,7 @@
 
 import asyncio
 import logging
+import dateparser
 from datetime import datetime, date, time
 
 from aiogram.types import (
@@ -70,6 +71,7 @@ class AdditionalProfileForm(StatesGroup):
     """FSM состояния для создания дополнительного профиля"""
     waiting_for_additional_name = State()
     waiting_for_additional_birth_date = State()
+    waiting_for_additional_birth_date_confirm = State()
     waiting_for_additional_birth_city = State()
     waiting_for_additional_birth_city_confirm = State()
     waiting_for_additional_birth_time_accuracy = State()
@@ -184,9 +186,12 @@ async def handle_additional_birth_date(message: Message, state: FSMContext):
     logger.info(f"🔍 Received birth date input: '{text}' from user {message.from_user.id if message.from_user else 'unknown'}")
     
     try:
-        dt = datetime.strptime(text, "%d.%m.%Y").date()
+        dt = dateparser.parse(text, languages=['ru', 'en'])
+        if dt is None:
+            raise ValueError("dateparser returned None")
+        dt = dt.date()
         logger.info(f"✅ Successfully parsed date: {dt}")
-    except ValueError as e:
+    except (ValueError, TypeError) as e:
         logger.warning(f"❌ Failed to parse date '{text}': {e}")
         await message.answer(
             "Ой... я не могу распознать это 😿\n"
@@ -528,7 +533,10 @@ async def handle_additional_birth_time_local(message: Message, state: FSMContext
 
     try:
         # Парсим время
-        time_obj = datetime.strptime(text, "%H:%M").time()
+        dt = dateparser.parse(text, languages=['ru', 'en'])
+        if dt is None:
+            raise ValueError("dateparser returned None")
+        time_obj = dt.time()
         logger.info(f"Parsed time: {time_obj}")
 
         # Сохраняем время во временных данных
@@ -565,7 +573,7 @@ async def handle_additional_birth_time_local(message: Message, state: FSMContext
             reply_markup=kb
         )
 
-    except ValueError as e:
+    except (ValueError, TypeError) as e:
         logger.warning(f"❌ Failed to parse time '{text}': {e}")
         await message.answer(
             "Ой... я не могу распознать это 😿\n"
@@ -1015,6 +1023,7 @@ async def handle_additional_birth_date_callback(callback: CallbackQuery, state: 
             pass
     elif action == "retry":
         # Возвращаемся к вводу даты
+        await state.set_state(AdditionalProfileForm.waiting_for_additional_birth_date)
         try:
             await callback.message.edit_text(
                 "📆 Напиши дату рождения в формате ДД.ММ.ГГГГ\n\n"

@@ -1,5 +1,6 @@
 ﻿import asyncio
 import logging
+import dateparser
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, BaseFilter
 from aiogram.types import (
@@ -307,6 +308,7 @@ async def on_start_new_analysis(callback: CallbackQuery):
 class ProfileForm(StatesGroup):
     waiting_for_first_name = State()
     waiting_for_birth_date = State()
+    waiting_for_birth_date_confirm = State()
     waiting_for_birth_city = State()
     waiting_for_birth_city_confirm = State()
     waiting_for_birth_time_accuracy = State()
@@ -686,7 +688,7 @@ async def handle_additional_gender_callback_wrapper(callback: CallbackQuery, sta
     await handle_additional_gender_callback(callback, state)
 
 
-@dp.callback_query(F.data.startswith("additional_birth_date:"))
+@dp.callback_query(AdditionalProfileForm.waiting_for_additional_birth_date_confirm, F.data.startswith("additional_birth_date:"))
 async def handle_additional_birth_date_callback_wrapper(callback: CallbackQuery, state: FSMContext):
     """Обертка для обработчика подтверждения даты рождения дополнительного профиля"""
     await handle_additional_birth_date_callback(callback, state)
@@ -754,12 +756,17 @@ async def receive_first_name(message: Message, state: FSMContext):
     )
 
 
+
 @dp.message(ProfileForm.waiting_for_birth_date)
 async def receive_birth_date(message: Message, state: FSMContext):
     text = (message.text or "").strip()
     try:
-        dt = datetime.strptime(text, "%d.%m.%Y").date()
-    except ValueError:
+        # Используем dateparser для более гибкого парсинга
+        dt = dateparser.parse(text, languages=['ru', 'en'])
+        if dt is None:
+            raise ValueError("dateparser returned None")
+        dt = dt.date()
+    except (ValueError, TypeError):
         await message.answer(
             "Ой... я не могу распознать это 😿\n"
             "👇🏼 Введи дату рождения еще раз в формате ДД.ММ.ГГГГ (например, 23.01.1998)"
@@ -787,88 +794,86 @@ async def receive_birth_date(message: Message, state: FSMContext):
         f"Дата рождения: {date_str} -\n" "Верно? Нажми кнопку 👇🏼",
         reply_markup=kb,
     )
-    # Остаёмся в состоянии ожидания даты до подтверждения/переввода
-    await state.set_state(ProfileForm.waiting_for_birth_date)
+    # Переходим в состояние ожидания подтверждения
+    await state.set_state(ProfileForm.waiting_for_birth_date_confirm)
 
 
-@dp.callback_query(F.data == "bdate:confirm")
-async def on_birth_date_confirm(
-    callback: CallbackQuery, state: FSMContext
-):
-    # Подтверждение: записать дату, определить знак и перейти к городу
-    data = await state.get_data()
-    iso = data.get("pending_birth_date")
-    if not iso:
-        await callback.answer(
-            "Не нашла дату. Пожалуйста, введите дату снова.",
-            show_alert=True,
-        )
-        return
+@dp.callback_query(ProfileForm.waiting_for_birth_date_confirm, F.data.startswith("bdate:"))
+async def on_birth_date_confirm_or_redo(callback: CallbackQuery, state: FSMContext):
+    action = callback.data.split(":")[1]
 
-    from datetime import date as _date
-    try:
-        dt = _date.fromisoformat(iso)
-    except Exception:
-        await callback.answer(
-            "Формат даты потерялся, введите дату ещё раз.",
-            show_alert=True,
-        )
-        return
-
-    cb_user = cast(TgUser, callback.from_user)
-    async with get_session() as session:
-        res = await session.execute(
-            select(DbUser).where(DbUser.telegram_id == cb_user.id)
-        )
-        user = res.scalar_one_or_none()
-        if user is None:
+    if action == "confirm":
+        # Подтверждение: записать дату, определить знак и перейти к городу
+        data = await state.get_data()
+        iso = data.get("pending_birth_date")
+        if not iso:
             await callback.answer(
-                "Похоже, анкета ещё не начата. Нажми /start 💫",
+                "Не нашла дату. Пожалуйста, введите дату снова.",
                 show_alert=True,
             )
-            await state.clear()
+            # Возвращаем в состояние ввода даты
+            await state.set_state(ProfileForm.waiting_for_birth_date)
+            await callback.message.edit_text("Пожалуйста, введи дату рождения в формате ДД.ММ.ГГГГ")
             return
-        user.birth_date = dt
-        sign_enum = zodiac_sign_ru_for_date(dt)
-        user.zodiac_sign = sign_enum
 
-    await state.update_data(pending_birth_date=None)
-    await state.set_state(ProfileForm.waiting_for_birth_city)
+        from datetime import date as _date
+        try:
+            dt = _date.fromisoformat(iso)
+        except Exception:
+            await callback.answer(
+                "Формат даты потерялся, введите дату ещё раз.",
+                show_alert=True,
+            )
+            # Возвращаем в состояние ввода даты
+            await state.set_state(ProfileForm.waiting_for_birth_date)
+            await callback.message.edit_text("Пожалуйста, введи дату рождения в формате ДД.ММ.ГГГГ")
+            return
 
-    cb_msg = cast(Message, callback.message)
-    sign = sign_enum.value
-    await cb_msg.answer(
-        (
-            f"Понятно, значит ты у нас {sign} 🤭 интересно, что еще зашифровано в твоей карте \n\n"
-            "📍 <b>Далее напиши место своего рождения</b>\n\n"
-            "Обратите внимание: \n"
-            "❕ если это крупный город, укажите его (пример: родились в Краснодаре → укажите «Краснодар») \n"
-            "❕ если это небольшой город, укажите его с областью (пример: родились в г. Березовском Свердловской обл. → укажите «Березовский, Свердловская область») \n"
-            "❕ если это село/деревня/поселок и пр., укажите ближайший крупный город (пример: родились в пос. Октябрьском Свердловской обл. → укажите «Екатеринбург»)"
-        ),
-        parse_mode="HTML"
-    )
-    try:
-        await cb_msg.edit_reply_markup(reply_markup=None)
-    except Exception:
-        pass
-    await callback.answer()
+        cb_user = cast(TgUser, callback.from_user)
+        async with get_session() as session:
+            res = await session.execute(
+                select(DbUser).where(DbUser.telegram_id == cb_user.id)
+            )
+            user = res.scalar_one_or_none()
+            if user is None:
+                await callback.answer(
+                    "Похоже, анкета ещё не начата. Нажми /start 💫",
+                    show_alert=True,
+                )
+                await state.clear()
+                return
+            user.birth_date = dt
+            sign_enum = zodiac_sign_ru_for_date(dt)
+            user.zodiac_sign = sign_enum
+            await session.commit()
 
+        await state.update_data(pending_birth_date=None)
+        await state.set_state(ProfileForm.waiting_for_birth_city)
 
-@dp.callback_query(F.data == "bdate:redo")
-async def on_birth_date_redo(callback: CallbackQuery, state: FSMContext):
-    # Просим ввести дату снова
-    await state.update_data(pending_birth_date=None)
-    cb_msg = cast(Message, callback.message)
-    await cb_msg.answer(
-        "Окей! Пришли дату рождения в формате ДД.ММ.ГГГГ\n"
-        "например: 23.04.1987"
-    )
-    try:
-        await cb_msg.edit_reply_markup(reply_markup=None)
-    except Exception:
-        pass
-    await state.set_state(ProfileForm.waiting_for_birth_date)
+        cb_msg = cast(Message, callback.message)
+        sign = sign_enum.value
+        await cb_msg.edit_text(
+            (
+                f"Понятно, значит ты у нас {sign} 🤭 интересно, что еще зашифровано в твоей карте \n\n"
+                "📍 <b>Далее напиши место своего рождения</b>\n\n"
+                "Обратите внимание: \n"
+                "❕ если это крупный город, укажите его (пример: родились в Краснодаре → укажите «Краснодар») \n"
+                "❕ если это небольшой город, укажите его с областью (пример: родились в г. Березовском Свердловской обл. → укажите «Березовский, Свердловская область») \n"
+                "❕ если это село/деревня/поселок и пр., укажите ближайший крупный город (пример: родились в пос. Октябрьском Свердловской обл. → укажите «Екатеринбург»)"
+            ),
+            parse_mode="HTML"
+        )
+    
+    elif action == "redo":
+        # Просим ввести дату снова
+        await state.update_data(pending_birth_date=None)
+        cb_msg = cast(Message, callback.message)
+        await cb_msg.edit_text(
+            "Окей! Пришли дату рождения в формате ДД.ММ.ГГГГ\n"
+            "например: 23.04.1987"
+        )
+        await state.set_state(ProfileForm.waiting_for_birth_date)
+
     await callback.answer()
 
 
@@ -1028,6 +1033,18 @@ async def on_birth_city_confirm(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
+@dp.message(ProfileForm.waiting_for_birth_city_confirm)
+async def handle_text_during_birth_city_confirm(message: Message, state: FSMContext):
+    """Обработчик текстовых сообщений в состоянии подтверждения города"""
+    await message.answer(
+        "👆🏼 Пожалуйста, используй кнопки выше для подтверждения места рождения\n\n"
+        "Нажми:\n"
+        "✅ <b>Верно</b> - если место указано правильно\n"
+        "🔄 <b>Ввести заново</b> - если хочешь изменить место",
+        parse_mode="HTML"
+    )
+
+
 @dp.callback_query(F.data == "bcity:redo")
 async def on_birth_city_redo(callback: CallbackQuery, state: FSMContext):
     """Просим ввести место рождения заново"""
@@ -1163,11 +1180,13 @@ async def receive_birth_time_during_accuracy(message: Message, state: FSMContext
 @dp.message(ProfileForm.waiting_for_birth_time_local)
 async def receive_birth_time_local(message: Message, state: FSMContext):
     text = (message.text or "").strip()
-    from datetime import datetime as dt_mod
     try:
-        # Принимаем формат ЧЧ:ММ
-        t = dt_mod.strptime(text, "%H:%M").time()
-    except ValueError:
+        # Используем dateparser для более гибкого парсинга
+        dt = dateparser.parse(text, languages=['ru', 'en'])
+        if dt is None:
+            raise ValueError("dateparser returned None")
+        t = dt.time()
+    except (ValueError, TypeError):
         await message.answer(
             "Ой... я не могу распознать это 😿\n"
             "👇🏼 Введи время рождения еще раз в формате ЧЧ:ММ (например, 11:05)"
@@ -1318,6 +1337,18 @@ async def on_birth_time_redo(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
+@dp.message(ProfileForm.waiting_for_birth_time_confirm)
+async def handle_text_during_birth_time_confirm(message: Message, state: FSMContext):
+    """Обработчик текстовых сообщений в состоянии подтверждения времени"""
+    await message.answer(
+        "👆🏼 Пожалуйста, используй кнопки выше для подтверждения времени рождения\n\n"
+        "Нажми:\n"
+        "✅ <b>Верно</b> - если время указано правильно\n"
+        "🔄 <b>Ввести заново</b> - если хочешь изменить время",
+        parse_mode="HTML"
+    )
+
+
 @dp.callback_query(F.data.startswith("btime_unknown:"))
 async def on_birth_time_unknown(callback: CallbackQuery, state: FSMContext):
     """Обработчик кнопки для подтверждения работы без времени рождения"""
@@ -1375,6 +1406,18 @@ async def on_birth_time_unknown_specify(
     )
     await state.set_state(ProfileForm.waiting_for_birth_time_accuracy)
     await callback.answer()
+
+
+@dp.message(ProfileForm.waiting_for_birth_time_unknown_confirm)
+async def handle_text_during_birth_time_unknown_confirm(message: Message, state: FSMContext):
+    """Обработчик текстовых сообщений в состоянии подтверждения работы без времени"""
+    await message.answer(
+        "👆🏼 Пожалуйста, используй кнопки выше\n\n"
+        "Выбери:\n"
+        "✅ <b>Верно</b> - если хочешь продолжить без времени рождения\n"
+        "🔄 <b>Указать время</b> - если всё-таки хочешь указать время",
+        parse_mode="HTML"
+    )
 
 
 @dp.callback_query(F.data == "start_moon_analysis")
@@ -2609,6 +2652,30 @@ async def process_additional_birth_time_accuracy_message(
 async def process_additional_birth_time_local(message: Message, state: FSMContext):
     """Обработчик ввода времени рождения для дополнительного профиля"""
     await handle_additional_birth_time_local(message, state)
+
+
+@dp.message(AdditionalProfileForm.waiting_for_additional_birth_time_confirm)
+async def handle_text_during_additional_birth_time_confirm(message: Message, state: FSMContext):
+    """Обработчик текстовых сообщений в состоянии подтверждения времени дополнительного профиля"""
+    await message.answer(
+        "👆🏼 Пожалуйста, используй кнопки выше для подтверждения времени рождения\n\n"
+        "Нажми:\n"
+        "✅ <b>Верно</b> - если время указано правильно\n"
+        "🔄 <b>Ввести заново</b> - если хочешь изменить время",
+        parse_mode="HTML"
+    )
+
+
+@dp.message(AdditionalProfileForm.waiting_for_additional_birth_time_unknown_confirm)
+async def handle_text_during_additional_birth_time_unknown_confirm(message: Message, state: FSMContext):
+    """Обработчик текстовых сообщений в состоянии подтверждения работы без времени для дополнительного профиля"""
+    await message.answer(
+        "👆🏼 Пожалуйста, используй кнопки выше\n\n"
+        "Выбери:\n"
+        "✅ <b>Верно</b> - если хочешь продолжить без времени рождения\n"
+        "🔄 <b>Указать время</b> - если всё-таки хочешь указать время",
+        parse_mode="HTML"
+    )
 
 
 @dp.message(QuestionForm.waiting_for_question)
@@ -4015,6 +4082,7 @@ async def check_user_payment_access(user_id: int, planet: str) -> bool:
     # Состояния основной анкеты
     ProfileForm.waiting_for_first_name,
     ProfileForm.waiting_for_birth_date,
+    ProfileForm.waiting_for_birth_date_confirm,  # ДОБАВЛЕНО: подтверждение даты
     ProfileForm.waiting_for_birth_city,
     ProfileForm.waiting_for_birth_city_confirm,
     ProfileForm.waiting_for_birth_time_accuracy,
@@ -4024,6 +4092,7 @@ async def check_user_payment_access(user_id: int, planet: str) -> bool:
     # Состояния дополнительного профиля
     AdditionalProfileForm.waiting_for_additional_name,
     AdditionalProfileForm.waiting_for_additional_birth_date,
+    AdditionalProfileForm.waiting_for_additional_birth_date_confirm,  # ДОБАВЛЕНО: подтверждение даты
     AdditionalProfileForm.waiting_for_additional_birth_city,
     AdditionalProfileForm.waiting_for_additional_birth_city_confirm,
     AdditionalProfileForm.waiting_for_additional_birth_time_accuracy,
