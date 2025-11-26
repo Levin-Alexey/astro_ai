@@ -186,7 +186,11 @@ async def handle_additional_birth_date(message: Message, state: FSMContext):
     logger.info(f"🔍 Received birth date input: '{text}' from user {message.from_user.id if message.from_user else 'unknown'}")
     
     try:
-        dt = dateparser.parse(text, languages=['ru', 'en'])
+        dt = dateparser.parse(
+            text,
+            languages=['ru', 'en'],
+            settings={'DATE_ORDER': 'DMY'}  # День-Месяц-Год
+        )
         if dt is None:
             raise ValueError("dateparser returned None")
         dt = dt.date()

@@ -762,8 +762,12 @@ async def receive_first_name(message: Message, state: FSMContext):
 async def receive_birth_date(message: Message, state: FSMContext):
     text = (message.text or "").strip()
     try:
-        # Используем dateparser для более гибкого парсинга
-        dt = dateparser.parse(text, languages=['ru', 'en'])
+        # Используем dateparser для более гибкого парсинга с явным форматом DD.MM.YYYY
+        dt = dateparser.parse(
+            text,
+            languages=['ru', 'en'],
+            settings={'DATE_ORDER': 'DMY'}  # День-Месяц-Год
+        )
         if dt is None:
             raise ValueError("dateparser returned None")
         dt = dt.date()
