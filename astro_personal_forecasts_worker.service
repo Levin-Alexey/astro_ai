@@ -1,0 +1,17 @@
+[Unit]
+Description=Astro Personal Forecasts Worker
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/astro_ai
+Environment=PATH=/root/astro_ai/venv/bin
+ExecStart=/root/astro_ai/venv/bin/python /root/astro_ai/forecast_worker.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

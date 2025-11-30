@@ -18,7 +18,7 @@ from sqlalchemy import select
 
 from db import get_session, init_engine, dispose_engine
 from models import User, DailyForecast
-from config import BOT_TOKEN, OPENROUTER_API_KEY
+from config import BOT_TOKEN
 from queue_sender import PERSONAL_FORECASTS_QUEUE_NAME
 
 # Настройка логирования
@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://astro_user:astro_password_123@31.128.40.111:5672/")
 BOT_API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") # Берем из окружения
 
 DAILY_FORECAST_PROMPT = """Ты астролог с опытом 10 лет, который составляет индивидуальные прогнозы на день. Не говори об этом формально, не указывай сухую астрологическую информацию. Пиши, как близкий друг, который видит суть и не боится говорить честно. Стиль — живой, человеческий, прямой. Ты можешь быть и жёстким, если это поможет человеку очнуться. Но без морали. Используй разговорный стиль без канцеляризмов. Опиши, как положение может проявляться в повседневной жизни: в реакциях, привычках, мелочах. Обращайся к человеку по имени. 
 

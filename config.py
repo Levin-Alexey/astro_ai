@@ -37,3 +37,6 @@ ASTROLOGY_API_KEY = os.getenv(
     "ASTROLOGY_API_KEY",
     "ded745efefef2a72f117e0c32d1f1c853dc485ac"
 )
+
+# Настройки OpenRouter (для LLM)
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
