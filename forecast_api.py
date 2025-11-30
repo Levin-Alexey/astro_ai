@@ -66,6 +66,8 @@ class AstrologyAPIClient:
             "current_month": current_date.month,
             "current_year": current_date.year
         }
+        
+        logger.info(f"Sending payload to AstrologyAPI: {payload}") # Добавлено логирование payload
 
         async with aiohttp.ClientSession() as session:
             try:
