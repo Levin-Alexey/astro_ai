@@ -68,7 +68,7 @@ class OpenRouterClient:
         )
         
         payload = {
-            "model": "deepseek/deepseek-chat-v3.1",
+            "model": "google/gemini-2.5-flash",
             "messages": [
                 {
                     "role": "user",
