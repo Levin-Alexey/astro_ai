@@ -128,7 +128,8 @@ async def send_telegram_message(chat_id: int, text: str):
             
     async with aiohttp.ClientSession() as session:
         for i, part in enumerate(parts):
-            payload = {"chat_id": chat_id, "text": part, "parse_mode": "Markdown"}
+            # Убрали parse_mode="Markdown", чтобы избежать ошибок с незакрытыми тегами при разбивке
+            payload = {"chat_id": chat_id, "text": part}
             try:
                 async with session.post(url, json=payload) as response:
                     if response.status != 200:
