@@ -61,8 +61,10 @@ class AstrologyAPIClient:
             "lat": birth_lat,
             "lon": birth_lon,
             "tzone": birth_tzid_hours,
-            # Не передаем current_date, так как в примере testapi.js его нет,
-            # и API вероятно использует текущую дату сервера.
+            # Передаем текущую дату для прогноза на сегодня
+            "current_date": current_date.day,
+            "current_month": current_date.month,
+            "current_year": current_date.year
         }
 
         async with aiohttp.ClientSession() as session:
