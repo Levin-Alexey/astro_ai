@@ -76,51 +76,52 @@ async def handle_personal_forecasts(callback: CallbackQuery, state: FSMContext):
     """
     Обработчик нажатия на кнопку '🔥 Персональные прогнозы'
     """
-    user_id = callback.from_user.id
-    logger.info(f"handle_personal_forecasts вызвана для user_id={user_id}")
+    telegram_id = callback.from_user.id
+    logger.info(f"handle_personal_forecasts вызвана для telegram_id={telegram_id}")
 
     # Ответ на callback, чтобы убрать часики
     await callback.answer()
 
     async with get_session() as session:
-        active_subscription = await get_active_subscription(session, user_id)
+        # Сначала получаем user_id (PK) из БД
+        user_db_id = await get_user_id_by_telegram_id(session, telegram_id)
+        
+        if not user_db_id:
+            await callback.message.answer("❌ Ошибка: пользователь не найден в базе данных. Попробуйте перезапустить бота через /start")
+            return
+
+        # Проверяем подписку по user_db_id (PK)
+        active_subscription = await get_active_subscription(session, user_db_id)
 
         if active_subscription:
             await callback.message.answer("⏳ Генерирую ваш прогноз на сегодня...")
             
-            # Получаем PK пользователя для запроса к БД
-            user_db_id = await get_user_id_by_telegram_id(session, user_id)
+            # Получаем данные от AstrologyAPI
+            api_result = await get_forecast_data(user_db_id)
             
-            if user_db_id:
-                # Получаем данные от AstrologyAPI
-                api_result = await get_forecast_data(user_db_id)
+            if api_result.get("success"):
+                # Формируем полные данные для воркера
+                full_data = api_result["data"]
+                # Добавляем данные профиля, если они есть (добавлены в get_forecast_data)
+                full_data["user_profile"] = api_result.get("profile_data")
                 
-                if api_result.get("success"):
-                    # Формируем полные данные для воркера
-                    full_data = api_result["data"]
-                    # Добавляем данные профиля, если они есть (добавлены в get_forecast_data)
-                    full_data["user_profile"] = api_result.get("profile_data")
-                    
-                    # Подписка активна, отправляем запрос на генерацию прогноза в RabbitMQ
-                    success = await send_personal_forecast_to_queue(
-                        user_id=user_id, # telegram_id для отправки сообщения
-                        astrology_data=full_data
-                    )
+                # Подписка активна, отправляем запрос на генерацию прогноза в RabbitMQ
+                success = await send_personal_forecast_to_queue(
+                    user_id=telegram_id, # telegram_id для отправки сообщения в чат
+                    astrology_data=full_data
+                )
 
-                    if success:
-                        # Уведомление, что процесс пошел
-                        # Воркер сам отправит результат
-                        pass
-                    else:
-                        await callback.message.answer(
-                            "Произошла ошибка при отправке запроса на прогноз. Пожалуйста, попробуйте позже."
-                        )
+                if success:
+                    # Уведомление, что процесс пошел
+                    pass
                 else:
-                    error_msg = api_result.get("error", "Unknown error")
-                    logger.error(f"Forecast API error for user {user_id}: {error_msg}")
-                    await callback.message.answer(f"❌ Не удалось получить астрологические данные: {error_msg}")
+                    await callback.message.answer(
+                        "Произошла ошибка при отправке запроса на прогноз. Пожалуйста, попробуйте позже."
+                    )
             else:
-                await callback.message.answer("❌ Пользователь не найден в системе.")
+                error_msg = api_result.get("error", "Unknown error")
+                logger.error(f"Forecast API error for user {telegram_id}: {error_msg}")
+                await callback.message.answer(f"❌ Не удалось получить астрологические данные: {error_msg}")
         else:
             # Подписка неактивна, предлагаем купить
             buy_forecast_kb = InlineKeyboardMarkup(
