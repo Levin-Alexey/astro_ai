@@ -29,8 +29,7 @@ class AstrologyAPIClient:
         birth_datetime: datetime,
         birth_lat: float,
         birth_lon: float,
-        birth_tzid_hours: float,
-        current_date: date
+        birth_tzid_hours: float
     ) -> Dict[str, Any]:
         """
         Получает ежедневные натальные транзиты с AstrologyAPI.
@@ -61,10 +60,8 @@ class AstrologyAPIClient:
             "lat": birth_lat,
             "lon": birth_lon,
             "tzone": birth_tzid_hours,
-            # Передаем текущую дату для прогноза на сегодня
-            "current_date": current_date.day,
-            "current_month": current_date.month,
-            "current_year": current_date.year
+            # Ключи current_date, current_month, current_year удалены,
+            # так как их нет в testapi.js и они, возможно, вызывают ошибку с датой.
         }
         
         logger.info(f"Sending payload to AstrologyAPI: {payload}") # Добавлено логирование payload
@@ -73,7 +70,9 @@ class AstrologyAPIClient:
             try:
                 async with session.post(url, headers=headers, json=payload, timeout=60) as response:
                     if response.status == 200:
-                        return {"success": True, "data": await response.json()}
+                        json_data = await response.json()
+                        logger.info(f"AstrologyAPI response received: {json.dumps(json_data, indent=2)}") # Логируем полный ответ
+                        return {"success": True, "data": json_data}
                     else:
                         error_text = await response.text()
                         logger.error(f"AstrologyAPI error {response.status}: {error_text}")
@@ -143,8 +142,7 @@ async def get_forecast_data(user_id: int, profile_id: Optional[int] = None) -> D
         birth_datetime=profile_data["birth_datetime"],
         birth_lat=profile_data["birth_lat"],
         birth_lon=profile_data["birth_lon"],
-        birth_tzid_hours=profile_data["tz_offset_hours"],
-        current_date=date.today()
+        birth_tzid_hours=profile_data["tz_offset_hours"]
     )
     
     # Добавляем метаданные профиля к ответу, чтобы воркер знал имя/пол
