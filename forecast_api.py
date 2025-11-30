@@ -132,6 +132,7 @@ async def get_forecast_data(user_id: int, profile_id: Optional[int] = None) -> D
     if not all([profile_data["birth_datetime"], profile_data["birth_lat"]]):
         return {"success": False, "error": "Incomplete birth data"}
 
+    logger.info(f"Using USER_ID: {ASTROLOGY_API_USER_ID}, API_KEY len: {len(str(ASTROLOGY_API_KEY))}")
     client = AstrologyAPIClient(ASTROLOGY_API_USER_ID, ASTROLOGY_API_KEY)
     
     api_response = await client.get_natal_transits_daily(
