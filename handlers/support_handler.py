@@ -83,8 +83,14 @@ async def handle_support_message(message: Message, state: FSMContext):
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="💵 Купить разбор",
+                            text="🪐 Купить разборы планет",
                             callback_data="buy_analysis"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🔥 Персональные прогнозы",
+                            callback_data="personal_forecasts"
                         )
                     ],
                     [

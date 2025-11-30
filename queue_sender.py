@@ -6,7 +6,8 @@ import asyncio
 import json
 import logging
 import os
-from typing import Optional
+from datetime import date # Добавлен импорт date
+from typing import Optional, Dict, Any
 
 import aio_pika
 
@@ -27,7 +28,7 @@ MERCURY_RECOMMENDATIONS_QUEUE_NAME = "mercury_recommendations"
 VENUS_RECOMMENDATIONS_QUEUE_NAME = "venus_recommendations"
 MARS_RECOMMENDATIONS_QUEUE_NAME = "mars_recommendations"
 QUESTIONS_QUEUE_NAME = "questions"
-
+PERSONAL_FORECASTS_QUEUE_NAME = "personal_forecasts" # Новая очередь
 
 class QueueSender:
     """Отправитель сообщений в очередь"""
@@ -64,6 +65,9 @@ class QueueSender:
         )
         await self.channel.declare_queue(
             QUESTIONS_QUEUE_NAME, durable=True
+        )
+        await self.channel.declare_queue( # Объявляем новую очередь
+            PERSONAL_FORECASTS_QUEUE_NAME, durable=True
         )
 
         logger.info("Queue sender initialized")
@@ -629,6 +633,59 @@ class QueueSender:
             return False
 
 
+    async def send_personal_forecast_for_processing(
+        self,
+        user_id: int,
+        astrology_data: Dict[str, Any],
+        profile_id: Optional[int] = None
+    ) -> bool:
+        """
+        Отправляет запрос на генерацию персонального прогноза в очередь.
+
+        Args:
+            user_id: ID пользователя.
+            astrology_data: Данные, полученные от AstrologyAPI.
+            profile_id: ID дополнительного профиля (опционально).
+
+        Returns:
+            True если сообщение отправлено успешно.
+        """
+        if not self.channel:
+            await self.initialize()
+
+        message_data = {
+            "user_id": user_id,
+            "astrology_data": astrology_data,
+            "timestamp": asyncio.get_event_loop().time()
+        }
+        
+        if profile_id is not None:
+            message_data["profile_id"] = profile_id
+
+        try:
+            message = aio_pika.Message(
+                body=json.dumps(message_data).encode(),
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+            )
+
+            await self.channel.default_exchange.publish(
+                message,
+                routing_key=PERSONAL_FORECASTS_QUEUE_NAME
+            )
+
+            logger.info(
+                f"🔥 Sent personal forecast request for user {user_id} "
+                f"with data to queue"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(
+                f"❌ Failed to send personal forecast message to queue: {e}"
+            )
+            return False
+
+
     async def close(self):
         """Закрывает подключение"""
         if self.connection:
@@ -889,6 +946,28 @@ async def send_mars_recommendation_to_queue(
     sender = await get_queue_sender()
     return await sender.send_mars_recommendation_for_processing(
         prediction_id, user_telegram_id, mars_analysis, profile_id
+    )
+
+
+async def send_personal_forecast_to_queue(
+    user_id: int,
+    astrology_data: Dict[str, Any],
+    profile_id: Optional[int] = None
+) -> bool:
+    """
+    Удобная функция для отправки запроса на генерацию персонального прогноза в очередь.
+
+    Args:
+        user_id: ID пользователя.
+        astrology_data: Данные, полученные от AstrologyAPI.
+        profile_id: ID дополнительного профиля (опционально).
+
+    Returns:
+        True если сообщение отправлено успешно.
+    """
+    sender = await get_queue_sender()
+    return await sender.send_personal_forecast_for_processing(
+        user_id, astrology_data, profile_id
     )
 
 

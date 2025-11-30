@@ -3,6 +3,15 @@ import logging
 import asyncio
 from datetime import datetime, timezone
 from typing import Optional
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton # Добавлен импорт
+from db import get_session 
+from subscriptions_db import (
+    create_or_update_subscription, 
+    update_subscription_payment_status,
+    get_user_id_by_telegram_id
+)
+from models import PaymentStatus
+
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -37,7 +46,51 @@ async def yookassa_webhook(request: Request):
                 logger.error("❌ Invalid Telegram ID in metadata")
                 return {"status": "error", "detail": "Invalid Telegram ID"}
 
+            # Обработка подписки на персональные прогнозы
+            if planet == "personal_forecasts_sub":
+                logger.info(f"🔥 Processing SUBSCRIPTION payment for user {telegram_id}")
+                async with get_session() as session:
+                    # Обновляем статус платежа
+                    await update_subscription_payment_status(
+                        session, payment_id, PaymentStatus.completed
+                    )
+                    
+                    # Получаем реальный user_id из БД по telegram_id
+                    db_user_id = await get_user_id_by_telegram_id(session, telegram_id)
+                    
+                    if db_user_id:
+                        # Активируем/продлеваем подписку на 1 месяц
+                        await create_or_update_subscription(session, db_user_id, duration_months=1)
+                        logger.info(f"✅ Subscription created/extended for user {telegram_id}")
+                        
+                        # Отправляем уведомление
+                        try:
+                            from main import bot
+                            await bot.send_message(
+                                telegram_id,
+                                "🎉 **Подписка успешно оформлена!**\n\n"
+                                "Теперь вы будете получать ежедневные персональные прогнозы.\n"
+                                "Нажмите кнопку ниже, чтобы получить свой прогноз на сегодня!",
+                                reply_markup=InlineKeyboardMarkup(
+                                    inline_keyboard=[
+                                        [
+                                            InlineKeyboardButton(
+                                                text="🔥 Получить персональный прогноз",
+                                                callback_data="personal_forecasts"
+                                            )
+                                        ]
+                                    ]
+                                )
+                            )
+                        except Exception as e:
+                            logger.error(f"❌ Failed to send subscription notification: {e}")
+                    else:
+                        logger.error(f"❌ User with telegram_id {telegram_id} not found for subscription update")
+                
+                return {"status": "ok"}
+
             # Обновляем статус платежа в БД
+
             logger.info(f"🔥 Updating payment status: telegram_id={telegram_id}, planet={planet}, profile_id={profile_id}")
             await update_payment_status(telegram_id, planet, payment_id)
             

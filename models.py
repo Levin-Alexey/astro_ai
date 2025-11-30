@@ -546,6 +546,82 @@ class PlanetPayment(Base):
         )
 
 
+
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+
+    subscription_id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True, autoincrement=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False
+    )
+    start_date: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    end_date: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class SubscriptionPayment(Base):
+    __tablename__ = "subscription_payments"
+
+    payment_id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True, autoincrement=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False
+    )
+    amount_kopecks: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    
+    # Используем существующий ENUM PaymentStatus
+    status: Mapped[PaymentStatus] = mapped_column(
+        PG_ENUM(
+            PaymentStatus,
+            name="payment_status",
+            create_type=False,
+            native_enum=True
+        ),
+        nullable=False,
+        server_default=text("'pending'"),
+    )
+    
+    external_payment_id: Mapped[Optional[str]] = mapped_column(Text)
+    payment_url: Mapped[Optional[str]] = mapped_column(Text)
+    
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
+
+
+class DailyForecast(Base):
+    __tablename__ = "daily_forecasts"
+
+    forecast_id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True, autoincrement=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False
+    )
+    date: Mapped[date] = mapped_column(Date, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 # Индексы (соответствуют заданным)
 Index("users_last_seen_idx", User.last_seen_at.desc())
 Index("users_birth_utc_idx", User.birth_datetime_utc)

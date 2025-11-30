@@ -425,8 +425,14 @@ async def show_personal_cabinet(message_or_callback):
                     ],
                     [
                         InlineKeyboardButton(
-                            text="💵 Купить разбор",
+                            text="🪐 Купить разборы планет",
                             callback_data="buy_analysis"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🔥 Персональные прогнозы",
+                            callback_data="personal_forecasts"
                         )
                     ],
                     [
@@ -515,8 +521,14 @@ async def show_main_menu(message_or_callback):
             ],
             [
                 InlineKeyboardButton(
-                    text="💵 Купить разбор",
+                    text="🪐 Купить разборы планет",
                     callback_data="buy_analysis"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🔥 Персональные прогнозы",
+                    callback_data="personal_forecasts"
                 )
             ],
             [
@@ -1451,6 +1463,24 @@ async def on_buy_analysis(callback: CallbackQuery):
     await show_buy_analysis_menu(cb_msg)
 
 
+@dp.callback_query(F.data == "personal_forecasts")
+async def on_personal_forecasts(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки '🔥 Персональные прогнозы'"""
+    from handlers.personal_forecasts_handler import handle_personal_forecasts
+    await handle_personal_forecasts(callback, state)
+
+
+@dp.callback_query(F.data == "buy_personal_forecasts_sub")
+async def on_buy_subscription(callback: CallbackQuery):
+    """Обработчик кнопки покупки подписки"""
+    # Обязательно отвечаем на callback, чтобы убрать часики
+    await callback.answer()
+    
+    from handlers.personal_forecasts_handler import handle_buy_subscription
+    # payment_handler глобальный в main.py
+    await handle_buy_subscription(callback, payment_handler)
+
+
 @dp.callback_query(F.data == "buy_analysis_self")
 async def on_buy_analysis_self(callback: CallbackQuery, state: FSMContext):
     """Обработчик кнопки 'Купить разбор для себя'"""
@@ -1790,8 +1820,14 @@ async def on_view_planet(callback: CallbackQuery):
                         inline_keyboard=[
                             [
                                 InlineKeyboardButton(
-                                    text="💳 Купить разбор",
+                                    text="🪐 Купить разборы планет",
                                     callback_data="buy_analysis"
+                                )
+                            ],
+                            [
+                                InlineKeyboardButton(
+                                    text="🔥 Персональные прогнозы",
+                                    callback_data="personal_forecasts"
                                 )
                             ],
                             [
@@ -2197,8 +2233,14 @@ async def on_view_profile_planet(callback: CallbackQuery):
                         inline_keyboard=[
                             [
                                 InlineKeyboardButton(
-                                    text="💳 Купить разбор",
+                                    text="🪐 Купить разборы планет",
                                     callback_data=f"buy_profile_planet:{profile_id}:{planet_code}"
+                                )
+                            ],
+                            [
+                                InlineKeyboardButton(
+                                    text="🔥 Персональные прогнозы",
+                                    callback_data="personal_forecasts"
                                 )
                             ],
                             [
@@ -2327,8 +2369,14 @@ async def send_faq(message_or_callback):
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="� Купить разбор",
+                    text="🪐 Купить разборы планет",
                     callback_data="buy_analysis"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🔥 Персональные прогнозы",
+                    callback_data="personal_forecasts"
                 )
             ],
             [
@@ -2836,6 +2884,12 @@ async def on_explore_other_areas(callback: CallbackQuery):
                     InlineKeyboardButton(
                         text="🔥 Марс 77₽",
                         callback_data=create_callback_data("explore_mars")
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🔥 Персональные прогнозы",
+                        callback_data="personal_forecasts"
                     )
                 ],
                 [
