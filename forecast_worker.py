@@ -112,17 +112,29 @@ class OpenRouterClient:
 
 
 async def send_telegram_message(chat_id: int, text: str):
-    """Отправляет сообщение в Telegram"""
+    """
+    Отправляет сообщение в Telegram, разбивая его на части, если оно слишком длинное.
+    """
     url = f"{BOT_API_URL}/sendMessage"
-    payload = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
+    max_length = 4096 # Лимит Telegram для одного сообщения
     
+    # Разделяем текст на части, если он превышает max_length
+    if len(text) <= max_length:
+        parts = [text]
+    else:
+        parts = []
+        for i in range(0, len(text), max_length):
+            parts.append(text[i:i+max_length])
+            
     async with aiohttp.ClientSession() as session:
-        try:
-            async with session.post(url, json=payload) as response:
-                if response.status != 200:
-                    logger.error(f"Telegram error: {await response.text()}")
-        except Exception as e:
-            logger.error(f"Telegram request failed: {e}")
+        for i, part in enumerate(parts):
+            payload = {"chat_id": chat_id, "text": part, "parse_mode": "Markdown"}
+            try:
+                async with session.post(url, json=payload) as response:
+                    if response.status != 200:
+                        logger.error(f"Telegram error sending part {i+1}: {await response.text()}")
+            except Exception as e:
+                logger.error(f"Telegram request failed sending part {i+1}: {e}")
 
 
 async def process_personal_forecast(data: Dict[str, Any], openrouter_client: OpenRouterClient) -> bool:
