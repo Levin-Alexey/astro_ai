@@ -76,7 +76,7 @@ class OpenRouterClient:
                     "content": prompt
                 }
             ],
-            "max_tokens": 1000, # Изменено на 1000
+            "max_tokens": 2500, # Увеличено для гарантии полного ответа
             "temperature": 0.7
         }
         
