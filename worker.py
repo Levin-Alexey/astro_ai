@@ -99,7 +99,7 @@ class OpenRouterClient:
                     "content": prompt
                 }
             ],
-            "max_tokens": 2000,
+            "max_tokens": 2500,
             "temperature": 0.7
         }
         
