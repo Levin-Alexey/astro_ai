@@ -270,53 +270,73 @@ class PredictionWorker:
         reply_markup: Optional[Dict[str, Any]] = None
     ) -> bool:
         """
-        Отправляет сообщение через Telegram Bot API
-        
-        Args:
-            chat_id: ID чата
-            text: Текст сообщения
-            reply_markup: Клавиатура для сообщения (опционально)
-            
-        Returns:
-            True если отправлено успешно, False иначе
+        Отправляет сообщение через Telegram Bot API.
+        Если сообщение длиннее 4096 символов, разбивает его на части.
         """
         url = f"{BOT_API_URL}/sendMessage"
+        max_length = 4096
         
-        payload = {
-            "chat_id": chat_id,
-            "text": text,
-            "parse_mode": "HTML",
-            "disable_web_page_preview": True
-        }
+        # Разбиваем текст на части
+        parts = []
+        while text:
+            if len(text) <= max_length:
+                parts.append(text)
+                text = ""
+            else:
+                # Ищем ближайший перенос строки перед лимитом
+                split_index = text.rfind('\n', 0, max_length)
+                if split_index == -1:
+                    # Если переносов нет, режем жестко
+                    split_index = max_length
+                
+                parts.append(text[:split_index])
+                text = text[split_index:].lstrip() # Убираем пробелы в начале следующей части
         
-        if reply_markup:
-            payload["reply_markup"] = reply_markup
+        success_all = True
         
         async with aiohttp.ClientSession() as session:
-            try:
-                async with session.post(
-                    url,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=30)
-                ) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        if result.get("ok"):
-                            return True
+            for i, part in enumerate(parts):
+                # Клавиатуру добавляем только к последней части
+                current_reply_markup = reply_markup if i == len(parts) - 1 else None
+                
+                payload = {
+                    "chat_id": chat_id,
+                    "text": part,
+                    "parse_mode": "HTML",
+                    "disable_web_page_preview": True
+                }
+                
+                if current_reply_markup:
+                    payload["reply_markup"] = current_reply_markup
+                
+                try:
+                    async with session.post(
+                        url,
+                        json=payload,
+                        timeout=aiohttp.ClientTimeout(total=30)
+                    ) as response:
+                        if response.status == 200:
+                            result = await response.json()
+                            if not result.get("ok"):
+                                logger.error(f"Telegram API error part {i}: {result}")
+                                success_all = False
                         else:
-                            logger.error(f"Telegram API error: {result}")
-                            return False
-                    else:
-                        error_text = await response.text()
-                        logger.error(f"HTTP error {response.status}: {error_text}")
-                        return False
+                            error_text = await response.text()
+                            logger.error(f"HTTP error {response.status} part {i}: {error_text}")
+                            success_all = False
+                            
+                    # Небольшая пауза между сообщениями для соблюдения лимитов
+                    if len(parts) > 1:
+                        await asyncio.sleep(0.5)
                         
-            except asyncio.TimeoutError:
-                logger.error("Telegram API request timeout")
-                return False
-            except Exception as e:
-                logger.error(f"Telegram API request failed: {e}")
-                return False
+                except asyncio.TimeoutError:
+                    logger.error(f"Telegram API request timeout part {i}")
+                    success_all = False
+                except Exception as e:
+                    logger.error(f"Telegram API request failed part {i}: {e}")
+                    success_all = False
+                    
+        return success_all
     
     def format_prediction_message(self, prediction: Prediction, user: User, profile_name: Optional[str] = None) -> str:
         """
@@ -376,11 +396,7 @@ class PredictionWorker:
             # Fallback на content для совместимости
             content = prediction.content or "Содержимое недоступно"
         
-        # Обрезаем если слишком длинное (Telegram лимит 4096 символов)
-        max_length = 4096 - len(message) - 100  # Оставляем место для подписи
-        if len(content) > max_length:
-            content = content[:max_length] + "..."
-        
+        # Просто добавляем контент без обрезания, так как send_telegram_message теперь умеет разбивать
         message += content
         
         return message

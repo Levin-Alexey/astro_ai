@@ -118,17 +118,27 @@ async def send_telegram_message(chat_id: int, text: str):
     url = f"{BOT_API_URL}/sendMessage"
     max_length = 4096 # Лимит Telegram для одного сообщения
     
-    # Разделяем текст на части, если он превышает max_length
-    if len(text) <= max_length:
-        parts = [text]
-    else:
-        parts = []
-        for i in range(0, len(text), max_length):
-            parts.append(text[i:i+max_length])
+    # Разбиваем текст на части
+    parts = []
+    current_text = text
+    while current_text:
+        if len(current_text) <= max_length:
+            parts.append(current_text)
+            current_text = ""
+        else:
+            # Ищем ближайший перенос строки перед лимитом
+            split_index = current_text.rfind('\n', 0, max_length)
+            if split_index == -1:
+                # Если переносов нет, режем жестко
+                split_index = max_length
             
+            parts.append(current_text[:split_index])
+            current_text = current_text[split_index:].lstrip() # Убираем пробелы в начале следующей части
+    
     async with aiohttp.ClientSession() as session:
         for i, part in enumerate(parts):
-            # Убрали parse_mode="Markdown", чтобы избежать ошибок с незакрытыми тегами при разбивке
+            # parse_mode="HTML" был убран, чтобы избежать ошибок с незакрытыми тегами при разбивке.
+            # Если требуется Markdown/HTML, нужно убедиться, что каждая часть сообщения валидна.
             payload = {"chat_id": chat_id, "text": part}
             try:
                 async with session.post(url, json=payload) as response:
@@ -136,6 +146,11 @@ async def send_telegram_message(chat_id: int, text: str):
                         logger.error(f"Telegram error sending part {i+1}: {await response.text()}")
             except Exception as e:
                 logger.error(f"Telegram request failed sending part {i+1}: {e}")
+            
+            # Небольшая пауза между сообщениями для соблюдения лимитов Telegram
+            if len(parts) > 1 and i < len(parts) - 1:
+                await asyncio.sleep(0.5)
+
 
 
 async def process_personal_forecast(data: Dict[str, Any], openrouter_client: OpenRouterClient) -> bool:
