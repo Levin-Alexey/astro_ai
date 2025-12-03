@@ -7,7 +7,8 @@ from aiogram import Bot
 from yookassa import Configuration, Payment
 from config import (
     PAYMENT_SHOP_ID, PAYMENT_SECRET_KEY, 
-    PAYMENT_TEST_AMOUNT, PAYMENT_CURRENCY
+    PAYMENT_TEST_AMOUNT, PAYMENT_CURRENCY,
+    DEFAULT_CUSTOMER_EMAIL
 )
 
 # Настройка ЮKassa
@@ -28,19 +29,39 @@ class PaymentHandler:
         self.currency = PAYMENT_CURRENCY
     
     def create_payment_data(self, user_id: int, planet: str, description: str, profile_id: int = None, amount_kopecks: int = None) -> Dict[str, Any]:
-        """Создает данные для платежа"""
+        """Создает данные для платежа, включая чек (receipt) с customer.email из .env."""
         metadata = {
             "user_id": str(user_id),
             "planet": planet
         }
         
-        # Добавляем profile_id если указан
         if profile_id:
             metadata["profile_id"] = str(profile_id)
         
-        # Используем переданную сумму или тестовую по умолчанию
         payment_amount = amount_kopecks if amount_kopecks is not None else self.test_amount
         
+        # Строго используем email из .env
+        customer_email = DEFAULT_CUSTOMER_EMAIL or "payments@example.com"
+        if not DEFAULT_CUSTOMER_EMAIL:
+            logger.error("DEFAULT_CUSTOMER_EMAIL не задан в .env, используем 'payments@example.com' по умолчанию")
+
+        receipt = {
+            "customer": {"email": customer_email},
+            "items": [
+                {
+                    "description": description,
+                    "quantity": "1.00",
+                    "amount": {
+                        "value": f"{payment_amount / 100:.2f}",
+                        "currency": self.currency
+                    },
+                    "vat_code": 1,
+                    "payment_subject": "service",
+                    "payment_mode": "full_prepayment"
+                }
+            ]
+        }
+
         return {
             "amount": {
                 "value": f"{payment_amount / 100:.2f}",
@@ -52,34 +73,33 @@ class PaymentHandler:
             },
             "capture": True,
             "description": description,
-            "metadata": metadata
+            "metadata": metadata,
+            "receipt": receipt
         }
     
     async def create_payment(
         self, payment_data: Dict[str, Any]
-    ) -> Dict[str, str | None]:
+    ) -> Dict[str, Any]:
         """Создает платеж через ЮKassa API"""
         try:
-            # Создаем уникальный ID для платежа
             payment_id = str(uuid.uuid4())
             
             logger.info(f"Создание платежа с ID: {payment_id}")
             logger.info(f"Данные платежа: {payment_data}")
             logger.info(f"Configuration account_id: {Configuration.account_id}")
             
-            # Создаем платеж через API
             payment = Payment.create({
                 "amount": payment_data["amount"],
                 "confirmation": payment_data["confirmation"],
                 "capture": payment_data["capture"],
                 "description": payment_data["description"],
-                "metadata": payment_data["metadata"]
+                "metadata": payment_data["metadata"],
+                "receipt": payment_data.get("receipt")
             }, payment_id)
             
             logger.info(f"Платеж создан успешно: {payment.id}")
             logger.info(f"URL для оплаты: {payment.confirmation.confirmation_url}")
             
-            # Возвращаем как URL, так и payment_id
             return {
                 "success": True,
                 "payment_url": payment.confirmation.confirmation_url,
@@ -89,19 +109,16 @@ class PaymentHandler:
         except Exception as e:
             logger.error(f"Ошибка при создании платежа: {e}")
             logger.error(f"Тип ошибки: {type(e).__name__}")
-            # Fallback на старый метод
             fallback_url = self.create_payment_url(payment_data)
             return {
                 "success": False,
                 "error": str(e),
                 "payment_url": fallback_url,
-                "payment_id": None  # Для тестовых платежей ID не генерируется
+                "payment_id": None
             }
     
     def create_payment_url(self, payment_data: Dict[str, Any]) -> str:
         """Создает URL для оплаты (заглушка для тестирования)"""
-        # В реальном проекте здесь будет интеграция с ЮKassa API
-        # Для тестирования возвращаем заглушку
         description = payment_data['description']
         return (
             f"https://yoomoney.ru/checkout/payments/v2/checkout?"
@@ -160,8 +177,6 @@ class PaymentHandler:
     async def _grant_access(self, user_id: int, planet: str):
         """Предоставляет доступ к разбору планеты"""
         try:
-            # Здесь должна быть логика предоставления доступа
-            # Например, сохранение в БД, отправка уведомления и т.д.
             await self.bot.send_message(
                 user_id,
                 f"🎉 Платеж успешно обработан!\n\n"

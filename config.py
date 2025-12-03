@@ -30,6 +30,8 @@ PAYMENT_SECRET_KEY = os.getenv(
 )
 PAYMENT_TEST_AMOUNT = 7700  # 77 рублей в копейках
 PAYMENT_CURRENCY = "RUB"
+# Email покупателя для формирования чека YooKassa (если недоступен другой)
+DEFAULT_CUSTOMER_EMAIL = os.getenv("DEFAULT_CUSTOMER_EMAIL")
 
 # Настройки AstrologyAPI
 ASTROLOGY_API_USER_ID = os.getenv("ASTROLOGY_API_USER_ID", "645593")
