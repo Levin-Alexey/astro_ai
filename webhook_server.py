@@ -146,7 +146,7 @@ async def update_payment_status(user_id: int, planet: str, external_payment_id: 
                     select(PlanetPayment).where(
                         (PlanetPayment.external_payment_id == external_payment_id) |
                         (
-                            (PlanetPayment.user_id == user.telegram_id) &
+                            (PlanetPayment.user_id == user.user_id) &  # FIX: используем внутренний ID
                             (PlanetPayment.payment_type == PaymentType.all_planets) &
                             (PlanetPayment.status == PaymentStatus.pending)
                         )
@@ -158,7 +158,7 @@ async def update_payment_status(user_id: int, planet: str, external_payment_id: 
                     select(PlanetPayment).where(
                         (PlanetPayment.external_payment_id == external_payment_id) |
                         (
-                            (PlanetPayment.user_id == user.telegram_id) &
+                            (PlanetPayment.user_id == user.user_id) &  # FIX: используем внутренний ID
                             (PlanetPayment.payment_type == PaymentType.single_planet) &
                             (PlanetPayment.planet == planet_enum) &
                             (PlanetPayment.status == PaymentStatus.pending)
@@ -182,7 +182,7 @@ async def update_payment_status(user_id: int, planet: str, external_payment_id: 
                 # Попробуем найти хотя бы по пользователю для отладки
                 debug_result = await session.execute(
                     select(PlanetPayment).where(
-                        PlanetPayment.user_id == user.telegram_id
+                        PlanetPayment.user_id == user.user_id  # FIX: используем внутренний ID
                     ).order_by(PlanetPayment.created_at.desc()).limit(5)
                 )
                 debug_payments = debug_result.scalars().all()

@@ -496,12 +496,22 @@ async def send_mercury_analysis_to_user(user_telegram_id: int, analysis_text: st
 async def _check_if_all_planets_analysis(telegram_id: int) -> bool:
     """Проверяет, является ли это частью разбора всех планет"""
     try:
-        from models import PlanetPayment, PaymentStatus, PaymentType
-        
+        from models import PlanetPayment, PaymentStatus, PaymentType, User
+        from sqlalchemy import select
+
         async with get_session() as session:
+            # Находим внутренний user_id по telegram_id
+            user_result = await session.execute(
+                select(User).where(User.telegram_id == telegram_id)
+            )
+            user = user_result.scalar_one_or_none()
+            if not user:
+                logger.warning(f"User not found for telegram_id {telegram_id} in Mercury worker")
+                return False
+
             result = await session.execute(
                 select(PlanetPayment).where(
-                    PlanetPayment.user_id == telegram_id,
+                    PlanetPayment.user_id == user.user_id,  # FIX: используем внутренний ID
                     PlanetPayment.payment_type == PaymentType.all_planets,
                     PlanetPayment.status == PaymentStatus.completed
                 )

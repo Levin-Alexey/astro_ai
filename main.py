@@ -4106,14 +4106,25 @@ async def on_next_planet(callback: CallbackQuery):
 
 
 async def check_user_payment_access(user_id: int, planet: str) -> bool:
-    """Проверяет, есть ли у пользователя оплаченный доступ к планете"""
-    from models import PlanetPayment, PaymentStatus, PaymentType, Planet
-    
+    """Проверяет, есть ли у пользователя оплаченный доступ к планете.
+    user_id здесь - это telegram_id, маппим на внутренний user_id."""
+    from models import PlanetPayment, PaymentStatus, PaymentType, Planet, User
+
     async with get_session() as session:
+        # !!! FIX START: Сначала находим внутренний user_id по telegram_id !!!
+        user_result = await session.execute(
+            select(User).where(User.telegram_id == user_id)
+        )
+        db_user = user_result.scalar_one_or_none()
+        if not db_user:
+            logger.warning(f"User not found for telegram_id {user_id} in check_user_payment_access")
+            return False
+        # !!! FIX END !!!
+
         # Проверяем, есть ли оплата за все планеты (только для основного профиля)
         all_planets_payment = await session.execute(
             select(PlanetPayment).where(
-                PlanetPayment.user_id == user_id,
+                PlanetPayment.user_id == db_user.user_id,  # FIX: используем внутренний ID
                 PlanetPayment.payment_type == PaymentType.all_planets,
                 PlanetPayment.status == PaymentStatus.completed,
                 PlanetPayment.profile_id.is_(None)  # Только основной профиль
@@ -4128,7 +4139,7 @@ async def check_user_payment_access(user_id: int, planet: str) -> bool:
                 planet_enum = Planet(planet)
                 single_planet_payment = await session.execute(
                     select(PlanetPayment).where(
-                        PlanetPayment.user_id == user_id,
+                        PlanetPayment.user_id == db_user.user_id,  # FIX: используем внутренний ID
                         PlanetPayment.payment_type == PaymentType.single_planet,
                         PlanetPayment.planet == planet_enum,
                         PlanetPayment.status == PaymentStatus.completed,

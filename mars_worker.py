@@ -234,19 +234,19 @@ async def process_mars_prediction(
         prediction_id = data.get("prediction_id")
         user_id = data.get("user_id") or data.get("user_telegram_id")  # Support both formats
         profile_id = data.get("profile_id")
-        
+
         if not prediction_id or not user_id:
             logger.error(f"♂️ Missing required data: prediction_id={prediction_id}, user_id={user_id}")
             return False
-        
+
         logger.info(f"♂️ Processing Mars prediction {prediction_id} for user {user_id}, profile_id: {profile_id}")
-        
+
         # Интеграция с системой защиты платежей
         try:
             import sys
             sys.path.append('.')
             from payment_access import mark_analysis_started, mark_analysis_completed, mark_analysis_failed
-            
+
             # Отмечаем начало анализа
             await mark_analysis_started(prediction_id)
             logger.info(f"♂️ Marked Mars analysis as started for user {user_id}")
@@ -259,11 +259,11 @@ async def process_mars_prediction(
                 select(Prediction).where(Prediction.prediction_id == prediction_id)
             )
             prediction = result.scalar_one_or_none()
-            
+
             if not prediction:
                 logger.error(f"♂️ Prediction {prediction_id} not found")
                 return False
-            
+
             # Получаем пользователя по user_id или telegram_id
             user_result = await session.execute(
                 select(User).where(
@@ -271,13 +271,13 @@ async def process_mars_prediction(
                 )
             )
             user = user_result.scalar_one_or_none()
-            
+
             if not user:
                 logger.error(f"♂️ User with user_id {user_id} not found")
                 return False
-            
+
             logger.info(f"♂️ Found user: {user.first_name} (telegram_id: {user.telegram_id})")
-            
+
             # Определяем данные для LLM в зависимости от типа профиля
             if profile_id:
                 profile_info = await get_additional_profile_info(profile_id)
@@ -291,7 +291,7 @@ async def process_mars_prediction(
                 llm_user_name = user.first_name or "Друг"
                 llm_user_gender = user.gender.value if user.gender else "не указан"
                 logger.info(f"♂️ Using main user data for analysis: {llm_user_name}, gender: {llm_user_gender}")
-            
+
             # Если нет клиента OpenRouter, создаем тестовый разбор
             if not openrouter_client or not OPENROUTER_API_KEY:
                 logger.warning("♂️ OpenRouter not available, creating test analysis")
@@ -308,11 +308,11 @@ async def process_mars_prediction(
 💪 **Лидерство**: Ты можешь быть очень эффективным лидером, когда понимаешь свои сильные стороны.
 
 Это тестовый разбор. После оплаты ты получишь персональный анализ на основе точных астрологических данных!"""
-                
+
                 # Сохраняем результат
                 prediction.mars_analysis = analysis_content
                 await session.commit()
-                
+
                 # Отправляем пользователю (передаем profile_id из prediction)
                 await send_mars_analysis_to_user(user.telegram_id, analysis_content, prediction.profile_id)
                 logger.info(f"♂️ Test Mars analysis sent to user {user.telegram_id}")
@@ -358,11 +358,11 @@ async def process_mars_prediction(
                     logger.info(f"♂️ Marked Mars analysis as delivered for user {user_id}")
                 except Exception as e:
                     logger.error(f"♂️ Failed to mark analysis as delivered: {e}")
-                
+
                 return True
             else:
                 logger.error(f"♂️ Failed to generate Mars analysis: {llm_result['error']}")
-                
+
                 # Отмечаем анализ как неудачный
                 try:
                     await mark_analysis_failed(prediction_id, f"LLM error: {llm_result['error']}")
@@ -392,14 +392,14 @@ async def process_mars_prediction(
                 logger.info(f"♂️ Marked Mars analysis as failed due to processing error for user {user_id if 'user_id' in locals() else 'unknown'}")
             except Exception as mark_error:
                 logger.error(f"♂️ Failed to mark analysis as failed: {mark_error}")
-        
+
         return False
 
 
 async def send_mars_analysis_to_user(user_telegram_id: int, analysis_text: str, profile_id: Optional[int] = None):
     """
     Отправляет анализ Марса пользователю через Telegram Bot API
-    
+
     Args:
         user_telegram_id: Telegram ID пользователя
         analysis_text: Текст анализа
@@ -408,11 +408,11 @@ async def send_mars_analysis_to_user(user_telegram_id: int, analysis_text: str, 
     try:
         # Импортируем универсальные функции
         from all_planets_handler import create_planet_analysis_buttons, check_if_all_planets_payment
-        
+
         # Проверяем, является ли это частью разбора всех планет
         is_all_planets = await check_if_all_planets_payment(user_telegram_id, profile_id)
         logger.info(f"♂️ Mars worker: is_all_planets = {is_all_planets} for user {user_telegram_id}, profile_id={profile_id}")
-        
+
         # Для Марса (последняя планета) нет кнопки "Следующая планета", но проверяем is_all_planets для кнопки рекомендаций
         keyboard = create_planet_analysis_buttons("mars", is_all_planets=is_all_planets, profile_id=profile_id)
         
@@ -427,7 +427,7 @@ async def send_mars_analysis_to_user(user_telegram_id: int, analysis_text: str, 
                 "reply_markup": keyboard,
                 "parse_mode": "HTML"
             }
-            
+
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     f"{BOT_API_URL}/sendMessage",
@@ -487,12 +487,22 @@ async def send_mars_analysis_to_user(user_telegram_id: int, analysis_text: str, 
 async def _check_if_all_planets_analysis(telegram_id: int) -> bool:
     """Проверяет, является ли это частью разбора всех планет"""
     try:
-        from models import PlanetPayment, PaymentStatus, PaymentType
-        
+        from models import PlanetPayment, PaymentStatus, PaymentType, User
+        from sqlalchemy import select
+
         async with get_session() as session:
+            # Находим внутренний user_id по telegram_id
+            user_result = await session.execute(
+                select(User).where(User.telegram_id == telegram_id)
+            )
+            user = user_result.scalar_one_or_none()
+            if not user:
+                logger.warning(f"User not found for telegram_id {telegram_id} in Mars worker")
+                return False
+
             result = await session.execute(
                 select(PlanetPayment).where(
-                    PlanetPayment.user_id == telegram_id,
+                    PlanetPayment.user_id == user.user_id,  # FIX: используем внутренний ID
                     PlanetPayment.payment_type == PaymentType.all_planets,
                     PlanetPayment.status == PaymentStatus.completed
                 )
@@ -542,17 +552,17 @@ async def main():
                         logger.info(f"♂️ Mars prediction processed successfully")
                     else:
                         logger.error(f"♂️ Failed to process Mars prediction")
-                        
+
                 except json.JSONDecodeError as e:
                     logger.error(f"♂️ Failed to decode message: {e}")
                 except Exception as e:
                     logger.error(f"♂️ Error processing message: {e}")
-        
+
         # Настраиваем обработку сообщений
         await queue.consume(process_message)
-        
+
         logger.info("♂️ Mars worker is ready. Waiting for messages...")
-        
+
         # Ожидаем сообщения
         try:
             await asyncio.Future()  # Бесконечное ожидание

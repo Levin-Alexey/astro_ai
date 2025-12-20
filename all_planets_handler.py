@@ -273,8 +273,17 @@ class AllPlanetsHandler:
     async def _save_payment_to_db(self, user_id: int, payment_id: str, profile_id: Optional[int] = None) -> None:
         """Сохраняет информацию о платеже в БД"""
         async with get_session() as session:
+            # !!! FIX START: Сначала получаем внутренний user_id по Telegram ID !!!
+            from models import User
+            user_result = await session.execute(select(User).where(User.telegram_id == user_id))
+            user = user_result.scalar_one_or_none()
+            if not user:
+                logger.error(f"❌ User not found for telegram_id {user_id} when saving payment")
+                return
+            internal_user_id = user.user_id
+            # !!! FIX END !!!
             payment = PlanetPayment(
-                user_id=user_id,
+                user_id=internal_user_id,  # Используем внутренний ID
                 planet=None,  # Для всех планет
                 payment_type=PaymentType.all_planets,
                 external_payment_id=payment_id,
@@ -285,13 +294,21 @@ class AllPlanetsHandler:
             )
             session.add(payment)
             await session.commit()
-            logger.info(f"💾 Платеж сохранен в БД: {payment_id}, profile_id={profile_id}")
+            logger.info(f"💾 Платеж сохранен в БД: {payment_id}, internal_user_id={internal_user_id}, profile_id={profile_id}")
 
     async def _update_payment_status(self, user_id: int, profile_id: Optional[int] = None) -> None:
         """Обновляет статус платежа на 'completed'"""
         async with get_session() as session:
+            # !!! FIX START !!!
+            from models import User
+            user_result = await session.execute(select(User).where(User.telegram_id == user_id))
+            user = user_result.scalar_one_or_none()
+            if not user:
+                logger.error(f"❌ User not found for update payment status: {user_id}")
+                return
+            # !!! FIX END !!!
             query_conditions = [
-                PlanetPayment.user_id == user_id,
+                PlanetPayment.user_id == user.user_id,  # Используем user.user_id
                 PlanetPayment.payment_type == PaymentType.all_planets,
                 PlanetPayment.status == PaymentStatus.pending
             ]
