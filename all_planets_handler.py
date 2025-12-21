@@ -393,7 +393,7 @@ class AllPlanetsHandler:
                 
                 # Получаем время оплаты за все планеты для конкретного профиля
                 payment_conditions = [
-                    PlanetPayment.user_id == telegram_id,
+                    PlanetPayment.user_id == user.user_id,  # FIX: используем внутренний ID
                     PlanetPayment.payment_type == PaymentType.all_planets,
                     PlanetPayment.status == PaymentStatus.completed
                 ]
@@ -532,8 +532,18 @@ async def check_if_all_planets_payment(telegram_id: int, profile_id: Optional[in
     """
     try:
         async with get_session() as session:
+            # Сначала получаем внутренний user_id по telegram_id
+            from models import User
+            user_result = await session.execute(
+                select(User).where(User.telegram_id == telegram_id)
+            )
+            user = user_result.scalar_one_or_none()
+            if not user:
+                logger.warning(f"User not found for telegram_id {telegram_id} in check_if_all_planets_payment")
+                return False
+            
             conditions = [
-                PlanetPayment.user_id == telegram_id,
+                PlanetPayment.user_id == user.user_id,  # FIX: используем внутренний ID
                 PlanetPayment.payment_type == PaymentType.all_planets,
                 PlanetPayment.status == PaymentStatus.completed
             ]
@@ -550,7 +560,7 @@ async def check_if_all_planets_payment(telegram_id: int, profile_id: Optional[in
             payment = result.scalar_one_or_none()
             
             logger.info(
-                f"Check all planets payment: telegram_id={telegram_id}, "
+                f"Check all planets payment: telegram_id={telegram_id}, internal_user_id={user.user_id}, "
                 f"profile_id={profile_id}, found={payment is not None}"
             )
             

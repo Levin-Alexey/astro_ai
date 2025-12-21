@@ -99,8 +99,11 @@ async def yookassa_webhook(request: Request):
                 logger.info(f"🔥 Processing ALL PLANETS payment")
                 from all_planets_handler import get_all_planets_handler
                 handler = get_all_planets_handler()
+                # Преобразуем profile_id в int или None
+                profile_id_int = int(profile_id) if profile_id and profile_id != "None" else None
+                logger.info(f"🔥 Calling handle_payment_success with telegram_id={telegram_id}, profile_id={profile_id_int}")
                 if handler:
-                    await handler.handle_payment_success(telegram_id)
+                    await handler.handle_payment_success(telegram_id, profile_id_int)
                 else:
                     logger.error("❌ All planets handler not initialized")
             else:
