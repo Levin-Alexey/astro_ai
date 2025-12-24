@@ -422,15 +422,10 @@ class AllPlanetsHandler:
                 logger.info(f"🔍 All planets payment completed at: {payment_time}")
                 
                 # Получаем все разборы для конкретного профиля, созданные после оплаты
+                # Сортируем по дате создания в обратном порядке (новые сверху)
                 prediction_conditions = [
                     Prediction.user_id == user.user_id,
                     Prediction.created_at >= payment_time,
-                    (
-                        (Prediction.sun_analysis.isnot(None)) |
-                        (Prediction.mercury_analysis.isnot(None)) |
-                        (Prediction.venus_analysis.isnot(None)) |
-                        (Prediction.mars_analysis.isnot(None))
-                    )
                 ]
                 
                 # Фильтруем по profile_id
@@ -440,35 +435,43 @@ class AllPlanetsHandler:
                     prediction_conditions.append(Prediction.profile_id.is_(None))
                 
                 result = await session.execute(
-                    select(Prediction).where(*prediction_conditions)
+                    select(Prediction)
+                    .where(*prediction_conditions)
+                    .order_by(Prediction.created_at.desc())
                 )
-                completed_predictions = result.scalars().all()
-                logger.info(f"🔍 Found {len(completed_predictions)} predictions after payment for profile_id={profile_id}")
+                all_predictions = result.scalars().all()
+                logger.info(f"🔍 Found {len(all_predictions)} predictions after payment for profile_id={profile_id}")
 
-                # Определяем, какие планеты уже обработаны
-                completed_planets = set()
-                for prediction in completed_predictions:
-                    logger.info(f"🔍 Prediction {prediction.prediction_id}: sun={bool(prediction.sun_analysis)}, mercury={bool(prediction.mercury_analysis)}, venus={bool(prediction.venus_analysis)}, mars={bool(prediction.mars_analysis)}")
-                    if prediction.sun_analysis:
+                # Получаем последний (самый свежий) разбор - в нем находятся ВСЕ планеты для этого профиля
+                if all_predictions:
+                    latest_prediction = all_predictions[0]
+                    logger.info(f"🔍 Latest prediction {latest_prediction.prediction_id}: sun={bool(latest_prediction.sun_analysis)}, mercury={bool(latest_prediction.mercury_analysis)}, venus={bool(latest_prediction.venus_analysis)}, mars={bool(latest_prediction.mars_analysis)}")
+                    
+                    # Определяем, какие планеты уже готовы в этом разборе
+                    completed_planets = set()
+                    if latest_prediction.sun_analysis:
                         completed_planets.add("sun")
-                    if prediction.mercury_analysis:
+                    if latest_prediction.mercury_analysis:
                         completed_planets.add("mercury")
-                    if prediction.venus_analysis:
+                    if latest_prediction.venus_analysis:
                         completed_planets.add("venus")
-                    if prediction.mars_analysis:
+                    if latest_prediction.mars_analysis:
                         completed_planets.add("mars")
+                    
+                    logger.info(f"🔍 Completed planets in latest prediction: {completed_planets}")
+                    logger.info(f"🔍 Planet order: {PLANET_ORDER}")
 
-                logger.info(f"🔍 Completed planets: {completed_planets}")
-                logger.info(f"🔍 Planet order: {PLANET_ORDER}")
+                    # Находим следующую планету
+                    for planet in PLANET_ORDER:
+                        if planet not in completed_planets:
+                            logger.info(f"🔍 Next planet found: {planet}")
+                            return planet
 
-                # Находим следующую планету
-                for planet in PLANET_ORDER:
-                    if planet not in completed_planets:
-                        logger.info(f"🔍 Next planet found: {planet}")
-                        return planet
-
-                logger.info(f"🔍 All planets completed")
-                return None  # Все планеты обработаны
+                    logger.info(f"🔍 All planets completed")
+                    return None  # Все планеты обработаны
+                else:
+                    logger.warning(f"🔍 No predictions found after payment for user {telegram_id}, profile_id={profile_id}")
+                    return "sun"  # Если нет разборов, начинаем с Солнца
 
         except Exception as e:
             logger.error(f"❌ Ошибка при определении следующей планеты: {e}")
@@ -550,7 +553,12 @@ async def check_if_all_planets_payment(telegram_id: int, profile_id: Optional[in
             conditions = [
                 PlanetPayment.user_id == user.user_id,  # FIX: используем внутренний ID
                 PlanetPayment.payment_type == PaymentType.all_planets,
-                PlanetPayment.status == PaymentStatus.completed
+                PlanetPayment.status.in_([
+                    PaymentStatus.completed,
+                    PaymentStatus.processing,
+                    PaymentStatus.delivered,
+                    PaymentStatus.analysis_failed,
+                ])
             ]
             
             # Фильтруем по profile_id
