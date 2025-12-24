@@ -321,7 +321,12 @@ async def process_mercury_prediction(
                 await session.commit()
                 
                 # Отправляем пользователю
-                await send_mercury_analysis_to_user(user.telegram_id, analysis_content)
+                    # ВАЖНО: прокидываем profile_id, чтобы кнопка "Следующая планета" работала корректно
+                    await send_mercury_analysis_to_user(
+                        user.telegram_id,
+                        analysis_content,
+                        prediction.profile_id or None
+                    )
                 logger.info(f"☿️ Test Mercury analysis sent to user {user.telegram_id}")
                 
                 # Отмечаем анализ как завершенный

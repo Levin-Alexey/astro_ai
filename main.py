@@ -2963,7 +2963,7 @@ async def on_explore_all_planets(callback: CallbackQuery):
             "<b>Разборы всех планет</b> 💣\n\n"
             "☀️ <b>Солнце</b> — жизненная сила, внутренний стержень и источник энергии\n"
             "🧠 <b>Меркурий</b> — мышление, речь и эффективное обучение\n"
-            "�💍 <b>Венера</b> — деньги и отношения\n"
+            "💰💍 <b>Венера</b> — деньги и отношения\n"
             "⚡️ <b>Марс</b> — мотивация, решительность и умение идти вперед\n\n"
             "<b>Стоимость: 222₽ (вместо 5555₽)</b>\n"
             "+ 🎁: обсуждение своей натальной карты с Лилит 24/7\n\n"
@@ -2983,7 +2983,8 @@ async def on_explore_all_planets(callback: CallbackQuery):
                         )
                     ]
                 ]
-            )
+            ),
+            parse_mode="HTML"
         )
         logger.info(
             f"Пользователь {user_id} запросил разборы всех планет (доступа нет), profile_id={profile_id}"
@@ -4073,6 +4074,9 @@ async def on_pay_all_planets(callback: CallbackQuery):
 async def on_next_planet(callback: CallbackQuery):
     """Обработчик кнопки 'Следующая планета'"""
     from all_planets_handler import get_all_planets_handler
+    from db import get_session
+    from models import User as DbUser, PlanetPayment, PaymentType, PaymentStatus
+    from sqlalchemy import select
     
     # Извлекаем profile_id из callback_data если есть
     profile_id = None
@@ -4082,6 +4086,39 @@ async def on_next_planet(callback: CallbackQuery):
         except (ValueError, IndexError):
             profile_id = None
     
+    # Если profile_id отсутствует, пытаемся определить его по последнему платежу "все планеты"
+    if profile_id is None:
+        try:
+            async with get_session() as session:
+                # Находим пользователя по telegram_id
+                user_result = await session.execute(
+                    select(DbUser).where(DbUser.telegram_id == (callback.from_user.id if callback.from_user else 0))
+                )
+                user = user_result.scalar_one_or_none()
+                if user:
+                    payment_result = await session.execute(
+                        select(PlanetPayment)
+                        .where(
+                            PlanetPayment.user_id == user.user_id,
+                            PlanetPayment.payment_type == PaymentType.all_planets,
+                            PlanetPayment.status.in_([
+                                PaymentStatus.completed,
+                                PaymentStatus.processing,
+                                PaymentStatus.delivered,
+                                PaymentStatus.analysis_failed,
+                            ])
+                        )
+                        .order_by(PlanetPayment.completed_at.desc())
+                    )
+                    payment = payment_result.scalar_one_or_none()
+                    if payment:
+                        profile_id = payment.profile_id
+                        logger.info(
+                            f"on_next_planet: derived profile_id={profile_id} from latest all-planets payment"
+                        )
+        except Exception as e:
+            logger.warning(f"on_next_planet: failed to derive profile_id, error={e}")
+
     logger.info(f"on_next_planet called with profile_id={profile_id}")
     
     handler = get_all_planets_handler()
