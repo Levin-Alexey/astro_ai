@@ -838,29 +838,37 @@ async def save_astrology_data(
         )
         all_planets_payment = payment_result.scalar_one_or_none()
         
-        # Формируем условия для поиска prediction
-        query_conditions = [
-            Prediction.user_id == user.user_id,
-        ]
+        # ВАЖНО: Обновляем существующий prediction ТОЛЬКО если есть активная оплата all_planets
+        # В противном случае ВСЕГДА создаем новый prediction
+        prediction = None
         
-        # Добавляем условие по profile_id
-        if profile_id:
-            query_conditions.append(Prediction.profile_id == profile_id)
-        else:
-            query_conditions.append(Prediction.profile_id.is_(None))
-        
-        # ВАЖНО: Ищем только predictions, созданные ПОСЛЕ оплаты all_planets
         if all_planets_payment and all_planets_payment.completed_at:
-            query_conditions.append(Prediction.created_at >= all_planets_payment.completed_at)
-            logger.info(f"Searching for predictions created after payment at {all_planets_payment.completed_at}")
-        
-        # Ищем существующий prediction
-        existing_result = await session.execute(
-            select(Prediction)
-            .where(*query_conditions)
-            .order_by(Prediction.created_at.desc())
-        )
-        prediction = existing_result.scalar_one_or_none()
+            # Есть оплата all_planets - ищем prediction, созданный после этой оплаты
+            logger.info(f"Found all_planets payment completed at {all_planets_payment.completed_at}, searching for prediction to update")
+            
+            # Формируем условия для поиска prediction
+            query_conditions = [
+                Prediction.user_id == user.user_id,
+                Prediction.created_at >= all_planets_payment.completed_at  # ПОСЛЕ оплаты
+            ]
+            
+            # Добавляем условие по profile_id
+            if profile_id:
+                query_conditions.append(Prediction.profile_id == profile_id)
+            else:
+                query_conditions.append(Prediction.profile_id.is_(None))
+            
+            # Ищем существующий prediction
+            existing_result = await session.execute(
+                select(Prediction)
+                .where(*query_conditions)
+                .order_by(Prediction.created_at.desc())
+            )
+            prediction = existing_result.scalar_one_or_none()
+        else:
+            # Нет оплаты all_planets - создаем новый prediction для отдельной планеты
+            logger.info(f"No all_planets payment found, will create new prediction for {planet.value}")
+
         
         if prediction:
             # Обновляем существующий prediction - добавляем данные планеты к content
