@@ -809,26 +809,72 @@ async def save_astrology_data(
         if not user:
             raise ValueError(f"User {user_id} not found")
 
-        # Создаем запись предсказания - сохраняем сырые данные в content
-        # Результат LLM будет сохранен в соответствующий столбец воркером
-        prediction = Prediction(
-            user_id=user.user_id,
-            planet=planet,
-            prediction_type=prediction_type,
-            content=content,  # Сырые данные от API
-            llm_model=llm_model,
-            llm_tokens_used=llm_tokens_used,
-            llm_temperature=llm_temperature,
-            expires_at=expires_at,
-            profile_id=profile_id  # Добавляем поддержку дополнительных профилей
+        # ИЗМЕНЕНО: Ищем существующий Prediction для данного user + profile_id
+        # Используем один Prediction на пользователя + профиль для всех планет
+        query_conditions = [
+            Prediction.user_id == user.user_id,
+        ]
+        
+        # Добавляем условие по profile_id
+        if profile_id:
+            query_conditions.append(Prediction.profile_id == profile_id)
+        else:
+            query_conditions.append(Prediction.profile_id.is_(None))
+        
+        # Ищем существующий prediction
+        existing_result = await session.execute(
+            select(Prediction)
+            .where(*query_conditions)
+            .order_by(Prediction.created_at.desc())
         )
+        prediction = existing_result.scalar_one_or_none()
+        
+        if prediction:
+            # Обновляем существующий prediction - добавляем данные планеты к content
+            logger.info(f"Updating existing prediction {prediction.prediction_id} for user {user_id}, planet {planet.value}, profile_id={profile_id}")
+            
+            # Добавляем разделитель и данные новой планеты
+            if prediction.content:
+                prediction.content += f"\n\n{'='*50}\n\n{content}"
+            else:
+                prediction.content = content
+            
+            # Обновляем метаданные если указаны
+            if llm_model:
+                prediction.llm_model = llm_model
+            if llm_tokens_used:
+                prediction.llm_tokens_used = llm_tokens_used
+            if llm_temperature:
+                prediction.llm_temperature = llm_temperature
+            if expires_at:
+                prediction.expires_at = expires_at
+            
+            # Обновляем planet на последнюю обработанную
+            prediction.planet = planet
+            
+            await session.commit()
+            logger.info(f"Updated prediction {prediction.prediction_id} for user {user_id}, planet {planet.value}")
+            
+        else:
+            # Создаем новый prediction если не найден существующий
+            logger.info(f"Creating new prediction for user {user_id}, planet {planet.value}, profile_id={profile_id}")
+            
+            prediction = Prediction(
+                user_id=user.user_id,
+                planet=planet,
+                prediction_type=prediction_type,
+                content=content,  # Сырые данные от API
+                llm_model=llm_model,
+                llm_tokens_used=llm_tokens_used,
+                llm_temperature=llm_temperature,
+                expires_at=expires_at,
+                profile_id=profile_id
+            )
 
-        session.add(prediction)
-        await session.commit()
+            session.add(prediction)
+            await session.commit()
+            logger.info(f"Created new prediction {prediction.prediction_id} for user {user_id}, planet {planet.value}")
 
-        logger.info(
-            f"Saved prediction for user {user_id}, planet {planet.value}"
-        )
         return prediction.prediction_id
 
 
