@@ -395,7 +395,12 @@ class AllPlanetsHandler:
                 payment_conditions = [
                     PlanetPayment.user_id == user.user_id,  # FIX: используем внутренний ID
                     PlanetPayment.payment_type == PaymentType.all_planets,
-                    PlanetPayment.status == PaymentStatus.completed
+                    PlanetPayment.status.in_([
+                        PaymentStatus.completed,
+                        PaymentStatus.processing,
+                        PaymentStatus.delivered,
+                        PaymentStatus.analysis_failed,
+                    ])
                 ]
                 
                 # Добавляем условие по profile_id

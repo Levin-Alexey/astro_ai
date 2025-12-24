@@ -4126,7 +4126,14 @@ async def check_user_payment_access(user_id: int, planet: str) -> bool:
             select(PlanetPayment).where(
                 PlanetPayment.user_id == db_user.user_id,  # FIX: используем внутренний ID
                 PlanetPayment.payment_type == PaymentType.all_planets,
-                PlanetPayment.status == PaymentStatus.completed,
+                PlanetPayment.status.in_(
+                    [
+                        PaymentStatus.completed,
+                        PaymentStatus.processing,
+                        PaymentStatus.delivered,
+                        PaymentStatus.analysis_failed,
+                    ]
+                ),
                 PlanetPayment.profile_id.is_(None)  # Только основной профиль
             )
         )
