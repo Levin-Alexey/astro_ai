@@ -811,6 +811,34 @@ async def save_astrology_data(
 
         # ИЗМЕНЕНО: Ищем существующий Prediction для данного user + profile_id
         # Используем один Prediction на пользователя + профиль для всех планет
+        # Ищем только predictions, созданные после последней оплаты all_planets
+        
+        # Сначала получаем время последней оплаты all_planets для профиля
+        from models import PlanetPayment, PaymentType, PaymentStatus
+        
+        payment_conditions = [
+            PlanetPayment.user_id == user.user_id,
+            PlanetPayment.payment_type == PaymentType.all_planets,
+            PlanetPayment.status.in_([
+                PaymentStatus.completed,
+                PaymentStatus.processing,
+                PaymentStatus.delivered
+            ])
+        ]
+        
+        if profile_id:
+            payment_conditions.append(PlanetPayment.profile_id == profile_id)
+        else:
+            payment_conditions.append(PlanetPayment.profile_id.is_(None))
+        
+        payment_result = await session.execute(
+            select(PlanetPayment)
+            .where(*payment_conditions)
+            .order_by(PlanetPayment.completed_at.desc())
+        )
+        all_planets_payment = payment_result.scalar_one_or_none()
+        
+        # Формируем условия для поиска prediction
         query_conditions = [
             Prediction.user_id == user.user_id,
         ]
@@ -820,6 +848,11 @@ async def save_astrology_data(
             query_conditions.append(Prediction.profile_id == profile_id)
         else:
             query_conditions.append(Prediction.profile_id.is_(None))
+        
+        # ВАЖНО: Ищем только predictions, созданные ПОСЛЕ оплаты all_planets
+        if all_planets_payment and all_planets_payment.completed_at:
+            query_conditions.append(Prediction.created_at >= all_planets_payment.completed_at)
+            logger.info(f"Searching for predictions created after payment at {all_planets_payment.completed_at}")
         
         # Ищем существующий prediction
         existing_result = await session.execute(
