@@ -2,7 +2,6 @@ from fastapi import FastAPI, Request
 import logging
 import asyncio
 from datetime import datetime, timezone
-from typing import Optional
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton # Добавлен импорт
 from db import get_session 
 from subscriptions_db import (
@@ -33,7 +32,6 @@ async def yookassa_webhook(request: Request):
             metadata = data["object"].get("metadata", {})
             user_id = metadata.get("user_id")
             planet = metadata.get("planet")
-            profile_id = metadata.get("profile_id")  # Может быть None для основного профиля
             payment_id = data["object"].get("id")
             
             if not user_id or not planet:
@@ -91,7 +89,7 @@ async def yookassa_webhook(request: Request):
 
             # Обновляем статус платежа в БД
 
-            logger.info(f"🔥 Updating payment status: telegram_id={telegram_id}, planet={planet}, profile_id={profile_id}")
+            logger.info(f"🔥 Updating payment status: telegram_id={telegram_id}, planet={planet}")
             await update_payment_status(telegram_id, planet, payment_id)
             
             # Если это оплата за все планеты, запускаем последовательный разбор
@@ -99,18 +97,14 @@ async def yookassa_webhook(request: Request):
                 logger.info(f"🔥 Processing ALL PLANETS payment")
                 from all_planets_handler import get_all_planets_handler
                 handler = get_all_planets_handler()
-                # Преобразуем profile_id в int или None
-                profile_id_int = int(profile_id) if profile_id and profile_id != "None" else None
-                logger.info(f"🔥 Calling handle_payment_success with telegram_id={telegram_id}, profile_id={profile_id_int}")
                 if handler:
-                    await handler.handle_payment_success(telegram_id, profile_id_int)
+                    await handler.handle_payment_success(telegram_id)
                 else:
                     logger.error("❌ All planets handler not initialized")
             else:
                 # Отправляем уведомление пользователю для отдельных планет
-                profile_id_int = int(profile_id) if profile_id and profile_id != "None" else None
-                logger.info(f"🔥 Processing SINGLE PLANET payment: planet={planet}, profile_id={profile_id_int}")
-                await notify_user_payment_success(telegram_id, planet, profile_id_int)
+                logger.info(f"🔥 Processing SINGLE PLANET payment: planet={planet}")
+                await notify_user_payment_success(telegram_id, planet)
             
             logger.info(f"✅ Payment processed for Telegram ID {telegram_id}, planet: {planet}")
             
@@ -197,7 +191,7 @@ async def update_payment_status(user_id: int, planet: str, external_payment_id: 
         logger.error(f"❌ Error updating payment status: {e}")
 
 
-async def notify_user_payment_success(user_id: int, planet: str, profile_id: Optional[int] = None):
+async def notify_user_payment_success(user_id: int, planet: str):
     """Отправляет уведомление пользователю об успешной оплате"""
     try:
         from main import bot
@@ -224,7 +218,7 @@ async def notify_user_payment_success(user_id: int, planet: str, profile_id: Opt
         await bot.send_message(user_id, message)
         
         # Запускаем генерацию разбора в фоне
-        asyncio.create_task(generate_planet_analysis(user_id, planet, profile_id))
+        asyncio.create_task(generate_planet_analysis(user_id, planet))
         
         logger.info(f"✅ Notification sent to user {user_id} for planet {planet}")
         
@@ -232,71 +226,38 @@ async def notify_user_payment_success(user_id: int, planet: str, profile_id: Opt
         logger.error(f"❌ Error sending notification to user {user_id}: {e}")
 
 
-async def generate_planet_analysis(user_id: int, planet: str, profile_id: Optional[int] = None):
+async def generate_planet_analysis(user_id: int, planet: str):
     """Генерирует астрологический разбор планеты через воркер"""
     try:
-        logger.info(f"🚀 Starting planet analysis for user {user_id}, planet {planet}, profile_id: {profile_id}")
+        logger.info(f"🚀 Starting planet analysis for user {user_id}, planet {planet}")
         
         # Для Солнца вызываем start_sun_analysis
         if planet == "sun":
             from astrology_handlers import start_sun_analysis
-            astrology_data = await start_sun_analysis(user_id, profile_id)
+            astrology_data = await start_sun_analysis(user_id, None)
             
             if astrology_data:
-                logger.info(f"✅ Sun analysis data generated for user {user_id}, profile_id: {profile_id}")
+                logger.info(f"✅ Sun analysis data generated for user {user_id}")
             else:
-                logger.error(f"❌ Failed to generate sun analysis for user {user_id}, profile_id: {profile_id}")
+                logger.error(f"❌ Failed to generate sun analysis for user {user_id}")
         
         # Для Меркурия используем отдельную функцию как у Луны
         elif planet == "mercury":
-            if profile_id:
-                # Дополнительный профиль - используем отдельную функцию
-                from handlers.additional_profile_handler import start_mercury_analysis_for_profile
-                logger.info(f"🚀 Calling start_mercury_analysis_for_profile for profile_id: {profile_id}")
-                # Создаем фиктивное сообщение для функции
-                from aiogram.types import Message
-                fake_message = type('obj', (object,), {'answer': lambda x: None})()
-                await start_mercury_analysis_for_profile(fake_message, profile_id)
-                astrology_data = True  # Функция сама обрабатывает все
-            else:
-                # Основной профиль - используем стандартную функцию
-                from astrology_handlers import start_mercury_analysis
-                logger.info(f"🚀 Calling start_mercury_analysis for user {user_id}, profile_id: {profile_id}")
-                astrology_data = await start_mercury_analysis(user_id, profile_id)
+            from astrology_handlers import start_mercury_analysis
+            logger.info(f"🚀 Calling start_mercury_analysis for user {user_id}")
+            astrology_data = await start_mercury_analysis(user_id, None)
         
         # Для Венеры используем отдельную функцию как у Луны
         elif planet == "venus":
-            if profile_id:
-                # Дополнительный профиль - используем отдельную функцию
-                from handlers.additional_profile_handler import start_venus_analysis_for_profile
-                logger.info(f"🚀 Calling start_venus_analysis_for_profile for profile_id: {profile_id}")
-                # Создаем фиктивное сообщение для функции
-                from aiogram.types import Message
-                fake_message = type('obj', (object,), {'answer': lambda x: None})()
-                await start_venus_analysis_for_profile(fake_message, profile_id)
-                astrology_data = True  # Функция сама обрабатывает все
-            else:
-                # Основной профиль - используем стандартную функцию
-                from astrology_handlers import start_venus_analysis
-                logger.info(f"🚀 Calling start_venus_analysis for user {user_id}, profile_id: {profile_id}")
-                astrology_data = await start_venus_analysis(user_id, profile_id)
+            from astrology_handlers import start_venus_analysis
+            logger.info(f"🚀 Calling start_venus_analysis for user {user_id}")
+            astrology_data = await start_venus_analysis(user_id, None)
         
         # Для Марса используем отдельную функцию как у Луны
         elif planet == "mars":
-            if profile_id:
-                # Дополнительный профиль - используем отдельную функцию
-                from handlers.additional_profile_handler import start_mars_analysis_for_profile
-                logger.info(f"🚀 Calling start_mars_analysis_for_profile for profile_id: {profile_id}")
-                # Создаем фиктивное сообщение для функции
-                from aiogram.types import Message
-                fake_message = type('obj', (object,), {'answer': lambda x: None})()
-                await start_mars_analysis_for_profile(fake_message, profile_id)
-                astrology_data = True  # Функция сама обрабатывает все
-            else:
-                # Основной профиль - используем стандартную функцию
-                from astrology_handlers import start_mars_analysis
-                logger.info(f"🚀 Calling start_mars_analysis for user {user_id}, profile_id: {profile_id}")
-                astrology_data = await start_mars_analysis(user_id, profile_id)
+            from astrology_handlers import start_mars_analysis
+            logger.info(f"🚀 Calling start_mars_analysis for user {user_id}")
+            astrology_data = await start_mars_analysis(user_id, None)
         
         else:
             logger.warning(f"⚠️ Analysis for {planet} not implemented yet")

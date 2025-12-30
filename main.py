@@ -58,21 +58,6 @@ from handlers.mars_recommendations_handler import (
 )
 from handlers.ask_question_handler import handle_ask_question, QuestionForm
 from handlers.support_handler import SupportForm
-from handlers.additional_profile_handler import (
-    AdditionalProfileForm,
-    start_additional_profile_creation,
-    handle_additional_name,
-    handle_additional_birth_date,
-    handle_additional_birth_city,
-    handle_additional_birth_time_accuracy_callback,
-    handle_additional_birth_time_local,
-    handle_additional_gender_callback,
-    handle_additional_birth_date_callback,
-    handle_additional_birth_city_callback,
-    handle_additional_birth_time_callback,
-    handle_additional_profile_cancel,
-    handle_additional_time_unknown_callback,
-)
 from payment_handler import init_payment_handler
 from all_planets_handler import init_all_planets_handler
 from handlers.purchase_history_handler import router as purchase_history_router
@@ -411,7 +396,6 @@ async def show_personal_cabinet(message_or_callback):
                 "📅 Мои разборы → переходи сюда, если хочешь увидеть свой прогресс по датам и перечитать разборы\n"
                 "🪐 Купить разборы планет  → переходи сюда, если хочешь приобрести разбор\n"
                 "🔥 Персональные прогнозы → переходи сюда, чтобы получить прогноз на сегодня по твоим личным данным\n"
-                "🆕 Начать разбор по новой дате → переходи сюда, если хочешь перейти к разбору по новым данным\n"
                 "🖇 История покупок → переходи сюда, если тебе хочешь посмотреть список твоих покупок у НейроАстролога\n\n"
                 "<b>Выбирай нужное действие</b>👇🏼"
             )
@@ -435,12 +419,6 @@ async def show_personal_cabinet(message_or_callback):
                         InlineKeyboardButton(
                             text="🔥 Персональные прогнозы",
                             callback_data="personal_forecasts"
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text="🆕 Начать разбор по новой дате",
-                            callback_data="new_analysis"
                         )
                     ],
                     [
@@ -508,7 +486,6 @@ async def show_main_menu(message_or_callback):
         "🪐 Купить разборы планет → переходи сюда, если хочешь приобрести разбор \n"
         "🔥 Персональные прогнозы → переходи сюда, чтобы получить прогноз на сегодня по твоим личным данным \n"
         "🔮 Общение с Лилит → переходи сюда, если хочешь задать вопросы по своей карте или просто поговорить о жизни \n"
-        "🆕 Начать разбор по новой дате → переходи сюда, если хочешь перейти к разбору по новым данным \n"
         "❔ Частые вопросы → переходи сюда, если хочешь больше узнать о проекте «НейроАстролог 🪐🤖 AI»\n"
         "❤️‍🩹 Служба заботы → переходи сюда, если у тебя есть вопрос любого рода (техническая ошибка, предложение по сотрудничеству и т.д.) \n\n"
         "<b>Выбирай нужное действие</b>👇🏼"
@@ -538,12 +515,6 @@ async def show_main_menu(message_or_callback):
                 InlineKeyboardButton(
                     text="🔮 Общение с Лилит",
                     callback_data="ask_question"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="🆕 Начать разбор по новой дате",
-                    callback_data="new_analysis"
                 )
             ],
             [
@@ -696,49 +667,6 @@ async def set_gender(callback: CallbackQuery, state: FSMContext):
     await cb_msg.answer("*Как тебя зовут?* 💫", parse_mode="Markdown")
     await state.set_state(ProfileForm.waiting_for_first_name)
     await callback.answer("Сохранено")
-
-
-# Callback обработчики для дополнительного профиля
-@dp.callback_query(F.data.startswith("additional_gender:"))
-async def handle_additional_gender_callback_wrapper(callback: CallbackQuery, state: FSMContext):
-    """Обертка для обработчика выбора пола дополнительного профиля"""
-    await handle_additional_gender_callback(callback, state)
-
-
-@dp.callback_query(AdditionalProfileForm.waiting_for_additional_birth_date_confirm, F.data.startswith("additional_birth_date:"))
-async def handle_additional_birth_date_callback_wrapper(callback: CallbackQuery, state: FSMContext):
-    """Обертка для обработчика подтверждения даты рождения дополнительного профиля"""
-    await handle_additional_birth_date_callback(callback, state)
-
-
-@dp.callback_query(F.data.startswith("additional_city:"))
-async def handle_additional_birth_city_callback_wrapper(callback: CallbackQuery, state: FSMContext):
-    """Обертка для обработчика подтверждения города дополнительного профиля"""
-    await handle_additional_birth_city_callback(callback, state)
-
-
-@dp.callback_query(F.data.startswith("additional_birth_time:"))
-async def handle_additional_birth_time_callback_wrapper(callback: CallbackQuery, state: FSMContext):
-    """Обертка для обработчика подтверждения времени рождения дополнительного профиля"""
-    await handle_additional_birth_time_callback(callback, state)
-
-
-@dp.callback_query(F.data.startswith("additional_time_unknown:"))
-async def handle_additional_time_unknown_callback_wrapper(callback: CallbackQuery, state: FSMContext):
-    """Обертка для обработчика неизвестного времени дополнительного профиля"""
-    await handle_additional_time_unknown_callback(callback, state)
-
-
-@dp.callback_query(F.data == "additional_profile:cancel")
-async def handle_additional_profile_cancel_wrapper(callback: CallbackQuery, state: FSMContext):
-    """Обертка для обработчика отмены создания дополнительного профиля"""
-    await handle_additional_profile_cancel(callback, state)
-
-
-@dp.callback_query(F.data.startswith("additional_timeacc:"))
-async def handle_additional_birth_time_accuracy_callback_wrapper(callback: CallbackQuery, state: FSMContext):
-    """Обертка для обработчика выбора точности времени рождения дополнительного профиля"""
-    await handle_additional_birth_time_accuracy_callback(callback, state)
 
 
 @dp.message(ProfileForm.waiting_for_first_name)
@@ -1495,39 +1423,6 @@ async def on_buy_analysis_self(callback: CallbackQuery, state: FSMContext):
     await handle_buy_analysis_self(callback, state)
 
 
-@dp.callback_query(F.data == "buy_analysis_additional")
-async def on_buy_analysis_additional(callback: CallbackQuery):
-    """Обработчик кнопки 'Купить разбор для дополнительных дат'"""
-    from handlers.buy_analysis_handler import show_additional_profiles_for_purchase
-    
-    await show_additional_profiles_for_purchase(callback)
-
-
-@dp.callback_query(F.data.startswith("buy_for_profile:"))
-async def on_buy_for_profile(callback: CallbackQuery, state: FSMContext):
-    """Обработчик выбора профиля для покупки разборов"""
-    from handlers.buy_analysis_handler import handle_buy_for_profile
-    
-    await handle_buy_for_profile(callback, state)
-
-
-@dp.callback_query(F.data == "add_new_date")
-async def on_add_new_date(callback: CallbackQuery, state: FSMContext):
-    """Обработчик кнопки 'Добавить новую дату'"""
-    await callback.answer()
-    
-    await start_additional_profile_creation(callback, state)
-
-
-@dp.callback_query(F.data == "new_analysis")
-async def on_new_analysis(callback: CallbackQuery, state: FSMContext):
-    """Обработчик кнопки 'Новый разбор' - перенаправляет на создание доп. профиля"""
-    await callback.answer()
-    
-    # Используем тот же обработчик, что и для "Добавить новую дату"
-    await start_additional_profile_creation(callback, state)
-
-
 @dp.callback_query(F.data == "my_analyses")
 async def on_my_analyses(callback: CallbackQuery):
     """Обработчик кнопки 'Мои разборы' - показывает выбор типа разборов"""
@@ -1542,8 +1437,7 @@ async def on_my_analyses(callback: CallbackQuery):
             "📅 <b>Мои разборы</b>\n"
             "Здесь ты можешь увидеть прогресс по каждой дате и перечитать разборы\n\n"
             "Краткая инструкция: \n"
-            "👑 Мой профиль → переходи сюда, если хочешь увидеть прогресс по своей дате, перечитать свои разборы и купить новые \n"
-            "👥 Другие профили → переходи сюда, если хочешь увидеть прогресс по другим введенным датам, перечитать их разборы и купить новые \n\n"
+            "👑 Мой профиль → переходи сюда, если хочешь увидеть прогресс по своей дате, перечитать свои разборы и купить новые \n\n"
             "<b>Выбирай нужное действие</b>👇🏼",
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -1551,12 +1445,6 @@ async def on_my_analyses(callback: CallbackQuery):
                         InlineKeyboardButton(
                             text="👑 Мой профиль",
                             callback_data="my_main_analyses"
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text="👥 Другие профили",
-                            callback_data="my_additional_analyses"
                         )
                     ],
                     [
@@ -1853,503 +1741,6 @@ async def on_view_planet(callback: CallbackQuery):
         )
 
 
-@dp.callback_query(F.data == "my_additional_analyses")
-async def on_my_additional_analyses(callback: CallbackQuery):
-    """Обработчик для просмотра дополнительных разборов"""
-    await callback.answer()
-    cb_msg = cast(Message, callback.message)
-    
-    try:
-        user_id = callback.from_user.id if callback.from_user else 0
-        logger.info(f"User {user_id} viewing additional profiles")
-        
-        # Получаем список дополнительных профилей пользователя
-        from db import get_session
-        from models import User, AdditionalProfile
-        from sqlalchemy import select
-        
-        async with get_session() as session:
-            # Находим пользователя
-            user_result = await session.execute(
-                select(User).where(User.telegram_id == user_id)
-            )
-            user = user_result.scalar_one_or_none()
-            
-            if not user:
-                await cb_msg.answer(
-                    "❌ Пользователь не найден в базе данных.\n"
-                    "Попробуйте перезапустить бота командой /start"
-                )
-                return
-            
-            # Получаем все дополнительные профили пользователя
-            profiles_result = await session.execute(
-                select(AdditionalProfile)
-                .where(
-                    AdditionalProfile.owner_user_id == user.user_id,
-                    AdditionalProfile.is_active.is_(True)
-                )
-                .order_by(AdditionalProfile.created_at.desc())
-            )
-            profiles = profiles_result.scalars().all()
-            
-            if not profiles:
-                # Нет дополнительных профилей
-                await cb_msg.answer(
-                    "👥 **Дополнительные разборы**\n\n"
-                    "У вас пока нет дополнительных профилей.\n\n"
-                    "Вы можете создать профиль для:\n"
-                    "• Члена семьи (мама, папа, брат, сестра)\n"
-                    "• Партнера или друга\n"
-                    "• Ребенка\n\n"
-                    "Для создания профиля нажмите кнопку ниже 👇",
-                    reply_markup=InlineKeyboardMarkup(
-                        inline_keyboard=[
-                            [
-                                InlineKeyboardButton(
-                                    text="➕ Создать профиль",
-                                    callback_data="add_new_date"
-                                )
-                            ],
-                            [
-                                InlineKeyboardButton(
-                                    text="← Назад к выбору типа разборов",
-                                    callback_data="my_analyses"
-                                )
-                            ]
-                        ]
-                    )
-                )
-                return
-            
-            # Формируем список профилей с кнопками
-            text = (
-                "👥 <b>Другие профили</b>\n"
-                "Здесь ты можешь увидеть прогресс по своим дополнительным профилям и перечитать их разборы\n\n"
-                "<b>Выбери профиль</b>👇🏼"
-            )
-            
-            # Создаем кнопки для каждого профиля
-            buttons = []
-            for profile in profiles:
-                gender_emoji = {
-                    "male": "👨",
-                    "female": "👩",
-                    "other": "🧑"
-                }.get(profile.gender.value if profile.gender else "unknown", "👤")
-                
-                profile_button = InlineKeyboardButton(
-                    text=f"{gender_emoji} {profile.full_name}",
-                    callback_data=f"view_profile:{profile.profile_id}"
-                )
-                buttons.append([profile_button])
-            
-            # Добавляем кнопки навигации
-            buttons.append([
-                InlineKeyboardButton(
-                    text="➕ Добавить профиль",
-                    callback_data="add_new_date"
-                )
-            ])
-            buttons.append([
-                InlineKeyboardButton(
-                    text="← Назад к выбору типа разборов",
-                    callback_data="my_analyses"
-                )
-            ])
-            
-            await cb_msg.answer(
-                text,
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
-                parse_mode="HTML"
-            )
-            
-    except Exception as e:
-        logger.error(f"Error in on_my_additional_analyses: {e}")
-        await cb_msg.answer(
-            "❌ Произошла ошибка при загрузке дополнительных профилей.\n"
-            "Попробуйте позже или обратитесь в службу заботы.",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="← Назад",
-                            callback_data="my_analyses"
-                        )
-                    ]
-                ]
-            )
-        )
-
-
-@dp.callback_query(F.data.startswith("view_profile:"))
-async def on_view_profile(callback: CallbackQuery):
-    """Обработчик для просмотра планет дополнительного профиля"""
-    await callback.answer()
-    cb_msg = cast(Message, callback.message)
-    
-    try:
-        user_id = callback.from_user.id if callback.from_user else 0
-        profile_id = int(callback.data.split(":")[1])
-        logger.info(f"User {user_id} viewing profile {profile_id}")
-        
-        from db import get_session
-        from models import AdditionalProfile, Prediction
-        from sqlalchemy import select
-        
-        async with get_session() as session:
-            # Получаем профиль
-            profile_result = await session.execute(
-                select(AdditionalProfile).where(
-                    AdditionalProfile.profile_id == profile_id
-                )
-            )
-            profile = profile_result.scalar_one_or_none()
-            
-            if not profile:
-                await cb_msg.answer(
-                    "❌ Профиль не найден",
-                    reply_markup=InlineKeyboardMarkup(
-                        inline_keyboard=[[
-                            InlineKeyboardButton(
-                                text="← Назад",
-                                callback_data="my_additional_analyses"
-                            )
-                        ]]
-                    )
-                )
-                return
-            
-            # Проверяем все планеты для этого профиля
-            from models import Planet
-            
-            planets_info = []
-            planets_to_check = [
-                (Planet.moon, Prediction.moon_analysis, "Луна", "🌙"),
-                (Planet.sun, Prediction.sun_analysis, "Солнце", "☀️"),
-                (Planet.mercury, Prediction.mercury_analysis, "Меркурий", "☿️"),
-                (Planet.venus, Prediction.venus_analysis, "Венера", "♀️"),
-                (Planet.mars, Prediction.mars_analysis, "Марс", "♂️")
-            ]
-            
-            for planet_enum, analysis_field, planet_name, planet_emoji in planets_to_check:
-                # Проверяем наличие готового разбора
-                prediction_result = await session.execute(
-                    select(Prediction).where(
-                        Prediction.profile_id == profile_id,
-                        Prediction.planet == planet_enum,
-                        Prediction.is_deleted.is_(False),
-                        Prediction.is_active.is_(True),
-                        analysis_field.is_not(None)  # Анализ должен быть готов
-                    ).limit(1)
-                )
-                prediction = prediction_result.scalar_one_or_none()
-                
-                # Проверяем есть ли текст разбора
-                has_analysis = prediction is not None
-                
-                planets_info.append({
-                    "code": planet_enum.value,  # Сохраняем строковое значение enum
-                    "name": planet_name,
-                    "emoji": planet_emoji,
-                    "has_analysis": has_analysis
-                })
-            
-            # Формируем сообщение
-            gender_emoji = {
-                "male": "👨",
-                "female": "👩",
-                "other": "🧑"
-            }.get(profile.gender.value if profile.gender else "unknown", "👤")
-            
-            text = f"👤 **Профиль: {gender_emoji} {profile.full_name}**\n\n"
-            text += "📋 **Доступные разборы:**\n\n"
-            
-            # Создаем кнопки для планет
-            buttons = []
-            for planet in planets_info:
-                battery = "🔋" if planet["has_analysis"] else "🪫"
-                button_text = f"{battery} {planet['emoji']} {planet['name']}"
-                buttons.append([
-                    InlineKeyboardButton(
-                        text=button_text,
-                        callback_data=f"view_profile_planet:{profile_id}:{planet['code']}"
-                    )
-                ])
-            
-            # Добавляем кнопку "Назад"
-            buttons.append([
-                InlineKeyboardButton(
-                    text="← Назад к профилям",
-                    callback_data="my_additional_analyses"
-                )
-            ])
-            
-            await cb_msg.answer(
-                text,
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
-                parse_mode="Markdown"
-            )
-            
-    except Exception as e:
-        logger.error(f"Error in on_view_profile: {e}")
-        await cb_msg.answer(
-            "❌ Произошла ошибка при загрузке профиля",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[[
-                    InlineKeyboardButton(
-                        text="← Назад",
-                        callback_data="my_additional_analyses"
-                    )
-                ]]
-            )
-        )
-
-
-@dp.callback_query(F.data.startswith("view_profile_planet:"))
-async def on_view_profile_planet(callback: CallbackQuery):
-    """Обработчик для просмотра разбора планеты дополнительного профиля"""
-    await callback.answer()
-    cb_msg = cast(Message, callback.message)
-    
-    try:
-        user_id = callback.from_user.id if callback.from_user else 0
-        parts = callback.data.split(":")
-        profile_id = int(parts[1])
-        planet_code = parts[2]
-        
-        logger.info(f"User {user_id} viewing planet {planet_code} for profile {profile_id}")
-        
-        from db import get_session
-        from models import AdditionalProfile, Prediction, Planet
-        from sqlalchemy import select
-        
-        async with get_session() as session:
-            # Получаем профиль
-            profile_result = await session.execute(
-                select(AdditionalProfile).where(
-                    AdditionalProfile.profile_id == profile_id
-                )
-            )
-            profile = profile_result.scalar_one_or_none()
-
-            if not profile:
-                await cb_msg.answer("❌ Профиль не найден")
-                return
-            
-            # Конвертируем строку в Planet enum
-            try:
-                planet_enum = Planet(planet_code)
-            except ValueError:
-                logger.error(f"Invalid planet code: {planet_code}")
-                await cb_msg.answer("❌ Неверный код планеты.")
-                return
-            
-            # Определяем поле для анализа в зависимости от планеты
-            analysis_fields = {
-                Planet.moon: Prediction.moon_analysis,
-                Planet.sun: Prediction.sun_analysis,
-                Planet.mercury: Prediction.mercury_analysis,
-                Planet.venus: Prediction.venus_analysis,
-                Planet.mars: Prediction.mars_analysis,
-            }
-            analysis_field = analysis_fields.get(planet_enum)
-            
-            if not analysis_field:
-                logger.error(f"No analysis field for planet: {planet_code}")
-                await cb_msg.answer("❌ Неизвестная планета.")
-                return
-            
-            # Получаем готовый разбор планеты
-            # Учитываем is_active и наличие текста анализа
-            prediction_result = await session.execute(
-                select(Prediction).where(
-                    Prediction.profile_id == profile_id,
-                    Prediction.planet == planet_enum,
-                    Prediction.is_deleted.is_(False),
-                    Prediction.is_active.is_(True),
-                    analysis_field.is_not(None)  # Анализ должен быть готов
-                )
-                .order_by(Prediction.created_at.desc())
-                .limit(1)
-            )
-            prediction = prediction_result.scalar_one_or_none()
-            
-            planet_names = {
-                "moon": "Луна",
-                "sun": "Солнце",
-                "mercury": "Меркурий",
-                "venus": "Венера",
-                "mars": "Марс"
-            }
-            planet_name = planet_names.get(planet_code, planet_code)
-            
-            # Получаем текст разбора
-            prediction_text = None
-            if prediction:
-                if planet_code == "moon":
-                    prediction_text = prediction.moon_analysis
-                elif planet_code == "sun":
-                    prediction_text = prediction.sun_analysis
-                elif planet_code == "mercury":
-                    prediction_text = prediction.mercury_analysis
-                elif planet_code == "venus":
-                    prediction_text = prediction.venus_analysis
-                elif planet_code == "mars":
-                    prediction_text = prediction.mars_analysis
-            
-            if prediction_text:
-                # Есть разбор - показываем его
-                gender_emoji = {
-                    "male": "👨",
-                    "female": "👩",
-                    "other": "🧑"
-                }.get(profile.gender.value if profile.gender else "unknown", "👤")
-                
-                await cb_msg.answer(
-                    f"📋 **{planet_name} — {gender_emoji} {profile.full_name}**\n\n"
-                    f"{prediction_text}",
-                    reply_markup=InlineKeyboardMarkup(
-                        inline_keyboard=[
-                            [
-                                InlineKeyboardButton(
-                                    text="← Назад к планетам",
-                                    callback_data=f"view_profile:{profile_id}"
-                                )
-                            ]
-                        ]
-                    ),
-                    parse_mode="Markdown"
-                )
-            else:
-                # Нет разбора - предлагаем купить
-                gender_emoji = {
-                    "male": "👨",
-                    "female": "👩",
-                    "other": "🧑"
-                }.get(profile.gender.value if profile.gender else "unknown", "👤")
-                
-                await cb_msg.answer(
-                    f"🪫 **{planet_name} — {gender_emoji} {profile.full_name}**\n\n"
-                    f"У профиля пока нет разбора для планеты {planet_name}.\n\n"
-                    f"Хотите приобрести разбор?",
-                    reply_markup=InlineKeyboardMarkup(
-                        inline_keyboard=[
-                            [
-                                InlineKeyboardButton(
-                                    text="🪐 Купить разборы планет",
-                                    callback_data=f"buy_profile_planet:{profile_id}:{planet_code}"
-                                )
-                            ],
-                            [
-                                InlineKeyboardButton(
-                                    text="🔥 Персональные прогнозы",
-                                    callback_data="personal_forecasts"
-                                )
-                            ],
-                            [
-                                InlineKeyboardButton(
-                                    text="← Назад к планетам",
-                                    callback_data=f"view_profile:{profile_id}"
-                                )
-                            ]
-                        ]
-                    )
-                )
-                
-    except Exception as e:
-        logger.error(f"Error in on_view_profile_planet: {e}")
-        await cb_msg.answer(
-            "❌ Произошла ошибка при загрузке разбора",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[[
-                    InlineKeyboardButton(
-                        text="← Назад",
-                        callback_data="my_additional_analyses"
-                    )
-                ]]
-            )
-        )
-
-
-@dp.callback_query(F.data.startswith("buy_profile_planet:"))
-async def on_buy_profile_planet(callback: CallbackQuery):
-    """Обработчик для покупки разбора планеты дополнительного профиля"""
-    await callback.answer()
-    
-    try:
-        parts = callback.data.split(":")
-        profile_id = int(parts[1])
-        planet_code = parts[2]
-        
-        # Перенаправляем на соответствующий обработчик покупки с profile_id
-        planet_handlers = {
-            "sun": f"pay_sun:{profile_id}",
-            "mercury": f"pay_mercury:{profile_id}",
-            "venus": f"pay_venus:{profile_id}",
-            "mars": f"pay_mars:{profile_id}"
-        }
-        
-        if planet_code in planet_handlers:
-            # Создаем MockCallback для обхода frozen instance
-            class MockCallback:
-                def __init__(self, original, new_data):
-                    self.data = new_data
-                    self.from_user = original.from_user
-                    self.message = original.message
-                    self.id = original.id
-                    self.chat_instance = original.chat_instance
-                    self._original = original
-                
-                async def answer(self, *args, **kwargs):
-                    return await self._original.answer(*args, **kwargs)
-            
-            mock_callback = MockCallback(callback, planet_handlers[planet_code])
-            
-            # Вызываем соответствующий обработчик
-            if planet_code == "sun":
-                await on_pay_sun(mock_callback)
-            elif planet_code == "mercury":
-                await on_pay_mercury(mock_callback)
-            elif planet_code == "venus":
-                await on_pay_venus(mock_callback)
-            elif planet_code == "mars":
-                await on_pay_mars(mock_callback)
-        else:
-            # Луна бесплатная, не должно быть покупки
-            cb_msg = cast(Message, callback.message)
-            await cb_msg.answer(
-                "❌ Разбор Луны бесплатный и доступен всем профилям",
-                reply_markup=InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [
-                            InlineKeyboardButton(
-                                text="← Назад",
-                                callback_data="view_profile:{profile_id}"
-                            )
-                        ]
-                    ]
-                )
-            )
-            
-    except Exception as e:
-        logger.error(f"Error in on_buy_profile_planet: {e}")
-        cb_msg = cast(Message, callback.message)
-        await cb_msg.answer(
-            "❌ Произошла ошибка при обработке покупки",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="← Назад",
-                            callback_data="my_additional_analyses"
-                        )
-                    ]
-                ]
-            )
-        )
-
-
 @dp.message(Command("pay"))
 async def cmd_pay(message: Message, state: FSMContext):
     """Обработчик команды /pay — вызывает меню покупки разбора, как и кнопка 'Купить разбор'"""
@@ -2406,9 +1797,9 @@ async def send_faq(message_or_callback):
         "Что даёт время? Оно влияет на положение планет в домах. С ним разбор получается более полный и детальный. Без него ты всё равно получишь точный анализ планет, просто без домов.\n"
         "Совет от меня: если сомневаешься, пиши хотя бы примерное время — это всегда лучше, чем ничего!\n\n"
         "❔ <b>Как ввести или изменить дату/время/место рождения?</b>\n"
-        "😼: В Главном меню (введи в боте /start) есть раздел «Начать разбор по новой дате» — там можно добавить нового человека. Также эта функция есть в твоем Личном кабинете (введи в боте /lk).\n\n"
+        "😼: Используй /start, чтобы заново пройти анкету и обновить данные.\n\n"
         "❔ <b>Можно ли добавить несколько дат (для друзей/детей/партнёра)?</b>\n"
-        "😼: Да, можно. Более того, планируется обновление: добавим детские разборы и совместимость, не пропусти!\n\n"
+        "😼: Сейчас бот работает только с одним профилем.\n\n"
         "❔ <b>Луна бесплатна всегда или только первый раз?</b>\n"
         "😼: Разбор Луны всегда бесплатный.\n\n"
         "❔ <b>Какую планету лучше выбрать первой?</b>\n"
@@ -2667,74 +2058,6 @@ async def on_get_venus_recommendations(callback: CallbackQuery, state: FSMContex
 
 
 
-
-
-
-
-
-
-
-# Обработчики сообщений для дополнительного профиля
-@dp.message(AdditionalProfileForm.waiting_for_additional_name)
-async def process_additional_name(message: Message, state: FSMContext):
-    """Обработчик ввода имени для дополнительного профиля"""
-    await handle_additional_name(message, state)
-
-
-@dp.message(AdditionalProfileForm.waiting_for_additional_birth_date)
-async def process_additional_birth_date(message: Message, state: FSMContext):
-    """Обработчик ввода даты рождения для дополнительного профиля"""
-    await handle_additional_birth_date(message, state)
-
-
-@dp.message(AdditionalProfileForm.waiting_for_additional_birth_city)
-async def process_additional_birth_city(message: Message, state: FSMContext):
-    """Обработчик ввода места рождения для дополнительного профиля"""
-    await handle_additional_birth_city(message, state)
-
-
-@dp.message(AdditionalProfileForm.waiting_for_additional_birth_time_accuracy)
-async def process_additional_birth_time_accuracy_message(
-    message: Message, state: FSMContext
-):
-    """Позволяет ввести время рождения текстом до выбора кнопки точности"""
-    from handlers.additional_profile_handler import (
-        handle_additional_birth_time_accuracy_message,
-    )
-
-    await handle_additional_birth_time_accuracy_message(message, state)
-
-
-@dp.message(AdditionalProfileForm.waiting_for_additional_birth_time_local)
-async def process_additional_birth_time_local(message: Message, state: FSMContext):
-    """Обработчик ввода времени рождения для дополнительного профиля"""
-    await handle_additional_birth_time_local(message, state)
-
-
-@dp.message(AdditionalProfileForm.waiting_for_additional_birth_time_confirm)
-async def handle_text_during_additional_birth_time_confirm(message: Message, state: FSMContext):
-    """Обработчик текстовых сообщений в состоянии подтверждения времени дополнительного профиля"""
-    await message.answer(
-        "👆🏼 Пожалуйста, используй кнопки выше для подтверждения времени рождения\n\n"
-        "Нажми:\n"
-        "✅ <b>Верно</b> - если время указано правильно\n"
-        "🔄 <b>Ввести заново</b> - если хочешь изменить время",
-        parse_mode="HTML"
-    )
-
-
-@dp.message(AdditionalProfileForm.waiting_for_additional_birth_time_unknown_confirm)
-async def handle_text_during_additional_birth_time_unknown_confirm(message: Message, state: FSMContext):
-    """Обработчик текстовых сообщений в состоянии подтверждения работы без времени для дополнительного профиля"""
-    await message.answer(
-        "👆🏼 Пожалуйста, используй кнопки выше\n\n"
-        "Выбери:\n"
-        "✅ <b>Верно</b> - если хочешь продолжить без времени рождения\n"
-        "🔄 <b>Указать время</b> - если всё-таки хочешь указать время",
-        parse_mode="HTML"
-    )
-
-
 @dp.message(QuestionForm.waiting_for_question)
 async def process_user_question(message: Message, state: FSMContext):
     """Обработчик текстового вопроса пользователя"""
@@ -2792,58 +2115,11 @@ async def process_user_question(message: Message, state: FSMContext):
         )
 
 
-async def get_last_moon_prediction_profile_id(user_id: int) -> Optional[int]:
-    """
-    Получает profile_id из последнего разбора Луны пользователя
-    
-    Args:
-        user_id: Telegram ID пользователя
-        
-    Returns:
-        profile_id если это дополнительный профиль, None если основной
-    """
-    async with get_session() as session:
-        # Находим пользователя
-        user_result = await session.execute(
-            select(DbUser).where(DbUser.telegram_id == user_id)
-        )
-        user = user_result.scalar_one_or_none()
-        
-        if not user:
-            return None
-        
-        # Находим последний разбор Луны (может быть несколько для разных профилей)
-        prediction_result = await session.execute(
-            select(Prediction).where(
-                Prediction.user_id == user.user_id,
-                Prediction.planet == Planet.moon,
-                Prediction.prediction_type == PredictionType.free,
-                Prediction.is_active.is_(True),
-                Prediction.is_deleted.is_(False)
-            ).order_by(Prediction.created_at.desc())
-        )
-        prediction = prediction_result.scalars().first()  # Берем первый (последний созданный)
-        
-        if not prediction:
-            return None
-        
-        return prediction.profile_id
-
-
 @dp.callback_query(F.data == "explore_other_areas")
 async def on_explore_other_areas(callback: CallbackQuery):
     """Обработчик кнопки 'Исследовать другие сферы'"""
     await callback.answer()
     cb_msg = cast(Message, callback.message)
-    
-    # Определяем тип профиля (основной или дополнительный)
-    profile_id = await get_last_moon_prediction_profile_id(callback.from_user.id)
-    
-    # Создаем callback_data с profile_id если это дополнительный профиль
-    def create_callback_data(base_data: str) -> str:
-        if profile_id:
-            return f"{base_data}:{profile_id}"
-        return base_data
     
     await cb_msg.answer(
         "<b>Давай выберем, с чего начнем прямо сейчас</b> 🎅🏼💫\n\n"
@@ -2872,27 +2148,27 @@ async def on_explore_other_areas(callback: CallbackQuery):
                 [
                     InlineKeyboardButton(
                         text="😎 Все планеты 222₽",
-                        callback_data=create_callback_data("explore_all_planets")
+                        callback_data="explore_all_planets"
                     )
                 ],
                 [
                     InlineKeyboardButton(
                         text="☀️ Солнце 77₽",
-                        callback_data=create_callback_data("explore_sun")
+                        callback_data="explore_sun"
                     ),
                     InlineKeyboardButton(
                         text="🧠 Меркурий 77₽",
-                        callback_data=create_callback_data("explore_mercury")
+                        callback_data="explore_mercury"
                     )
                 ],
                 [
                     InlineKeyboardButton(
                         text="💰💍 Венера 77₽",
-                        callback_data=create_callback_data("explore_venus")
+                        callback_data="explore_venus"
                     ),
                     InlineKeyboardButton(
                         text="⚡️ Марс 77₽",
-                        callback_data=create_callback_data("explore_mars")
+                        callback_data="explore_mars"
                     )
                 ],
                 [
@@ -2921,14 +2197,6 @@ async def on_explore_all_planets(callback: CallbackQuery):
     cb_msg = cast(Message, callback.message)
     user_id = callback.from_user.id
     
-    # Извлекаем profile_id из callback_data если есть
-    profile_id = None
-    if ":" in callback.data:
-        try:
-            profile_id = int(callback.data.split(":")[1])
-        except (ValueError, IndexError):
-            profile_id = None
-    
     # Проверяем, есть ли у пользователя оплаченный доступ ко всем планетам
     has_access = await check_user_payment_access(user_id, "all_planets")
     
@@ -2938,7 +2206,7 @@ async def on_explore_all_planets(callback: CallbackQuery):
         
         handler = get_all_planets_handler()
         if handler:
-            await handler.handle_payment_success(user_id, profile_id)
+            await handler.handle_payment_success(user_id, None)
         else:
             await cb_msg.answer(
                 "❌ Ошибка: обработчик всех планет не инициализирован",
@@ -2958,8 +2226,8 @@ async def on_explore_all_planets(callback: CallbackQuery):
         )
     else:
         # Если доступа нет, предлагаем оплату
-        pay_callback = f"pay_all_planets:{profile_id}" if profile_id else "pay_all_planets"
-        back_callback = f"explore_other_areas:{profile_id}" if profile_id else "explore_other_areas"
+        pay_callback = "pay_all_planets"
+        back_callback = "explore_other_areas"
         
         await cb_msg.answer(
             "<b>Разборы всех планет</b> 💣\n\n"
@@ -3000,14 +2268,6 @@ async def on_explore_sun(callback: CallbackQuery):
     cb_msg = cast(Message, callback.message)
     user_id = callback.from_user.id
     
-    # Извлекаем profile_id из callback_data если есть
-    profile_id = None
-    if ":" in callback.data:
-        try:
-            profile_id = int(callback.data.split(":")[1])
-        except (ValueError, IndexError):
-            profile_id = None
-    
     # Проверяем, есть ли у пользователя оплаченный доступ к Солнцу
     has_access = await check_user_payment_access(user_id, "sun")
     
@@ -3030,7 +2290,7 @@ async def on_explore_sun(callback: CallbackQuery):
         )
         
         # Получаем разбор из БД
-        await send_existing_analysis(user_id, "sun", cb_msg, profile_id)
+        await send_existing_analysis(user_id, "sun", cb_msg, None)
         
         logger.info(
             f"Пользователь {user_id} запросил разбор Солнца (доступ есть)"
@@ -3048,13 +2308,13 @@ async def on_explore_sun(callback: CallbackQuery):
                     [
                         InlineKeyboardButton(
                             text="💳 Оплатить 77₽",
-                            callback_data=f"pay_sun:{profile_id}" if profile_id else "pay_sun"
+                            callback_data="pay_sun"
                         )
                     ],
                     [
                         InlineKeyboardButton(
                             text="🔙 Назад",
-                            callback_data=f"explore_other_areas:{profile_id}" if profile_id else "explore_other_areas"
+                            callback_data="explore_other_areas"
                         )
                     ]
                 ]
@@ -3072,14 +2332,6 @@ async def on_explore_mercury(callback: CallbackQuery):
     await callback.answer()
     cb_msg = cast(Message, callback.message)
     user_id = callback.from_user.id
-    
-    # Извлекаем profile_id из callback_data если есть
-    profile_id = None
-    if ":" in callback.data:
-        try:
-            profile_id = int(callback.data.split(":")[1])
-        except (ValueError, IndexError):
-            profile_id = None
     
     # Проверяем, есть ли у пользователя оплаченный доступ к Меркурию
     has_access = await check_user_payment_access(user_id, "mercury")
@@ -3103,7 +2355,7 @@ async def on_explore_mercury(callback: CallbackQuery):
         )
         
         # Получаем разбор из БД
-        await send_existing_analysis(user_id, "mercury", cb_msg, profile_id)
+        await send_existing_analysis(user_id, "mercury", cb_msg, None)
         
         logger.info(
             f"Пользователь {user_id} запросил разбор Меркурия (доступ есть)"
@@ -3121,7 +2373,7 @@ async def on_explore_mercury(callback: CallbackQuery):
                     [
                         InlineKeyboardButton(
                             text="💳 Оплатить 77₽",
-                            callback_data=f"pay_mercury:{profile_id}" if profile_id else "pay_mercury"
+                            callback_data="pay_mercury"
                         )
                     ],
                     [
@@ -3146,14 +2398,6 @@ async def on_explore_venus(callback: CallbackQuery):
     cb_msg = cast(Message, callback.message)
     user_id = callback.from_user.id
     
-    # Извлекаем profile_id из callback_data если есть
-    profile_id = None
-    if ":" in callback.data:
-        try:
-            profile_id = int(callback.data.split(":")[1])
-        except (ValueError, IndexError):
-            profile_id = None
-    
     # Проверяем, есть ли у пользователя оплаченный доступ к Венере
     has_access = await check_user_payment_access(user_id, "venus")
     
@@ -3176,7 +2420,7 @@ async def on_explore_venus(callback: CallbackQuery):
         )
         
         # Получаем разбор из БД
-        await send_existing_analysis(user_id, "venus", cb_msg, profile_id)
+        await send_existing_analysis(user_id, "venus", cb_msg, None)
         
         logger.info(
             f"Пользователь {user_id} запросил разбор Венеры (доступ есть)"
@@ -3194,7 +2438,7 @@ async def on_explore_venus(callback: CallbackQuery):
                     [
                         InlineKeyboardButton(
                             text="💳 Оплатить 77₽",
-                            callback_data=f"pay_venus:{profile_id}" if profile_id else "pay_venus"
+                            callback_data="pay_venus"
                         )
                     ],
                     [
@@ -3219,14 +2463,6 @@ async def on_explore_mars(callback: CallbackQuery):
     cb_msg = cast(Message, callback.message)
     user_id = callback.from_user.id
     
-    # Извлекаем profile_id из callback_data если есть
-    profile_id = None
-    if ":" in callback.data:
-        try:
-            profile_id = int(callback.data.split(":")[1])
-        except (ValueError, IndexError):
-            profile_id = None
-    
     # Проверяем, есть ли у пользователя оплаченный доступ к Марсу
     has_access = await check_user_payment_access(user_id, "mars")
     
@@ -3249,7 +2485,7 @@ async def on_explore_mars(callback: CallbackQuery):
         )
         
         # Получаем разбор из БД
-        await send_existing_analysis(user_id, "mars", cb_msg, profile_id)
+        await send_existing_analysis(user_id, "mars", cb_msg, None)
         
         logger.info(
             f"Пользователь {user_id} запросил разбор Марса (доступ есть)"
@@ -3267,7 +2503,7 @@ async def on_explore_mars(callback: CallbackQuery):
                     [
                         InlineKeyboardButton(
                             text="💳 Оплатить 77₽",
-                            callback_data=f"pay_mars:{profile_id}" if profile_id else "pay_mars"
+                            callback_data="pay_mars"
                         )
                     ],
                     [
@@ -3375,7 +2611,7 @@ async def cmd_help(message: Message, state: FSMContext):
 
 
 async def send_existing_analysis(user_id: int, planet: str, message_obj, profile_id: Optional[int] = None):
-    """Отправляет существующий разбор пользователю"""
+    """Отправляет существующий разбор пользователю (только основной профиль)."""
     try:
         from models import User, Prediction, PredictionType, Planet
         from sqlalchemy import select
@@ -3396,14 +2632,9 @@ async def send_existing_analysis(user_id: int, planet: str, message_obj, profile
             query_conditions = [
                 Prediction.user_id == user.user_id,
                 Prediction.planet == planet_enum,
-                Prediction.prediction_type == PredictionType.paid
+                Prediction.prediction_type == PredictionType.paid,
+                Prediction.profile_id.is_(None)
             ]
-            
-            # Добавляем условие для profile_id если указан
-            if profile_id:
-                query_conditions.append(Prediction.profile_id == profile_id)
-            else:
-                query_conditions.append(Prediction.profile_id.is_(None))
             
             prediction_result = await session.execute(
                 select(Prediction).where(*query_conditions).order_by(Prediction.created_at.desc())
@@ -3426,18 +2657,7 @@ async def send_existing_analysis(user_id: int, planet: str, message_obj, profile
                     
                     emoji = planet_emojis.get(planet, "🔮")
                     
-                    # Определяем заголовок в зависимости от типа профиля
-                    if profile_id:
-                        # Получаем имя дополнительного профиля
-                        from models import AdditionalProfile
-                        profile_result = await session.execute(
-                            select(AdditionalProfile).where(AdditionalProfile.profile_id == profile_id)
-                        )
-                        profile = profile_result.scalar_one_or_none()
-                        profile_name = profile.full_name if profile else "дополнительный профиль"
-                        header = f"{emoji} Разбор {planet.title()} для {profile_name}\n\n"
-                    else:
-                        header = f"{emoji} **{planet.title()}**\n\n"
+                    header = f"{emoji} **{planet.title()}**\n\n"
                     
                     # Разбиваем длинный текст на части, если нужно
                     max_length = 4000
@@ -3488,14 +2708,6 @@ async def on_pay_sun(callback: CallbackQuery):
     cb_msg = cast(Message, callback.message)
     user_id = callback.from_user.id
     
-    # Извлекаем profile_id из callback_data если есть
-    profile_id = None
-    if ":" in callback.data:
-        try:
-            profile_id = int(callback.data.split(":")[1])
-        except (ValueError, IndexError):
-            profile_id = None
-    
     if payment_handler is None:
         await cb_msg.answer(
             "❌ Ошибка: обработчик платежей не инициализирован",
@@ -3519,8 +2731,7 @@ async def on_pay_sun(callback: CallbackQuery):
         payment_data = payment_handler.create_payment_data(
             user_id=user_id,
             planet="sun",
-            description="Астрологический разбор Солнца",
-            profile_id=profile_id
+            description="Астрологический разбор Солнца"
         )
         logger.info(f"🔥 ДАННЫЕ ПЛАТЕЖА СОЗДАНЫ: {payment_data}")
         
@@ -3558,7 +2769,7 @@ async def on_pay_sun(callback: CallbackQuery):
                 amount_kopecks=1000,  # 10 рублей в копейках
                 external_payment_id=external_payment_id,
                 payment_url=payment_url,
-                profile_id=profile_id,  # Добавляем поддержку дополнительных профилей
+                profile_id=None,
                 notes="Платеж за разбор Солнца"
             )
             logger.info(f"🔥 СОЗДАЕМ ЗАПИСЬ ПЛАТЕЖА: {payment_record}")
@@ -3593,7 +2804,7 @@ async def on_pay_sun(callback: CallbackQuery):
                     [
                         InlineKeyboardButton(
                             text="🔙 Назад",
-                            callback_data=f"explore_sun:{profile_id}" if profile_id else "explore_sun"
+                            callback_data="explore_sun"
                         )
                     ]
                 ]
@@ -3628,14 +2839,6 @@ async def on_pay_mars(callback: CallbackQuery):
     cb_msg = cast(Message, callback.message)
     user_id = callback.from_user.id
     
-    # Извлекаем profile_id из callback_data если есть
-    profile_id = None
-    if ":" in callback.data:
-        try:
-            profile_id = int(callback.data.split(":")[1])
-        except (ValueError, IndexError):
-            profile_id = None
-    
     if payment_handler is None:
         await cb_msg.answer(
             "❌ Ошибка: обработчик платежей не инициализирован",
@@ -3659,8 +2862,7 @@ async def on_pay_mars(callback: CallbackQuery):
         payment_data = payment_handler.create_payment_data(
             user_id=user_id,
             planet="mars",
-            description="Астрологический разбор Марса",
-            profile_id=profile_id
+            description="Астрологический разбор Марса"
         )
         logger.info(f"🔥 ДАННЫЕ ПЛАТЕЖА СОЗДАНЫ: {payment_data}")
         
@@ -3698,7 +2900,7 @@ async def on_pay_mars(callback: CallbackQuery):
                 amount_kopecks=7700,  # 77 рублей в копейках
                 external_payment_id=external_payment_id,
                 payment_url=payment_url,
-                profile_id=profile_id,  # Добавляем поддержку дополнительных профилей
+                profile_id=None,
                 notes="Платеж за разбор Марса"
             )
             logger.info(f"🔥 СОЗДАЕМ ЗАПИСЬ ПЛАТЕЖА: {payment_record}")
@@ -3766,14 +2968,6 @@ async def on_pay_mercury(callback: CallbackQuery):
     cb_msg = cast(Message, callback.message)
     user_id = callback.from_user.id
     
-    # Извлекаем profile_id из callback_data если есть
-    profile_id = None
-    if ":" in callback.data:
-        try:
-            profile_id = int(callback.data.split(":")[1])
-        except (ValueError, IndexError):
-            profile_id = None
-    
     if payment_handler is None:
         await cb_msg.answer(
             "❌ Ошибка: обработчик платежей не инициализирован",
@@ -3797,8 +2991,7 @@ async def on_pay_mercury(callback: CallbackQuery):
         payment_data = payment_handler.create_payment_data(
             user_id=user_id,
             planet="mercury",
-            description="Астрологический разбор Меркурия",
-            profile_id=profile_id
+            description="Астрологический разбор Меркурия"
         )
         logger.info(f"🔥 ДАННЫЕ ПЛАТЕЖА СОЗДАНЫ: {payment_data}")
         
@@ -3836,7 +3029,7 @@ async def on_pay_mercury(callback: CallbackQuery):
                 amount_kopecks=7700,  # 77 рублей в копейках
                 external_payment_id=external_payment_id,
                 payment_url=payment_url,
-                profile_id=profile_id,  # Добавляем поддержку дополнительных профилей
+                profile_id=None,
                 notes="Платеж за разбор Меркурия"
             )
             logger.info(f"🔥 СОЗДАЕМ ЗАПИСЬ ПЛАТЕЖА: {payment_record}")
@@ -3901,14 +3094,6 @@ async def on_pay_venus(callback: CallbackQuery):
     cb_msg = cast(Message, callback.message)
     user_id = callback.from_user.id
     
-    # Извлекаем profile_id из callback_data если есть
-    profile_id = None
-    if ":" in callback.data:
-        try:
-            profile_id = int(callback.data.split(":")[1])
-        except (ValueError, IndexError):
-            profile_id = None
-    
     if payment_handler is None:
         await cb_msg.answer(
             "❌ Ошибка: обработчик платежей не инициализирован",
@@ -3932,8 +3117,7 @@ async def on_pay_venus(callback: CallbackQuery):
         payment_data = payment_handler.create_payment_data(
             user_id=user_id,
             planet="venus",
-            description="Астрологический разбор Венеры",
-            profile_id=profile_id
+            description="Астрологический разбор Венеры"
         )
         logger.info(f"🔥 ДАННЫЕ ПЛАТЕЖА СОЗДАНЫ: {payment_data}")
         
@@ -3971,7 +3155,7 @@ async def on_pay_venus(callback: CallbackQuery):
                 amount_kopecks=7700,  # 77 рублей в копейках
                 external_payment_id=external_payment_id,
                 payment_url=payment_url,
-                profile_id=profile_id,  # Добавляем поддержку дополнительных профилей
+                profile_id=None,
                 notes="Платеж за разбор Венеры"
             )
             logger.info(f"🔥 СОЗДАЕМ ЗАПИСЬ ПЛАТЕЖА: {payment_record}")
@@ -4040,20 +3224,10 @@ async def on_pay_venus(callback: CallbackQuery):
 async def on_pay_all_planets(callback: CallbackQuery):
     """Обработчик кнопки оплаты за все планеты"""
     from all_planets_handler import get_all_planets_handler
-    
-    # Извлекаем profile_id из callback_data если есть
-    profile_id = None
-    if ":" in callback.data:
-        try:
-            profile_id = int(callback.data.split(":")[1])
-        except (ValueError, IndexError):
-            profile_id = None
-    
-    logger.info(f"on_pay_all_planets called with profile_id={profile_id}")
-    
+
     handler = get_all_planets_handler()
     if handler:
-        await handler.handle_payment_request(callback, profile_id)
+        await handler.handle_payment_request(callback)
     else:
         await callback.answer()
         cb_msg = cast(Message, callback.message)
@@ -4063,8 +3237,8 @@ async def on_pay_all_planets(callback: CallbackQuery):
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="🔙 Назад",
-                            callback_data="explore_all_planets"
+                            text="🏠 Главное меню",
+                            callback_data="back_to_menu"
                         )
                     ]
                 ]
@@ -4074,58 +3248,12 @@ async def on_pay_all_planets(callback: CallbackQuery):
 
 @dp.callback_query(F.data.startswith("next_planet"))
 async def on_next_planet(callback: CallbackQuery):
-    """Обработчик кнопки 'Следующая планета'"""
+    """Переход к следующей планете в пакете 'Все планеты'"""
     from all_planets_handler import get_all_planets_handler
-    from db import get_session
-    from models import User as DbUser, PlanetPayment, PaymentType, PaymentStatus
-    from sqlalchemy import select
-    
-    # Извлекаем profile_id из callback_data если есть
-    profile_id = None
-    if ":" in callback.data:
-        try:
-            profile_id = int(callback.data.split(":")[1])
-        except (ValueError, IndexError):
-            profile_id = None
-    
-    # Если profile_id отсутствует, пытаемся определить его по последнему платежу "все планеты"
-    if profile_id is None:
-        try:
-            async with get_session() as session:
-                # Находим пользователя по telegram_id
-                user_result = await session.execute(
-                    select(DbUser).where(DbUser.telegram_id == (callback.from_user.id if callback.from_user else 0))
-                )
-                user = user_result.scalar_one_or_none()
-                if user:
-                    payment_result = await session.execute(
-                        select(PlanetPayment)
-                        .where(
-                            PlanetPayment.user_id == user.user_id,
-                            PlanetPayment.payment_type == PaymentType.all_planets,
-                            PlanetPayment.status.in_([
-                                PaymentStatus.completed,
-                                PaymentStatus.processing,
-                                PaymentStatus.delivered,
-                                PaymentStatus.analysis_failed,
-                            ])
-                        )
-                        .order_by(PlanetPayment.completed_at.desc())
-                    )
-                    payment = payment_result.scalar_one_or_none()
-                    if payment:
-                        profile_id = payment.profile_id
-                        logger.info(
-                            f"on_next_planet: derived profile_id={profile_id} from latest all-planets payment"
-                        )
-        except Exception as e:
-            logger.warning(f"on_next_planet: failed to derive profile_id, error={e}")
 
-    logger.info(f"on_next_planet called with profile_id={profile_id}")
-    
     handler = get_all_planets_handler()
     if handler:
-        await handler.handle_next_planet(callback, profile_id)
+        await handler.handle_next_planet(callback)
     else:
         await callback.answer()
         cb_msg = cast(Message, callback.message)
@@ -4212,16 +3340,6 @@ async def check_user_payment_access(user_id: int, planet: str) -> bool:
     ProfileForm.waiting_for_birth_time_local,
     ProfileForm.waiting_for_birth_time_confirm,
     ProfileForm.waiting_for_birth_time_unknown_confirm,
-    # Состояния дополнительного профиля
-    AdditionalProfileForm.waiting_for_additional_name,
-    AdditionalProfileForm.waiting_for_additional_birth_date,
-    AdditionalProfileForm.waiting_for_additional_birth_date_confirm,  # ДОБАВЛЕНО: подтверждение даты
-    AdditionalProfileForm.waiting_for_additional_birth_city,
-    AdditionalProfileForm.waiting_for_additional_birth_city_confirm,
-    AdditionalProfileForm.waiting_for_additional_birth_time_accuracy,
-    AdditionalProfileForm.waiting_for_additional_birth_time_local,
-    AdditionalProfileForm.waiting_for_additional_birth_time_confirm,
-    AdditionalProfileForm.waiting_for_additional_birth_time_unknown_confirm,
     # Состояние ожидания вопроса
     QuestionForm.waiting_for_question,
     # Состояние общения со службой заботы

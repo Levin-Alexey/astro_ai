@@ -371,13 +371,12 @@ class SunWorker:
         
         return message
     
-    def create_sun_analysis_buttons(self, is_all_planets: bool = False, profile_id: int = None) -> Dict[str, Any]:
+    def create_sun_analysis_buttons(self, is_all_planets: bool = False) -> Dict[str, Any]:
         """
         Создает кнопки для сообщения с разбором Солнца
         
         Args:
             is_all_planets: Если True, показывает кнопку "Следующая планета" вместо "Исследовать другие сферы"
-            profile_id: ID дополнительного профиля (если есть)
         
         Returns:
             Словарь с клавиатурой для Telegram API
@@ -394,11 +393,10 @@ class SunWorker:
             ])
         
         if is_all_planets:
-            next_planet_callback = f"next_planet:{profile_id}" if profile_id else "next_planet"
             buttons.append([
                 {
                     "text": "➡️ Следующая планета",
-                    "callback_data": next_planet_callback
+                    "callback_data": "next_planet"
                 }
             ])
         else:

@@ -59,13 +59,13 @@ class AllPlanetsHandler:
         self.queue_sender = await get_queue_sender()
         logger.info("AllPlanetsHandler initialized")
 
-    async def handle_payment_request(self, callback: CallbackQuery, profile_id: Optional[int] = None) -> None:
+    async def handle_payment_request(self, callback: CallbackQuery) -> None:
         """Обрабатывает запрос на оплату за все планеты"""
         await callback.answer()
         cb_msg = callback.message
         user_id = callback.from_user.id
         
-        logger.info(f"🌌 Payment request for all planets: user_id={user_id}, profile_id={profile_id}")
+        logger.info(f"🌌 Payment request for all planets: user_id={user_id}")
 
         if self.payment_handler is None:
             await cb_msg.answer(
@@ -93,7 +93,6 @@ class AllPlanetsHandler:
                 user_id=user_id,
                 planet="all_planets",
                 description="Астрологические разборы всех планет",
-                profile_id=profile_id,
                 amount_kopecks=22200  # 222₽
             )
 
@@ -112,7 +111,7 @@ class AllPlanetsHandler:
 
                 # Сохраняем информацию о платеже в БД
                 if payment_id:
-                    await self._save_payment_to_db(user_id, payment_id, profile_id)
+                    await self._save_payment_to_db(user_id, payment_id)
 
                 # Отправляем ссылку на оплату
                 if cb_msg:
@@ -191,40 +190,40 @@ class AllPlanetsHandler:
                     )
                 )
 
-    async def handle_payment_success(self, user_id: int, profile_id: Optional[int] = None) -> None:
+    async def handle_payment_success(self, user_id: int) -> None:
         """Обрабатывает успешную оплату и запускает разбор планет"""
         try:
             logger.info(
                 f"🌌 Начинаем последовательный разбор планет для "
-                f"пользователя {user_id}, profile_id: {profile_id}"
+                f"пользователя {user_id}"
             )
 
             # Обновляем статус платежа в БД
-            await self._update_payment_status(user_id, profile_id)
+            await self._update_payment_status(user_id)
 
             # Запускаем разбор первой планеты (Солнце)
-            await self._start_planet_analysis(user_id, "sun", profile_id)
+            await self._start_planet_analysis(user_id, "sun")
 
         except Exception as e:
             logger.error(f"❌ Ошибка при обработке успешной оплаты: {e}")
 
-    async def handle_next_planet(self, callback: CallbackQuery, profile_id: Optional[int] = None) -> None:
+    async def handle_next_planet(self, callback: CallbackQuery) -> None:
         """Обрабатывает нажатие кнопки 'Следующая планета'"""
         await callback.answer()
         cb_msg = callback.message
         user_id = callback.from_user.id
 
         try:
-            logger.info(f"🔍 Next planet button pressed by user {user_id}, profile_id={profile_id}")
+            logger.info(f"🔍 Next planet button pressed by user {user_id}")
             
             # Определяем следующую планету
-            next_planet = await self._get_next_planet(user_id, profile_id)
+            next_planet = await self._get_next_planet(user_id)
             logger.info(f"🔍 Next planet determined: {next_planet}")
 
             if next_planet:
                 # Запускаем разбор следующей планеты
-                logger.info(f"🔍 Starting analysis for planet: {next_planet}, profile_id={profile_id}")
-                await self._start_planet_analysis(user_id, next_planet, profile_id)
+                logger.info(f"🔍 Starting analysis for planet: {next_planet}")
+                await self._start_planet_analysis(user_id, next_planet)
             else:
                 # Все планеты обработаны
                 if cb_msg:
@@ -270,7 +269,7 @@ class AllPlanetsHandler:
                     )
                 )
 
-    async def _save_payment_to_db(self, user_id: int, payment_id: str, profile_id: Optional[int] = None) -> None:
+    async def _save_payment_to_db(self, user_id: int, payment_id: str) -> None:
         """Сохраняет информацию о платеже в БД"""
         async with get_session() as session:
             # !!! FIX START: Сначала получаем внутренний user_id по Telegram ID !!!
@@ -289,14 +288,13 @@ class AllPlanetsHandler:
                 external_payment_id=payment_id,
                 amount_kopecks=22200,  # 222₽ в копейках
                 status=PaymentStatus.pending,
-                profile_id=profile_id,  # Сохраняем profile_id
                 created_at=datetime.now(timezone.utc)
             )
             session.add(payment)
             await session.commit()
-            logger.info(f"💾 Платеж сохранен в БД: {payment_id}, internal_user_id={internal_user_id}, profile_id={profile_id}")
+            logger.info(f"💾 Платеж сохранен в БД: {payment_id}, internal_user_id={internal_user_id}")
 
-    async def _update_payment_status(self, user_id: int, profile_id: Optional[int] = None) -> None:
+    async def _update_payment_status(self, user_id: int) -> None:
         """Обновляет статус платежа на 'completed'"""
         async with get_session() as session:
             # !!! FIX START !!!
@@ -313,12 +311,6 @@ class AllPlanetsHandler:
                 PlanetPayment.status == PaymentStatus.pending
             ]
             
-            # Добавляем условие для profile_id если указан
-            if profile_id:
-                query_conditions.append(PlanetPayment.profile_id == profile_id)
-            else:
-                query_conditions.append(PlanetPayment.profile_id.is_(None))
-            
             result = await session.execute(
                 select(PlanetPayment).where(*query_conditions)
             )
@@ -329,14 +321,14 @@ class AllPlanetsHandler:
                 payment.completed_at = datetime.now(timezone.utc)
                 await session.commit()
                 logger.info(
-                    f"✅ Статус платежа обновлен для пользователя {user_id}, profile_id: {profile_id}"
+                    f"✅ Статус платежа обновлен для пользователя {user_id}"
                 )
 
-    async def _start_planet_analysis(self, user_id: int, planet: str, profile_id: Optional[int] = None) -> None:
+    async def _start_planet_analysis(self, user_id: int, planet: str) -> None:
         """Запускает анализ конкретной планеты"""
         try:
             logger.info(
-                f"🚀 Запуск анализа {planet} для пользователя {user_id}, profile_id: {profile_id}"
+                f"🚀 Запуск анализа {planet} для пользователя {user_id}"
             )
 
             # Отправляем уведомление о начале анализа
@@ -349,13 +341,13 @@ class AllPlanetsHandler:
 
             # Запускаем соответствующий анализ
             if planet == "sun":
-                astrology_data = await start_sun_analysis(user_id, profile_id)
+                astrology_data = await start_sun_analysis(user_id, None)
             elif planet == "mercury":
-                astrology_data = await start_mercury_analysis(user_id, profile_id)
+                astrology_data = await start_mercury_analysis(user_id, None)
             elif planet == "venus":
-                astrology_data = await start_venus_analysis(user_id, profile_id)
+                astrology_data = await start_venus_analysis(user_id, None)
             elif planet == "mars":
-                astrology_data = await start_mars_analysis(user_id, profile_id)
+                astrology_data = await start_mars_analysis(user_id, None)
             else:
                 logger.error(f"❌ Неизвестная планета: {planet}")
                 return
@@ -373,10 +365,10 @@ class AllPlanetsHandler:
         except Exception as e:
             logger.error(f"❌ Ошибка при запуске анализа {planet}: {e}")
 
-    async def _get_next_planet(self, telegram_id: int, profile_id: Optional[int] = None) -> Optional[str]:
+    async def _get_next_planet(self, telegram_id: int) -> Optional[str]:
         """Определяет следующую планету для анализа"""
         try:
-            logger.info(f"🔍 Getting next planet for user {telegram_id}, profile_id={profile_id}")
+            logger.info(f"🔍 Getting next planet for user {telegram_id}")
             
             async with get_session() as session:
                 # Сначала получаем внутренний user_id по telegram_id
@@ -386,7 +378,7 @@ class AllPlanetsHandler:
                 )
                 user = user_result.scalar_one_or_none()
                 if not user:
-                    logger.warning(f"🔍 User not found for telegram_id {telegram_id}")
+                        logger.info(f"🔍 Getting next planet for user {telegram_id}")
                     return None
                 
                 logger.info(f"🔍 Found user with internal id: {user.user_id}")
@@ -403,21 +395,15 @@ class AllPlanetsHandler:
                     ])
                 ]
                 
-                # Добавляем условие по profile_id
-                if profile_id:
-                    payment_conditions.append(PlanetPayment.profile_id == profile_id)
-                else:
-                    payment_conditions.append(PlanetPayment.profile_id.is_(None))
+                # Ограничиваемся основным профилем
+                payment_conditions.append(PlanetPayment.profile_id.is_(None))
                 
                 payment_result = await session.execute(
                     select(PlanetPayment).where(*payment_conditions).order_by(PlanetPayment.completed_at.desc())
                 )
                 all_planets_payment = payment_result.scalar_one_or_none()
                 
-                if not all_planets_payment:
-                    logger.warning(f"🔍 No all planets payment found for user {telegram_id}, profile_id={profile_id}")
-                    return None
-                
+                            payment_conditions.append(PlanetPayment.profile_id.is_(None))
                 payment_time = all_planets_payment.completed_at
                 logger.info(f"🔍 All planets payment completed at: {payment_time}")
                 
@@ -428,21 +414,15 @@ class AllPlanetsHandler:
                     Prediction.created_at >= payment_time,
                 ]
                 
-                # Фильтруем по profile_id
-                if profile_id:
-                    prediction_conditions.append(Prediction.profile_id == profile_id)
-                else:
-                    prediction_conditions.append(Prediction.profile_id.is_(None))
+                # Фильтруем по основному профилю
+                prediction_conditions.append(Prediction.profile_id.is_(None))
                 
                 result = await session.execute(
                     select(Prediction)
                     .where(*prediction_conditions)
                     .order_by(Prediction.created_at.desc())
                 )
-                all_predictions = result.scalars().all()
-                logger.info(f"🔍 Found {len(all_predictions)} predictions after payment for profile_id={profile_id}")
-
-                # Получаем последний (самый свежий) разбор - в нем находятся ВСЕ планеты для этого профиля
+                            prediction_conditions.append(Prediction.profile_id.is_(None))
                 if all_predictions:
                     latest_prediction = all_predictions[0]
                     logger.info(f"🔍 Latest prediction {latest_prediction.prediction_id}: sun={bool(latest_prediction.sun_analysis)}, mercury={bool(latest_prediction.mercury_analysis)}, venus={bool(latest_prediction.venus_analysis)}, mars={bool(latest_prediction.mars_analysis)}")
@@ -450,7 +430,7 @@ class AllPlanetsHandler:
                     # Определяем, какие планеты уже готовы в этом разборе
                     completed_planets = set()
                     if latest_prediction.sun_analysis:
-                        completed_planets.add("sun")
+                            logger.info(f"🔍 Found {len(all_predictions)} predictions after payment")
                     if latest_prediction.mercury_analysis:
                         completed_planets.add("mercury")
                     if latest_prediction.venus_analysis:
@@ -470,14 +450,14 @@ class AllPlanetsHandler:
                     logger.info(f"🔍 All planets completed")
                     return None  # Все планеты обработаны
                 else:
-                    logger.warning(f"🔍 No predictions found after payment for user {telegram_id}, profile_id={profile_id}")
+                    logger.warning(f"🔍 No predictions found after payment for user {telegram_id}")
                     return "sun"  # Если нет разборов, начинаем с Солнца
 
         except Exception as e:
             logger.error(f"❌ Ошибка при определении следующей планеты: {e}")
             return None
 
-    def create_planet_buttons(self, planet: str, profile_id: Optional[int] = None) -> InlineKeyboardMarkup:
+    def create_planet_buttons(self, planet: str) -> InlineKeyboardMarkup:
         """Создает кнопки для разбора планеты"""
         buttons = []
         
@@ -491,17 +471,16 @@ class AllPlanetsHandler:
 
         # Добавляем кнопку "Следующая планета" для всех планет кроме Марса
         if planet != "mars":
-            next_planet_callback = f"next_planet:{profile_id}" if profile_id else "next_planet"
             buttons.append([
                 InlineKeyboardButton(
                     text="➡️ Следующая планета",
-                    callback_data=next_planet_callback
+                    callback_data="next_planet"
                 )
             ])
 
         buttons.append([
             InlineKeyboardButton(
-                text="🏠 Главное меню",
+                        next_planet_callback = "next_planet"
                 callback_data="back_to_menu"
             )
         ])
@@ -527,16 +506,9 @@ def get_all_planets_handler() -> Optional[AllPlanetsHandler]:
     return _all_planets_handler
 
 
-async def check_if_all_planets_payment(telegram_id: int, profile_id: Optional[int] = None) -> bool:
+async def check_if_all_planets_payment(telegram_id: int) -> bool:
     """
-    Универсальная функция для проверки наличия оплаты за все планеты
-    
-    Args:
-        telegram_id: Telegram ID пользователя
-        profile_id: ID дополнительного профиля (опционально)
-        
-    Returns:
-        True если есть оплата за все планеты для указанного профиля
+    Универсальная функция для проверки наличия оплаты за все планеты для основного профиля
     """
     try:
         async with get_session() as session:
@@ -561,11 +533,8 @@ async def check_if_all_planets_payment(telegram_id: int, profile_id: Optional[in
                 ])
             ]
             
-            # Фильтруем по profile_id
-            if profile_id:
-                conditions.append(PlanetPayment.profile_id == profile_id)
-            else:
-                conditions.append(PlanetPayment.profile_id.is_(None))
+            # Основной профиль
+            conditions.append(PlanetPayment.profile_id.is_(None))
             
             result = await session.execute(
                 select(PlanetPayment).where(*conditions)
@@ -573,8 +542,7 @@ async def check_if_all_planets_payment(telegram_id: int, profile_id: Optional[in
             payment = result.scalar_one_or_none()
             
             logger.info(
-                f"Check all planets payment: telegram_id={telegram_id}, internal_user_id={user.user_id}, "
-                f"profile_id={profile_id}, found={payment is not None}"
+                f"Check all planets payment: telegram_id={telegram_id}, internal_user_id={user.user_id}, found={payment is not None}"
             )
             
             return payment is not None
@@ -584,14 +552,13 @@ async def check_if_all_planets_payment(telegram_id: int, profile_id: Optional[in
         return False
 
 
-def create_planet_analysis_buttons(planet: str, is_all_planets: bool = False, profile_id: Optional[int] = None) -> dict:
+def create_planet_analysis_buttons(planet: str, is_all_planets: bool = False) -> dict:
     """
     Универсальная функция для создания кнопок после разбора планеты
     
     Args:
         planet: Название планеты ("sun", "mercury", "venus", "mars")
         is_all_planets: Если True, показывает кнопку "Следующая планета"
-        profile_id: ID дополнительного профиля (опционально)
         
     Returns:
         Словарь с клавиатурой для Telegram API
@@ -607,11 +574,10 @@ def create_planet_analysis_buttons(planet: str, is_all_planets: bool = False, pr
     ]
     
     if is_all_planets:
-        next_planet_callback = f"next_planet:{profile_id}" if profile_id else "next_planet"
         buttons.append([
             {
                 "text": "➡️ Следующая планета",
-                "callback_data": next_planet_callback
+                "callback_data": "next_planet"
             }
         ])
     else:

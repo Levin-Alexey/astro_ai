@@ -28,15 +28,12 @@ class PaymentHandler:
         self.test_amount = PAYMENT_TEST_AMOUNT
         self.currency = PAYMENT_CURRENCY
     
-    def create_payment_data(self, user_id: int, planet: str, description: str, profile_id: int = None, amount_kopecks: int = None) -> Dict[str, Any]:
+    def create_payment_data(self, user_id: int, planet: str, description: str, amount_kopecks: int = None) -> Dict[str, Any]:
         """Создает данные для платежа, включая чек (receipt) с customer.email из .env."""
         metadata = {
             "user_id": str(user_id),
             "planet": planet
         }
-        
-        if profile_id:
-            metadata["profile_id"] = str(profile_id)
         
         payment_amount = amount_kopecks if amount_kopecks is not None else self.test_amount
         

@@ -396,25 +396,24 @@ async def process_mars_prediction(
         return False
 
 
-async def send_mars_analysis_to_user(user_telegram_id: int, analysis_text: str, profile_id: Optional[int] = None):
+async def send_mars_analysis_to_user(user_telegram_id: int, analysis_text: str):
     """
     Отправляет анализ Марса пользователю через Telegram Bot API
 
     Args:
         user_telegram_id: Telegram ID пользователя
         analysis_text: Текст анализа
-        profile_id: ID дополнительного профиля (опционально)
     """
     try:
         # Импортируем универсальные функции
         from all_planets_handler import create_planet_analysis_buttons, check_if_all_planets_payment
 
         # Проверяем, является ли это частью разбора всех планет
-        is_all_planets = await check_if_all_planets_payment(user_telegram_id, profile_id)
-        logger.info(f"♂️ Mars worker: is_all_planets = {is_all_planets} for user {user_telegram_id}, profile_id={profile_id}")
+        is_all_planets = await check_if_all_planets_payment(user_telegram_id)
+        logger.info(f"♂️ Mars worker: is_all_planets = {is_all_planets} for user {user_telegram_id}")
 
         # Для Марса (последняя планета) нет кнопки "Следующая планета", но проверяем is_all_planets для кнопки рекомендаций
-        keyboard = create_planet_analysis_buttons("mars", is_all_planets=is_all_planets, profile_id=profile_id)
+        keyboard = create_planet_analysis_buttons("mars", is_all_planets=is_all_planets)
         
         # Разбиваем длинный текст на части если нужно
         max_length = 4000  # Лимит Telegram для одного сообщения

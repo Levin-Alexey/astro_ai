@@ -411,24 +411,23 @@ async def process_mercury_prediction(
         return False
 
 
-async def send_mercury_analysis_to_user(user_telegram_id: int, analysis_text: str, profile_id: Optional[int] = None):
+async def send_mercury_analysis_to_user(user_telegram_id: int, analysis_text: str):
     """
     Отправляет анализ Меркурия пользователю через Telegram Bot API
     
     Args:
         user_telegram_id: Telegram ID пользователя
         analysis_text: Текст анализа
-        profile_id: ID дополнительного профиля (опционально)
     """
     try:
         # Импортируем универсальную функцию
         from all_planets_handler import check_if_all_planets_payment, create_planet_analysis_buttons
         
         # Проверяем, является ли это частью разбора всех планет для данного профиля
-        is_all_planets = await check_if_all_planets_payment(user_telegram_id, profile_id)
+        is_all_planets = await check_if_all_planets_payment(user_telegram_id)
         
-        # Создаем кнопки с учетом profile_id
-        keyboard = create_planet_analysis_buttons("mercury", is_all_planets, profile_id)
+        # Создаем кнопки
+        keyboard = create_planet_analysis_buttons("mercury", is_all_planets)
         
         # Разбиваем длинный текст на части если нужно
         max_length = 4000  # Лимит Telegram для одного сообщения
