@@ -369,89 +369,101 @@ class AllPlanetsHandler:
         """Определяет следующую планету для анализа"""
         try:
             logger.info(f"🔍 Getting next planet for user {telegram_id}")
-            
+
             async with get_session() as session:
-                # Сначала получаем внутренний user_id по telegram_id
+                # Получаем внутренний user_id по telegram_id
                 from models import User
                 user_result = await session.execute(
                     select(User).where(User.telegram_id == telegram_id)
                 )
                 user = user_result.scalar_one_or_none()
                 if not user:
-                        logger.info(f"🔍 Getting next planet for user {telegram_id}")
+                    logger.warning(f"🔍 User not found for telegram_id {telegram_id}")
                     return None
-                
+
                 logger.info(f"🔍 Found user with internal id: {user.user_id}")
-                
-                # Получаем время оплаты за все планеты для конкретного профиля
+
                 payment_conditions = [
-                    PlanetPayment.user_id == user.user_id,  # FIX: используем внутренний ID
+                    PlanetPayment.user_id == user.user_id,
                     PlanetPayment.payment_type == PaymentType.all_planets,
-                    PlanetPayment.status.in_([
-                        PaymentStatus.completed,
-                        PaymentStatus.processing,
-                        PaymentStatus.delivered,
-                        PaymentStatus.analysis_failed,
-                    ])
+                    PlanetPayment.status.in_(
+                        [
+                            PaymentStatus.completed,
+                            PaymentStatus.processing,
+                            PaymentStatus.delivered,
+                            PaymentStatus.analysis_failed,
+                        ]
+                    ),
+                    PlanetPayment.profile_id.is_(None),
                 ]
-                
-                # Ограничиваемся основным профилем
-                payment_conditions.append(PlanetPayment.profile_id.is_(None))
-                
+
                 payment_result = await session.execute(
-                    select(PlanetPayment).where(*payment_conditions).order_by(PlanetPayment.completed_at.desc())
+                    select(PlanetPayment)
+                    .where(*payment_conditions)
+                    .order_by(PlanetPayment.completed_at.desc())
                 )
                 all_planets_payment = payment_result.scalar_one_or_none()
-                
-                            payment_conditions.append(PlanetPayment.profile_id.is_(None))
+
+                if not all_planets_payment:
+                    logger.warning(
+                        f"🔍 No all planets payment found for user {telegram_id}"
+                    )
+                    return None
+
                 payment_time = all_planets_payment.completed_at
                 logger.info(f"🔍 All planets payment completed at: {payment_time}")
-                
-                # Получаем все разборы для конкретного профиля, созданные после оплаты
-                # Сортируем по дате создания в обратном порядке (новые сверху)
+
                 prediction_conditions = [
                     Prediction.user_id == user.user_id,
                     Prediction.created_at >= payment_time,
+                    Prediction.profile_id.is_(None),
+                    (
+                        (Prediction.sun_analysis.isnot(None))
+                        | (Prediction.mercury_analysis.isnot(None))
+                        | (Prediction.venus_analysis.isnot(None))
+                        | (Prediction.mars_analysis.isnot(None))
+                    ),
                 ]
-                
-                # Фильтруем по основному профилю
-                prediction_conditions.append(Prediction.profile_id.is_(None))
-                
+
                 result = await session.execute(
                     select(Prediction)
                     .where(*prediction_conditions)
                     .order_by(Prediction.created_at.desc())
                 )
-                            prediction_conditions.append(Prediction.profile_id.is_(None))
-                if all_predictions:
-                    latest_prediction = all_predictions[0]
-                    logger.info(f"🔍 Latest prediction {latest_prediction.prediction_id}: sun={bool(latest_prediction.sun_analysis)}, mercury={bool(latest_prediction.mercury_analysis)}, venus={bool(latest_prediction.venus_analysis)}, mars={bool(latest_prediction.mars_analysis)}")
-                    
-                    # Определяем, какие планеты уже готовы в этом разборе
-                    completed_planets = set()
-                    if latest_prediction.sun_analysis:
-                            logger.info(f"🔍 Found {len(all_predictions)} predictions after payment")
-                    if latest_prediction.mercury_analysis:
-                        completed_planets.add("mercury")
-                    if latest_prediction.venus_analysis:
-                        completed_planets.add("venus")
-                    if latest_prediction.mars_analysis:
-                        completed_planets.add("mars")
-                    
-                    logger.info(f"🔍 Completed planets in latest prediction: {completed_planets}")
-                    logger.info(f"🔍 Planet order: {PLANET_ORDER}")
+                predictions = result.scalars().all()
+                logger.info(
+                    f"🔍 Found {len(predictions)} predictions after payment"
+                )
 
-                    # Находим следующую планету
-                    for planet in PLANET_ORDER:
-                        if planet not in completed_planets:
-                            logger.info(f"🔍 Next planet found: {planet}")
-                            return planet
+                if not predictions:
+                    logger.warning(
+                        f"🔍 No predictions found after payment for user {telegram_id}"
+                    )
+                    return "sun"
 
-                    logger.info(f"🔍 All planets completed")
-                    return None  # Все планеты обработаны
-                else:
-                    logger.warning(f"🔍 No predictions found after payment for user {telegram_id}")
-                    return "sun"  # Если нет разборов, начинаем с Солнца
+                latest_prediction = predictions[0]
+                completed_planets: set[str] = set()
+                if latest_prediction.sun_analysis:
+                    completed_planets.add("sun")
+                if latest_prediction.mercury_analysis:
+                    completed_planets.add("mercury")
+                if latest_prediction.venus_analysis:
+                    completed_planets.add("venus")
+                if latest_prediction.mars_analysis:
+                    completed_planets.add("mars")
+
+                logger.info(
+                    f"🔍 Completed planets in latest prediction: {completed_planets}"
+                )
+                logger.info(f"🔍 Planet order: {PLANET_ORDER}")
+
+                for planet in PLANET_ORDER:
+                    if planet not in completed_planets:
+                        logger.info(f"🔍 Next planet found: {planet}")
+                        return planet
+
+                logger.info("🔍 All planets completed")
+                return None
 
         except Exception as e:
             logger.error(f"❌ Ошибка при определении следующей планеты: {e}")
@@ -459,31 +471,24 @@ class AllPlanetsHandler:
 
     def create_planet_buttons(self, planet: str) -> InlineKeyboardMarkup:
         """Создает кнопки для разбора планеты"""
-        buttons = []
-        
-        # Временно закомментирована кнопка "Получить рекомендации"
-        # [
-        #     InlineKeyboardButton(
-        #         text="💡 Получить рекомендации",
-        #         callback_data=f"get_{planet}_recommendations"
-        #     )
-        # ]
+        buttons: list[list[InlineKeyboardButton]] = []
 
-        # Добавляем кнопку "Следующая планета" для всех планет кроме Марса
         if planet != "mars":
-            buttons.append([
-                InlineKeyboardButton(
-                    text="➡️ Следующая планета",
-                    callback_data="next_planet"
-                )
-            ])
-
-        buttons.append([
-            InlineKeyboardButton(
-                        next_planet_callback = "next_planet"
-                callback_data="back_to_menu"
+            buttons.append(
+                [
+                    InlineKeyboardButton(
+                        text="➡️ Следующая планета", callback_data="next_planet"
+                    )
+                ]
             )
-        ])
+
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text="🏠 Главное меню", callback_data="back_to_menu"
+                )
+            ]
+        )
 
         return InlineKeyboardMarkup(inline_keyboard=buttons)
 
