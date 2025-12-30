@@ -167,11 +167,20 @@ async def update_payment_status(user_id: int, planet: str, external_payment_id: 
             if payment_record:
                 logger.info(f"✅ Payment record found: {payment_record.payment_id}")
                 # Обновляем статус на completed
+                logger.info(f"🔄 Updating payment {payment_record.payment_id} status from {payment_record.status} to completed")
                 payment_record.status = PaymentStatus.completed
                 payment_record.completed_at = datetime.now(timezone.utc)
                 if not payment_record.external_payment_id:
                     payment_record.external_payment_id = external_payment_id
-                await session.commit()
+                
+                # Коммитим изменения
+                try:
+                    await session.commit()
+                    logger.info(f"✅ Session committed for payment {payment_record.payment_id}")
+                except Exception as commit_error:
+                    logger.error(f"❌ Error committing payment status update: {commit_error}", exc_info=True)
+                    await session.rollback()
+                    raise
                 
                 logger.info(f"✅ Payment status updated for user {user_id}, planet {planet}")
             else:
@@ -188,7 +197,9 @@ async def update_payment_status(user_id: int, planet: str, external_payment_id: 
                     logger.info(f"  - Payment {dp.payment_id}: {dp.planet}, {dp.status}, external_id: {dp.external_payment_id}")
                 
     except Exception as e:
-        logger.error(f"❌ Error updating payment status: {e}")
+        logger.error(f"❌ Error updating payment status: {e}", exc_info=True)
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
 
 
 async def notify_user_payment_success(user_id: int, planet: str):

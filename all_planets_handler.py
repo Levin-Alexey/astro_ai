@@ -198,14 +198,16 @@ class AllPlanetsHandler:
                 f"пользователя {user_id}"
             )
 
-            # Обновляем статус платежа в БД
-            await self._update_payment_status(user_id)
-
-            # Запускаем разбор первой планеты (Солнце)
+            # ✅ Статус платежа уже обновлен в webhook_server.py
+            # Просто запускаем разбор первой планеты (Солнце)
+            logger.info(f"🌌 Starting first planet analysis (sun) for user {user_id}")
             await self._start_planet_analysis(user_id, "sun")
+            logger.info(f"✅ First planet analysis started for user {user_id}")
 
         except Exception as e:
-            logger.error(f"❌ Ошибка при обработке успешной оплаты: {e}")
+            import traceback
+            logger.error(f"❌ Ошибка при обработке успешной оплаты: {e}", exc_info=True)
+            logger.error(f"Traceback: {traceback.format_exc()}")
 
     async def handle_next_planet(self, callback: CallbackQuery) -> None:
         """Обрабатывает нажатие кнопки 'Следующая планета'"""
@@ -294,36 +296,6 @@ class AllPlanetsHandler:
             await session.commit()
             logger.info(f"💾 Платеж сохранен в БД: {payment_id}, internal_user_id={internal_user_id}")
 
-    async def _update_payment_status(self, user_id: int) -> None:
-        """Обновляет статус платежа на 'completed'"""
-        async with get_session() as session:
-            # !!! FIX START !!!
-            from models import User
-            user_result = await session.execute(select(User).where(User.telegram_id == user_id))
-            user = user_result.scalar_one_or_none()
-            if not user:
-                logger.error(f"❌ User not found for update payment status: {user_id}")
-                return
-            # !!! FIX END !!!
-            query_conditions = [
-                PlanetPayment.user_id == user.user_id,  # Используем user.user_id
-                PlanetPayment.payment_type == PaymentType.all_planets,
-                PlanetPayment.status == PaymentStatus.pending
-            ]
-            
-            result = await session.execute(
-                select(PlanetPayment).where(*query_conditions)
-            )
-            payment = result.scalar_one_or_none()
-
-            if payment:
-                payment.status = PaymentStatus.completed
-                payment.completed_at = datetime.now(timezone.utc)
-                await session.commit()
-                logger.info(
-                    f"✅ Статус платежа обновлен для пользователя {user_id}"
-                )
-
     async def _start_planet_analysis(self, user_id: int, planet: str) -> None:
         """Запускает анализ конкретной планеты"""
         try:
@@ -332,14 +304,19 @@ class AllPlanetsHandler:
             )
 
             # Отправляем уведомление о начале анализа
-            await self.bot.send_message(
-                user_id,
-                f"{PLANET_EMOJIS[planet]} {PLANET_NAMES[planet]}\n\n"
-                f"🔮 Генерирую ваш персональный астрологический разбор...\n\n"
-                f"⏳ Пожалуйста, подождите несколько секунд."
-            )
+            try:
+                await self.bot.send_message(
+                    user_id,
+                    f"{PLANET_EMOJIS[planet]} {PLANET_NAMES[planet]}\n\n"
+                    f"🔮 Генерирую ваш персональный астрологический разбор...\n\n"
+                    f"⏳ Пожалуйста, подождите несколько секунд."
+                )
+            except Exception as msg_error:
+                logger.error(f"❌ Failed to send message to user: {msg_error}")
 
             # Запускаем соответствующий анализ
+            logger.info(f"🚀 Calling start_{planet}_analysis for user {user_id}")
+            
             if planet == "sun":
                 astrology_data = await start_sun_analysis(user_id, None)
             elif planet == "mercury":
@@ -352,6 +329,8 @@ class AllPlanetsHandler:
                 logger.error(f"❌ Неизвестная планета: {planet}")
                 return
 
+            logger.info(f"🚀 Analysis function returned for {planet}, data: {astrology_data is not None}")
+            
             if astrology_data:
                 logger.info(
                     f"✅ Анализ {planet} запущен для пользователя {user_id}"
@@ -363,7 +342,9 @@ class AllPlanetsHandler:
                 )
 
         except Exception as e:
-            logger.error(f"❌ Ошибка при запуске анализа {planet}: {e}")
+            import traceback
+            logger.error(f"❌ Ошибка при запуске анализа {planet}: {e}", exc_info=True)
+            logger.error(f"Traceback: {traceback.format_exc()}")
 
     async def _get_next_planet(self, telegram_id: int) -> Optional[str]:
         """Определяет следующую планету для анализа"""
