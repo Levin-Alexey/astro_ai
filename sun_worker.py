@@ -593,8 +593,8 @@ class SunWorker:
                             is_all_planets = await self._check_if_all_planets_analysis(user.telegram_id, prediction_profile_id)
                             logger.info(f"🔍 Sun worker: is_all_planets = {is_all_planets} for user {user.telegram_id}, profile_id={prediction_profile_id}")
                             
-                            # Добавляем кнопки для разбора Солнца с profile_id
-                            reply_markup = self.create_sun_analysis_buttons(is_all_planets, prediction_profile_id)
+                            # Добавляем кнопки для разбора Солнца
+                            reply_markup = self.create_sun_analysis_buttons(is_all_planets)
                             logger.info(f"🔍 Sun worker: created buttons with is_all_planets = {is_all_planets}, profile_id={prediction_profile_id}")
                             
                             success = await self.send_telegram_message(
