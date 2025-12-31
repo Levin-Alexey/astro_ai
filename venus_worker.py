@@ -343,24 +343,48 @@ async def process_venus_prediction(
         return False
 
 
-async def send_venus_analysis_to_user(user_telegram_id: int, analysis_text: str):
+async def send_venus_analysis_to_user(user_telegram_id: int, analysis_text: str, profile_id: Optional[int] = None):
     """
     Отправляет анализ Венеры пользователю через Telegram Bot API
     
     Args:
         user_telegram_id: Telegram ID пользователя
         analysis_text: Текст анализа
+        profile_id: ID дополнительного профиля (если есть)
     """
     try:
-        # Импортируем универсальную функцию
-        from all_planets_handler import check_if_all_planets_payment, create_planet_analysis_buttons
-        
         # Проверяем, является ли это частью разбора всех планет для данного профиля
-        is_all_planets = await check_if_all_planets_payment(user_telegram_id)
-        
+        is_all_planets = await _check_if_all_planets_analysis(user_telegram_id, profile_id)
+
         # Создаем кнопки
-        keyboard = create_planet_analysis_buttons("venus", is_all_planets)
-        
+        buttons = []
+
+        if is_all_planets:
+            buttons.append([
+                {
+                    "text": "➡️ Следующая планета",
+                    "callback_data": "next_planet"
+                }
+            ])
+        else:
+            buttons.append([
+                {
+                    "text": "🔍 Исследовать другие сферы",
+                    "callback_data": "explore_other_areas"
+                }
+            ])
+
+        buttons.append([
+            {
+                "text": "🏠 Главное меню",
+                "callback_data": "back_to_menu"
+            }
+        ])
+
+        keyboard = {
+            "inline_keyboard": buttons
+        }
+
         # Разбиваем длинный текст на части если нужно
         max_length = 4000  # Лимит Telegram для одного сообщения
         
@@ -429,8 +453,8 @@ async def send_venus_analysis_to_user(user_telegram_id: int, analysis_text: str)
         logger.error(f"♀️ Error sending Venus analysis to user {user_telegram_id}: {e}")
 
 
-async def _check_if_all_planets_analysis(telegram_id: int) -> bool:
-    """Проверяет, является ли это частью разбора всех планет"""
+async def _check_if_all_planets_analysis(telegram_id: int, profile_id: Optional[int] = None) -> bool:
+    """Проверяет, является ли это частью разбора всех планет для конкретного профиля"""
     try:
         from models import PlanetPayment, PaymentStatus, PaymentType, User
         from sqlalchemy import select
@@ -445,12 +469,20 @@ async def _check_if_all_planets_analysis(telegram_id: int) -> bool:
                 logger.warning(f"User not found for telegram_id {telegram_id} in Venus worker")
                 return False
 
+            conditions = [
+                PlanetPayment.user_id == user.user_id,  # FIX: используем внутренний ID
+                PlanetPayment.payment_type == PaymentType.all_planets,
+                PlanetPayment.status == PaymentStatus.completed
+            ]
+
+            # Фильтруем по profile_id
+            if profile_id:
+                conditions.append(PlanetPayment.profile_id == profile_id)
+            else:
+                conditions.append(PlanetPayment.profile_id.is_(None))
+
             result = await session.execute(
-                select(PlanetPayment).where(
-                    PlanetPayment.user_id == user.user_id,  # FIX: используем внутренний ID
-                    PlanetPayment.payment_type == PaymentType.all_planets,
-                    PlanetPayment.status == PaymentStatus.completed
-                )
+                select(PlanetPayment).where(*conditions)
             )
             payment = result.scalar_one_or_none()
             return payment is not None
@@ -518,7 +550,7 @@ async def main():
         logger.error(f"♀️ Venus worker error: {e}")
     finally:
         # Закрываем соединение с БД
-        dispose_engine()
+        await dispose_engine()
         logger.info("♀️ Venus worker finished")
 
 
